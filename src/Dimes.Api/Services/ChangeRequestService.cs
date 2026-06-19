@@ -12,14 +12,14 @@ public class ChangeRequestService(DimesDbContext db, LifecycleService lifecycle,
 {
     /// <summary>Explicit human submission — enters the lifecycle directly at Captured.</summary>
     public async Task<ChangeRequestDto> CreateAsync(
-        Guid projectId, CreateChangeRequest req, CancellationToken ct = default)
+        Guid projectId, Guid actorId, CreateChangeRequest req, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(req.Title))
         {
             throw new BadRequestException("Title is required.");
         }
 
-        var (actor, _) = await members.ResolveAsync(projectId, req.ActorId, ct);
+        var (actor, _) = await members.ResolveAsync(projectId, actorId, ct);
 
         var change = new ChangeRequest
         {
@@ -47,12 +47,12 @@ public class ChangeRequestService(DimesDbContext db, LifecycleService lifecycle,
     /// <summary>Edit a change's title/description/priority after creation. Permitted to the original
     /// author or a Maintainer; recorded as a DetailsEdited audit event.</summary>
     public async Task<ChangeRequestDto> UpdateDetailsAsync(
-        Guid id, UpdateChangeDetailsRequest req, CancellationToken ct = default)
+        Guid id, Guid actorId, UpdateChangeDetailsRequest req, CancellationToken ct = default)
     {
         var change = await db.ChangeRequests.FindAsync([id], ct)
             ?? throw new NotFoundException($"Change request '{id}' not found.");
 
-        var (actor, role) = await members.ResolveAsync(change.ProjectId, req.ActorId, ct);
+        var (actor, role) = await members.ResolveAsync(change.ProjectId, actorId, ct);
         if (actor.Id != change.CreatedByActorId && role != MemberRole.Maintainer)
         {
             throw new ForbiddenException("Only the author or a Maintainer can edit this change.");
@@ -196,12 +196,12 @@ public class ChangeRequestService(DimesDbContext db, LifecycleService lifecycle,
     }
 
     public async Task<ChangeRequestDto> TransitionAsync(
-        Guid id, TransitionChangeRequest req, CancellationToken ct = default)
+        Guid id, Guid actorId, TransitionChangeRequest req, CancellationToken ct = default)
     {
         var change = await db.ChangeRequests.FindAsync([id], ct)
             ?? throw new NotFoundException($"Change request '{id}' not found.");
 
-        var (actor, role) = await members.ResolveAsync(change.ProjectId, req.ActorId, ct);
+        var (actor, role) = await members.ResolveAsync(change.ProjectId, actorId, ct);
 
         if (req.Target == ChangeStatus.Duplicate)
         {
@@ -225,7 +225,7 @@ public class ChangeRequestService(DimesDbContext db, LifecycleService lifecycle,
         return change.ToDto();
     }
 
-    public async Task<CommentDto> AddCommentAsync(Guid id, AddCommentRequest req, CancellationToken ct = default)
+    public async Task<CommentDto> AddCommentAsync(Guid id, Guid actorId, AddCommentRequest req, CancellationToken ct = default)
     {
         var change = await db.ChangeRequests.FindAsync([id], ct)
             ?? throw new NotFoundException($"Change request '{id}' not found.");
@@ -235,7 +235,7 @@ public class ChangeRequestService(DimesDbContext db, LifecycleService lifecycle,
             throw new BadRequestException("Comment body is required.");
         }
 
-        var (actor, _) = await members.ResolveAsync(change.ProjectId, req.ActorId, ct);
+        var (actor, _) = await members.ResolveAsync(change.ProjectId, actorId, ct);
 
         var comment = new Comment
         {

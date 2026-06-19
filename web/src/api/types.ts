@@ -57,6 +57,15 @@ export interface ActorSummary {
   projectCount: number; deletable: boolean; isArchived: boolean
 }
 
+// ----- Authentication -----
+export type AuthMode = 'Local' | 'Oidc'
+export interface AuthConfig { mode: AuthMode }
+export interface Me { actorId: string; displayName: string; email?: string | null; isSiteAdmin: boolean }
+export interface SiteUser {
+  id: string; displayName: string; email?: string | null; type: ActorType
+  isSiteAdmin: boolean; hasLocalCredential: boolean; isArchived: boolean
+}
+
 // The ordered "happy path" of the change lifecycle, for board columns.
 export const LIFECYCLE_COLUMNS: ChangeStatus[] = [
   'Captured', 'Triaged', 'Approved', 'InDevelopment', 'InReview', 'Done',

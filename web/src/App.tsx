@@ -1,22 +1,25 @@
 import { useEffect, useState } from 'react'
-import { useMembers, useProjects } from './api/hooks'
-import { Card, Select } from './components/ui'
+import { api } from './api/client'
+import { useMe, useMembers, useProjects } from './api/hooks'
+import { Button, Card } from './components/ui'
 import { Sidebar } from './features/Sidebar'
 import { Workspace } from './features/Workspace'
 import { LlmProvidersView } from './features/LlmProvidersView'
 import { ActorsView } from './features/ActorsView'
 import { SettingsModal } from './features/SettingsModal'
 import { CreateProjectModal } from './features/CreateProjectModal'
+import { LoginView } from './features/LoginView'
+import { SiteSettingsView } from './features/SiteSettingsView'
 import { applyTheme, getInitialTheme, type Theme } from './theme'
 
 const COLLAPSE_KEY = 'dimes.sidebar.collapsed'
 
-type View = 'board' | 'providers' | 'actors'
+type View = 'board' | 'providers' | 'actors' | 'settings'
 
 export default function App() {
+  const { data: me, isLoading: meLoading, isError: loggedOut } = useMe()
   const { data: projects } = useProjects()
   const [projectId, setProjectId] = useState<string>()
-  const [actingActorId, setActingActorId] = useState<string>()
   const [view, setView] = useState<View>('board')
   const [showSettings, setShowSettings] = useState(false)
   const [showCreateProject, setShowCreateProject] = useState(false)
@@ -39,13 +42,26 @@ export default function App() {
   }, [projects, projectId])
 
   const { data: members } = useMembers(projectId)
-  useEffect(() => {
-    if (members && members.length > 0 && !members.some((m) => m.actorId === actingActorId)) {
-      setActingActorId(members[0].actorId)
-    }
-  }, [members, actingActorId])
-
   const currentProject = (projects ?? []).find((p) => p.id === projectId)
+
+  // Auth gate: wait for the session, then either show the login screen or the app.
+  if (meLoading) {
+    return <div className="flex h-screen items-center justify-center text-sm text-slate-400">Loading…</div>
+  }
+  if (loggedOut || !me) {
+    return <LoginView />
+  }
+
+  const logout = async () => {
+    await api.logout()
+    window.location.reload()
+  }
+
+  const headerTitle =
+    view === 'providers' ? 'LLM providers'
+      : view === 'actors' ? 'Actors'
+        : view === 'settings' ? 'Site settings'
+          : (currentProject?.name ?? 'Dimes')
 
   return (
     <div className="flex h-screen">
@@ -59,6 +75,8 @@ export default function App() {
         activeView={view}
         onShowProviders={() => setView('providers')}
         onShowActors={() => setView('actors')}
+        onShowSettings={() => setView('settings')}
+        showSettings={me.isSiteAdmin}
       />
 
       <div className="flex min-w-0 flex-1 flex-col">
@@ -71,9 +89,7 @@ export default function App() {
           >
             ☰
           </button>
-          <span className="font-semibold text-slate-800 dark:text-slate-100">
-            {view === 'providers' ? 'LLM providers' : view === 'actors' ? 'Actors' : (currentProject?.name ?? 'Dimes')}
-          </span>
+          <span className="font-semibold text-slate-800 dark:text-slate-100">{headerTitle}</span>
 
           {view === 'board' && projectId && (
             <button
@@ -86,23 +102,11 @@ export default function App() {
             </button>
           )}
 
-          <div className="ml-auto flex items-center gap-2">
-            {view === 'board' && (
-              <>
-                <span className="text-xs text-slate-500 dark:text-slate-400">Acting as</span>
-                <Select
-                  value={actingActorId ?? ''}
-                  onChange={(e) => setActingActorId(e.target.value || undefined)}
-                  className="min-w-40"
-                  disabled={!members || members.length === 0}
-                >
-                  {(members ?? []).length === 0 && <option value="">No members</option>}
-                  {(members ?? []).map((m) => (
-                    <option key={m.actorId} value={m.actorId}>{m.displayName} · {m.role}</option>
-                  ))}
-                </Select>
-              </>
-            )}
+          <div className="ml-auto flex items-center gap-3">
+            <span className="text-sm text-slate-600 dark:text-slate-300" title={me.email ?? undefined}>
+              {me.displayName}
+            </span>
+            <Button variant="subtle" onClick={logout}>Sign out</Button>
             <button
               onClick={toggleTheme}
               title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
@@ -119,13 +123,15 @@ export default function App() {
             <LlmProvidersView projectId={projectId} />
           ) : view === 'actors' ? (
             <ActorsView />
-          ) : projectId && actingActorId ? (
-            <Workspace projectId={projectId} actingActorId={actingActorId} members={members ?? []} />
+          ) : view === 'settings' ? (
+            <SiteSettingsView />
+          ) : projectId ? (
+            <Workspace projectId={projectId} actingActorId={me.actorId} members={members ?? []} />
           ) : (
             <Card className="p-10 text-center text-slate-500 dark:text-slate-400">
               {(projects ?? []).length === 0
                 ? 'Create a project to get started — use “New project” in the sidebar.'
-                : 'Add a member to this project (Manage) to start working.'}
+                : 'Select a project to start working.'}
             </Card>
           )}
         </main>
@@ -136,7 +142,6 @@ export default function App() {
           onClose={() => setShowCreateProject(false)}
           onCreated={(p) => {
             setProjectId(p.id)
-            setActingActorId(undefined)
             setShowCreateProject(false)
             setShowSettings(true)
           }}

@@ -118,7 +118,7 @@ public class ObservationService(DimesDbContext db, LifecycleService lifecycle, M
     /// <summary>Promote an observation into a new change request, attaching it as evidence and
     /// moving the observation to Promoted. Requires at least Contributor (enforced by the engine).</summary>
     public async Task<ChangeRequestDto> PromoteAsync(
-        Guid observationId, PromoteObservationRequest req, CancellationToken ct = default)
+        Guid observationId, Guid actorId, PromoteObservationRequest req, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(req.Title))
         {
@@ -128,7 +128,7 @@ public class ObservationService(DimesDbContext db, LifecycleService lifecycle, M
         var observation = await db.Observations.FindAsync([observationId], ct)
             ?? throw new NotFoundException($"Observation '{observationId}' not found.");
 
-        var (actor, role) = await members.ResolveAsync(observation.ProjectId, req.ActorId, ct);
+        var (actor, role) = await members.ResolveAsync(observation.ProjectId, actorId, ct);
 
         var change = new ChangeRequest
         {

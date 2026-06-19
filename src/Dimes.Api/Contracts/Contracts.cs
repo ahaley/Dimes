@@ -2,8 +2,9 @@ using Dimes.Domain;
 
 namespace Dimes.Api.Contracts;
 
-// NOTE: pass-1 has no authentication yet, so actions that require an actor accept an ActorId in the
-// request. A real identity/auth layer is a future slice; the ActorId here is the stand-in.
+// NOTE: the acting actor is derived from the authenticated session (cookie → ICurrentActor), not the
+// request body. Mutating DTOs therefore carry no ActorId; controllers pass currentActor.ActorId into
+// services, which still authorize via MembershipResolver.
 
 // ----- Projects & members -----
 public record CreateProjectRequest(string Name, string? Description);
@@ -12,6 +13,18 @@ public record ProjectDto(Guid Id, string Name, string? Description, DateTimeOffs
 public record AddMemberRequest(string DisplayName, ActorType Type, string? Email, MemberRole Role, Guid? LlmProviderConfigId = null);
 public record UpdateMemberRequest(string DisplayName, string? Email, MemberRole Role, Guid? LlmProviderConfigId);
 public record MemberDto(Guid ActorId, Guid ProjectId, string DisplayName, ActorType Type, string? Email, MemberRole Role, Guid? LlmProviderConfigId);
+
+// ----- Authentication -----
+// Mode is a deployment choice (Local | Oidc); the SPA reads it to render the right login UI.
+public record AuthConfigDto(string Mode);
+public record LoginRequest(string Email, string Password);
+public record MeDto(Guid ActorId, string DisplayName, string? Email, bool IsSiteAdmin);
+
+// ----- Site administration (app-level user management; site-admin only) -----
+public record SiteUserDto(Guid Id, string DisplayName, string? Email, ActorType Type, bool IsSiteAdmin, bool HasLocalCredential, bool IsArchived);
+public record CreateLocalUserRequest(string DisplayName, string Email, string Password, bool IsSiteAdmin);
+public record ResetPasswordRequest(string Password);
+public record SetSiteAdminRequest(bool IsSiteAdmin);
 
 // ----- Actors (app-level management) -----
 public record ActorDto(
@@ -49,12 +62,12 @@ public record ObservationDto(
     DateTimeOffset LastSeen,
     Guid? ChangeRequestId);
 
-public record PromoteObservationRequest(Guid ActorId, string Title, string? Description);
-public record DismissObservationRequest(Guid ActorId, string? Reason);
-public record ActorActionRequest(Guid ActorId);
+// The acting actor is derived from the authenticated session, not the request body.
+public record PromoteObservationRequest(string Title, string? Description);
+public record DismissObservationRequest(string? Reason);
 
 // ----- Change requests -----
-public record CreateChangeRequest(Guid ActorId, string Title, string? Description, ChangeKind Kind, Priority Priority = Priority.None);
+public record CreateChangeRequest(string Title, string? Description, ChangeKind Kind, Priority Priority = Priority.None);
 public record ChangeRequestDto(
     Guid Id,
     Guid ProjectId,
@@ -75,15 +88,15 @@ public record ChangeRequestDetailDto(
     IReadOnlyList<ObservationDto> Evidence,
     IReadOnlyList<ScmLinkDto> ScmLinks);
 
-public record TransitionChangeRequest(Guid ActorId, ChangeStatus Target, string? Reason, Guid? DuplicateOfId);
+public record TransitionChangeRequest(ChangeStatus Target, string? Reason, Guid? DuplicateOfId);
 
 /// <summary>Post-hoc edit of a change's free-form details (author or Maintainer only).</summary>
-public record UpdateChangeDetailsRequest(Guid ActorId, string Title, string? Description, Priority Priority);
+public record UpdateChangeDetailsRequest(string Title, string? Description, Priority Priority);
 
 /// <summary>A generated file ready to download (name + UTF-8 text content).</summary>
 public record MarkdownExport(string FileName, string Markdown);
 
-public record AddCommentRequest(Guid ActorId, string Body);
+public record AddCommentRequest(string Body);
 public record CommentDto(Guid Id, Guid ChangeRequestId, Guid AuthorActorId, string Body, CommentKind Kind, DateTimeOffset CreatedAt);
 
 public record AddScmLinkRequest(string Url, string? ContextSnapshot);

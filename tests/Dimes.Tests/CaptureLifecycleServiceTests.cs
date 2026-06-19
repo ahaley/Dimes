@@ -68,19 +68,17 @@ public sealed class CaptureLifecycleServiceTests : IDisposable
 
         async Task<Guid> InDevWithPriority(string title, string desc, Priority priority)
         {
-            var c = await _changes.CreateAsync(seed.ProjectId,
-                new CreateChangeRequest(seed.MaintainerId, title, desc, ChangeKind.Feature, priority));
+            var c = await _changes.CreateAsync(seed.ProjectId, seed.MaintainerId, new CreateChangeRequest(title, desc, ChangeKind.Feature, priority));
             foreach (var target in new[] { ChangeStatus.Triaged, ChangeStatus.Approved, ChangeStatus.InDevelopment })
             {
-                await _changes.TransitionAsync(c.Id, new TransitionChangeRequest(seed.MaintainerId, target, null, null));
+                await _changes.TransitionAsync(c.Id, seed.MaintainerId, new TransitionChangeRequest(target, null, null));
             }
             return c.Id;
         }
 
         await InDevWithPriority("Add CSV export", "Let users download a CSV.", Priority.High);
         await InDevWithPriority("Fix login redirect", "Redirect loops on expired session.", Priority.None);
-        await _changes.CreateAsync(seed.ProjectId,
-            new CreateChangeRequest(seed.MaintainerId, "Not started yet", "still captured", ChangeKind.Problem));
+        await _changes.CreateAsync(seed.ProjectId, seed.MaintainerId, new CreateChangeRequest("Not started yet", "still captured", ChangeKind.Problem));
 
         var export = await _changes.ExportInDevelopmentAsync(seed.ProjectId);
 
@@ -108,11 +106,9 @@ public sealed class CaptureLifecycleServiceTests : IDisposable
     public async Task UpdateDetails_AsAuthor_EditsFieldsAndAudits()
     {
         var seed = await SeedAsync();
-        var change = await _changes.CreateAsync(seed.ProjectId,
-            new CreateChangeRequest(seed.ContributorId, "Original", "old", ChangeKind.Feature));
+        var change = await _changes.CreateAsync(seed.ProjectId, seed.ContributorId, new CreateChangeRequest("Original", "old", ChangeKind.Feature));
 
-        var updated = await _changes.UpdateDetailsAsync(change.Id,
-            new UpdateChangeDetailsRequest(seed.ContributorId, "Renamed", "new body", Priority.High));
+        var updated = await _changes.UpdateDetailsAsync(change.Id, seed.ContributorId, new UpdateChangeDetailsRequest("Renamed", "new body", Priority.High));
 
         Assert.Equal("Renamed", updated.Title);
         Assert.Equal("new body", updated.Description);
@@ -126,11 +122,9 @@ public sealed class CaptureLifecycleServiceTests : IDisposable
     public async Task UpdateDetails_AsMaintainerNonAuthor_Succeeds()
     {
         var seed = await SeedAsync();
-        var change = await _changes.CreateAsync(seed.ProjectId,
-            new CreateChangeRequest(seed.ContributorId, "Original", null, ChangeKind.Feature));
+        var change = await _changes.CreateAsync(seed.ProjectId, seed.ContributorId, new CreateChangeRequest("Original", null, ChangeKind.Feature));
 
-        var updated = await _changes.UpdateDetailsAsync(change.Id,
-            new UpdateChangeDetailsRequest(seed.MaintainerId, "Maintainer edit", null, Priority.None));
+        var updated = await _changes.UpdateDetailsAsync(change.Id, seed.MaintainerId, new UpdateChangeDetailsRequest("Maintainer edit", null, Priority.None));
 
         Assert.Equal("Maintainer edit", updated.Title);
     }
@@ -141,24 +135,20 @@ public sealed class CaptureLifecycleServiceTests : IDisposable
         var seed = await SeedAsync();
         var other = await _projects.AddMemberAsync(seed.ProjectId,
             new AddMemberRequest("Other", ActorType.Human, null, MemberRole.Contributor));
-        var change = await _changes.CreateAsync(seed.ProjectId,
-            new CreateChangeRequest(seed.ContributorId, "Original", null, ChangeKind.Feature));
+        var change = await _changes.CreateAsync(seed.ProjectId, seed.ContributorId, new CreateChangeRequest("Original", null, ChangeKind.Feature));
 
         await Assert.ThrowsAsync<ForbiddenException>(() =>
-            _changes.UpdateDetailsAsync(change.Id,
-                new UpdateChangeDetailsRequest(other.ActorId, "hijack", null, Priority.None)));
+            _changes.UpdateDetailsAsync(change.Id, other.ActorId, new UpdateChangeDetailsRequest("hijack", null, Priority.None)));
     }
 
     [Fact]
     public async Task UpdateDetails_AsNonMember_IsForbidden()
     {
         var seed = await SeedAsync();
-        var change = await _changes.CreateAsync(seed.ProjectId,
-            new CreateChangeRequest(seed.ContributorId, "Original", null, ChangeKind.Feature));
+        var change = await _changes.CreateAsync(seed.ProjectId, seed.ContributorId, new CreateChangeRequest("Original", null, ChangeKind.Feature));
 
         await Assert.ThrowsAsync<ForbiddenException>(() =>
-            _changes.UpdateDetailsAsync(change.Id,
-                new UpdateChangeDetailsRequest(Guid.NewGuid(), "x", null, Priority.None)));
+            _changes.UpdateDetailsAsync(change.Id, Guid.NewGuid(), new UpdateChangeDetailsRequest("x", null, Priority.None)));
     }
 
     [Fact]
@@ -166,8 +156,7 @@ public sealed class CaptureLifecycleServiceTests : IDisposable
     {
         var seed = await SeedAsync();
         // The contributor authored a change, so their actor must survive removal.
-        var change = await _changes.CreateAsync(seed.ProjectId,
-            new CreateChangeRequest(seed.ContributorId, "By cory", null, ChangeKind.Feature));
+        var change = await _changes.CreateAsync(seed.ProjectId, seed.ContributorId, new CreateChangeRequest("By cory", null, ChangeKind.Feature));
 
         var updated = await _projects.UpdateMemberAsync(seed.ProjectId, seed.ContributorId,
             new UpdateMemberRequest("Cory Renamed", null, MemberRole.Maintainer, null));
@@ -247,8 +236,7 @@ public sealed class CaptureLifecycleServiceTests : IDisposable
     {
         var seed = await SeedAsync();
         // The contributor authors a change, then leaves the project — actor is orphaned but referenced.
-        await _changes.CreateAsync(seed.ProjectId,
-            new CreateChangeRequest(seed.ContributorId, "By cory", null, ChangeKind.Feature));
+        await _changes.CreateAsync(seed.ProjectId, seed.ContributorId, new CreateChangeRequest("By cory", null, ChangeKind.Feature));
         await _projects.RemoveMemberAsync(seed.ProjectId, seed.ContributorId);
 
         await Assert.ThrowsAsync<BadRequestException>(() => _projects.DeleteActorAsync(seed.ContributorId));
@@ -303,8 +291,7 @@ public sealed class CaptureLifecycleServiceTests : IDisposable
         var obs = await _observations.IngestAsync(seed.SourceId,
             new IngestObservationRequest(ObservationKind.ExplicitFeedback, "{\"msg\":\"add export\"}", null, null));
 
-        var change = await _observations.PromoteAsync(obs.Id,
-            new PromoteObservationRequest(seed.ContributorId, "Add export button", "Users asked for it"));
+        var change = await _observations.PromoteAsync(obs.Id, seed.ContributorId, new PromoteObservationRequest("Add export button", "Users asked for it"));
 
         Assert.Equal(ChangeKind.ObservationDriven, change.Kind);
         Assert.Equal(ChangeStatus.Captured, change.Status);
@@ -325,39 +312,33 @@ public sealed class CaptureLifecycleServiceTests : IDisposable
             new IngestObservationRequest(ObservationKind.BehavioralFriction, "{}", null, null));
 
         await Assert.ThrowsAsync<InsufficientRoleException>(() =>
-            _observations.PromoteAsync(obs.Id, new PromoteObservationRequest(reporter.ActorId, "x", null)));
+            _observations.PromoteAsync(obs.Id, reporter.ActorId, new PromoteObservationRequest("x", null)));
     }
 
     [Fact]
     public async Task NonMember_CannotActOnProject()
     {
         var seed = await SeedAsync();
-        var change = await _changes.CreateAsync(seed.ProjectId,
-            new CreateChangeRequest(seed.ContributorId, "x", null, ChangeKind.Feature));
+        var change = await _changes.CreateAsync(seed.ProjectId, seed.ContributorId, new CreateChangeRequest("x", null, ChangeKind.Feature));
 
         await Assert.ThrowsAsync<ForbiddenException>(() =>
-            _changes.TransitionAsync(change.Id,
-                new TransitionChangeRequest(Guid.NewGuid(), ChangeStatus.Triaged, null, null)));
+            _changes.TransitionAsync(change.Id, Guid.NewGuid(), new TransitionChangeRequest(ChangeStatus.Triaged, null, null)));
     }
 
     [Fact]
     public async Task WhitelistGate_BlocksContributor_AllowsMaintainer()
     {
         var seed = await SeedAsync();
-        var change = await _changes.CreateAsync(seed.ProjectId,
-            new CreateChangeRequest(seed.ContributorId, "Gate test", null, ChangeKind.Feature));
+        var change = await _changes.CreateAsync(seed.ProjectId, seed.ContributorId, new CreateChangeRequest("Gate test", null, ChangeKind.Feature));
 
-        await _changes.TransitionAsync(change.Id,
-            new TransitionChangeRequest(seed.ContributorId, ChangeStatus.Triaged, null, null));
+        await _changes.TransitionAsync(change.Id, seed.ContributorId, new TransitionChangeRequest(ChangeStatus.Triaged, null, null));
 
         // Contributor blocked at the whitelist gate.
         await Assert.ThrowsAsync<InsufficientRoleException>(() =>
-            _changes.TransitionAsync(change.Id,
-                new TransitionChangeRequest(seed.ContributorId, ChangeStatus.Approved, null, null)));
+            _changes.TransitionAsync(change.Id, seed.ContributorId, new TransitionChangeRequest(ChangeStatus.Approved, null, null)));
 
         // Maintainer crosses it.
-        var approved = await _changes.TransitionAsync(change.Id,
-            new TransitionChangeRequest(seed.MaintainerId, ChangeStatus.Approved, "ok", null));
+        var approved = await _changes.TransitionAsync(change.Id, seed.MaintainerId, new TransitionChangeRequest(ChangeStatus.Approved, "ok", null));
         Assert.Equal(ChangeStatus.Approved, approved.Status);
     }
 
@@ -365,14 +346,13 @@ public sealed class CaptureLifecycleServiceTests : IDisposable
     public async Task FullPath_CaptureToDone_RecordsAuditTrail()
     {
         var seed = await SeedAsync();
-        var change = await _changes.CreateAsync(seed.ProjectId,
-            new CreateChangeRequest(seed.ContributorId, "End to end", null, ChangeKind.Feature));
+        var change = await _changes.CreateAsync(seed.ProjectId, seed.ContributorId, new CreateChangeRequest("End to end", null, ChangeKind.Feature));
 
-        await _changes.TransitionAsync(change.Id, new TransitionChangeRequest(seed.ContributorId, ChangeStatus.Triaged, null, null));
-        await _changes.TransitionAsync(change.Id, new TransitionChangeRequest(seed.MaintainerId, ChangeStatus.Approved, null, null));
-        await _changes.TransitionAsync(change.Id, new TransitionChangeRequest(seed.ContributorId, ChangeStatus.InDevelopment, null, null));
-        await _changes.TransitionAsync(change.Id, new TransitionChangeRequest(seed.ContributorId, ChangeStatus.InReview, null, null));
-        var done = await _changes.TransitionAsync(change.Id, new TransitionChangeRequest(seed.MaintainerId, ChangeStatus.Done, null, null));
+        await _changes.TransitionAsync(change.Id, seed.ContributorId, new TransitionChangeRequest(ChangeStatus.Triaged, null, null));
+        await _changes.TransitionAsync(change.Id, seed.MaintainerId, new TransitionChangeRequest(ChangeStatus.Approved, null, null));
+        await _changes.TransitionAsync(change.Id, seed.ContributorId, new TransitionChangeRequest(ChangeStatus.InDevelopment, null, null));
+        await _changes.TransitionAsync(change.Id, seed.ContributorId, new TransitionChangeRequest(ChangeStatus.InReview, null, null));
+        var done = await _changes.TransitionAsync(change.Id, seed.MaintainerId, new TransitionChangeRequest(ChangeStatus.Done, null, null));
 
         Assert.Equal(ChangeStatus.Done, done.Status);
 

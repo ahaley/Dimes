@@ -14,6 +14,7 @@ public sealed class GlobalExceptionHandler(IProblemDetailsService problemDetails
         var (status, title) = exception switch
         {
             NotFoundException => (StatusCodes.Status404NotFound, "Not found"),
+            UnauthorizedException => (StatusCodes.Status401Unauthorized, "Unauthorized"),
             ForbiddenException => (StatusCodes.Status403Forbidden, "Forbidden"),
             BadRequestException => (StatusCodes.Status400BadRequest, "Bad request"),
             InsufficientRoleException => (StatusCodes.Status403Forbidden, "Insufficient role"),

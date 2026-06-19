@@ -15,6 +15,11 @@ public class Actor : Entity
     public Guid? LlmProviderConfigId { get; set; }
     public LlmProviderConfig? LlmProviderConfig { get; set; }
 
+    /// <summary>App-level administrator: may configure the site and manage users/credentials.
+    /// Distinct from per-project <see cref="Membership"/> roles — a site admin still needs explicit
+    /// project membership to act within a project.</summary>
+    public bool IsSiteAdmin { get; set; }
+
     /// <summary>Archived actors are kept (so their authorship/assignment history stays valid) but
     /// hidden from active management lists. Archiving is the soft alternative to deletion for actors
     /// that are referenced and therefore can't be hard-deleted.</summary>
