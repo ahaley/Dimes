@@ -66,10 +66,10 @@ public sealed class CaptureLifecycleServiceTests : IDisposable
     {
         var seed = await SeedAsync();
 
-        async Task<Guid> InDev(string title, string desc)
+        async Task<Guid> InDevWithPriority(string title, string desc, Priority priority)
         {
             var c = await _changes.CreateAsync(seed.ProjectId,
-                new CreateChangeRequest(seed.MaintainerId, title, desc, ChangeKind.Feature));
+                new CreateChangeRequest(seed.MaintainerId, title, desc, ChangeKind.Feature, priority));
             foreach (var target in new[] { ChangeStatus.Triaged, ChangeStatus.Approved, ChangeStatus.InDevelopment })
             {
                 await _changes.TransitionAsync(c.Id, new TransitionChangeRequest(seed.MaintainerId, target, null, null));
@@ -77,8 +77,8 @@ public sealed class CaptureLifecycleServiceTests : IDisposable
             return c.Id;
         }
 
-        await InDev("Add CSV export", "Let users download a CSV.");
-        await InDev("Fix login redirect", "Redirect loops on expired session.");
+        await InDevWithPriority("Add CSV export", "Let users download a CSV.", Priority.High);
+        await InDevWithPriority("Fix login redirect", "Redirect loops on expired session.", Priority.None);
         await _changes.CreateAsync(seed.ProjectId,
             new CreateChangeRequest(seed.MaintainerId, "Not started yet", "still captured", ChangeKind.Problem));
 
@@ -89,8 +89,18 @@ public sealed class CaptureLifecycleServiceTests : IDisposable
         Assert.Contains("Add CSV export", export.Markdown);
         Assert.Contains("Let users download a CSV.", export.Markdown);
         Assert.Contains("Fix login redirect", export.Markdown);
-        Assert.Contains("- [ ] Implemented & verified", export.Markdown);
         Assert.DoesNotContain("Not started yet", export.Markdown);
+
+        // Per-change git workflow instructions.
+        Assert.Contains("integration branch", export.Markdown);
+        Assert.Contains("git merge --no-ff", export.Markdown);
+        Assert.Contains("Branch: `change/", export.Markdown);
+        Assert.Contains("- [ ] Implemented, verified, committed, merged", export.Markdown);
+
+        // Ordered by priority severity (High before None), not alphabetically by the stored string.
+        Assert.True(
+            export.Markdown.IndexOf("Add CSV export", StringComparison.Ordinal)
+            < export.Markdown.IndexOf("Fix login redirect", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -330,10 +340,12 @@ public sealed class CaptureLifecycleServiceTests : IDisposable
         Assert.Equal(ChangeStatus.Done, done.Status);
 
         var trail = await _changes.GetAuditAsync(change.Id);
-        // Created + 5 transitions.
+        // Created + 5 transitions. Assert presence (timestamps can tie under rapid transitions,
+        // so don't depend on positional order).
         Assert.Equal(6, trail.Count);
-        Assert.Equal("Created", trail[0].Action);
-        Assert.Equal("Done", trail[^1].ToStatus);
+        Assert.Contains(trail, e => e.Action == "Created");
+        Assert.Contains(trail, e => e.ToStatus == "Done");
+        Assert.Contains(trail, e => e.FromStatus == "Triaged" && e.ToStatus == "Approved");
     }
 
     public void Dispose()

@@ -86,19 +86,46 @@ public class ChangeRequestService(DimesDbContext db, LifecycleService lifecycle,
         var project = await db.Projects.FindAsync([projectId], ct)
             ?? throw new NotFoundException($"Project '{projectId}' not found.");
 
-        var changes = await db.ChangeRequests
+        // Sort in memory: Priority is persisted as a string, so a DB ORDER BY would sort it
+        // alphabetically (e.g. "None" before "High") rather than by severity.
+        var changes = (await db.ChangeRequests
             .Where(c => c.ProjectId == projectId && c.Status == ChangeStatus.InDevelopment)
+            .ToListAsync(ct))
             .OrderByDescending(c => c.Priority)
             .ThenBy(c => c.Title)
-            .ToListAsync(ct);
+            .ToList();
 
         var sb = new StringBuilder();
-        sb.AppendLine($"# Implement In-Development changes — {project.Name}");
+        sb.AppendLine($"# Work order — implement In-Development changes ({project.Name})");
         sb.AppendLine();
-        sb.AppendLine("You are Claude Code working in this repository. Implement each change request");
-        sb.AppendLine("listed below against the codebase. Work through them one at a time, in order;");
-        sb.AppendLine("after each, make sure the project builds and any relevant tests pass, then move");
-        sb.AppendLine("on to the next. Do not stop until every change below is implemented and checked off.");
+        sb.AppendLine("## Objective");
+        sb.AppendLine();
+        sb.AppendLine("You are Claude Code working in this repository. Implement every change request in the");
+        sb.AppendLine("\"Changes\" section below against this codebase. This file is the full task list — keep");
+        sb.AppendLine("going until each change is implemented and merged, or explicitly recorded as blocked.");
+        sb.AppendLine();
+        sb.AppendLine("## How to work");
+        sb.AppendLine();
+        sb.AppendLine("1. **Record the integration branch.** Note the branch you start on (e.g. `main`); call it");
+        sb.AppendLine("   the *integration branch*. Every change branches from it and merges back into it.");
+        sb.AppendLine("2. **One branch per change**, in order. Create a branch off the *current* integration");
+        sb.AppendLine("   branch using the `Branch:` name given for each change below.");
+        sb.AppendLine("3. **Implement only that change**, then **verify before committing**: the project must");
+        sb.AppendLine("   build and the relevant tests must pass. Never commit a broken change.");
+        sb.AppendLine("4. **Commit on the branch.** First line is the change title, then a blank line, then");
+        sb.AppendLine("   `Dimes change <id>`. Keep unrelated edits out of the commit.");
+        sb.AppendLine("5. **Merge back.** Switch to the integration branch and run");
+        sb.AppendLine("   `git merge --no-ff <branch>` so each change is one reviewable merge commit. Resolve");
+        sb.AppendLine("   any conflicts and re-verify the build after merging.");
+        sb.AppendLine("6. **Sequence matters.** Branch each subsequent change from the *updated* integration");
+        sb.AppendLine("   branch so later changes build on earlier ones.");
+        sb.AppendLine("7. **If a change can't be completed** (won't build, tests fail, unresolvable conflict),");
+        sb.AppendLine("   leave its branch unmerged, check it off as blocked with a one-line reason, and");
+        sb.AppendLine("   continue with the remaining changes.");
+        sb.AppendLine("8. Work autonomously through the whole list; pause only if a change is too ambiguous to");
+        sb.AppendLine("   implement safely. When finished, report what merged and what's blocked.");
+        sb.AppendLine();
+        sb.AppendLine("## Changes");
         sb.AppendLine();
 
         if (changes.Count == 0)
@@ -111,13 +138,14 @@ public class ChangeRequestService(DimesDbContext db, LifecycleService lifecycle,
             foreach (var c in changes)
             {
                 var priority = c.Priority == Priority.None ? string.Empty : $" (priority: {c.Priority})";
-                sb.AppendLine($"## {n}. {c.Title}{priority}");
+                var id8 = c.Id.ToString()[..8];
+                sb.AppendLine($"### {n}. {c.Title}{priority}");
                 sb.AppendLine();
                 sb.AppendLine(string.IsNullOrWhiteSpace(c.Description) ? "_No description provided._" : c.Description);
                 sb.AppendLine();
-                sb.AppendLine($"_Change id: {c.Id}_");
-                sb.AppendLine();
-                sb.AppendLine("- [ ] Implemented & verified");
+                sb.AppendLine($"- Change id: `{c.Id}`");
+                sb.AppendLine($"- Branch: `change/{id8}-{Slug(c.Title)}`");
+                sb.AppendLine("- [ ] Implemented, verified, committed, merged");
                 sb.AppendLine();
                 n++;
             }

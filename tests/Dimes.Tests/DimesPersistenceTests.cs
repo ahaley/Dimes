@@ -77,11 +77,11 @@ public sealed class DimesPersistenceTests : IDisposable
                 .OrderBy(e => e.Timestamp)
                 .ToList();
 
+            // Assert presence/correctness rather than tied-timestamp ordering (two synchronous
+            // transitions can share a millisecond, making OrderBy(Timestamp) non-deterministic).
             Assert.Equal(2, trail.Count);
-            Assert.Equal("Captured", trail[0].FromStatus);
-            Assert.Equal("Triaged", trail[0].ToStatus);
-            Assert.Equal("Approved", trail[1].ToStatus);
-            Assert.Equal("looks good", trail[1].Reason);
+            Assert.Contains(trail, e => e.FromStatus == "Captured" && e.ToStatus == "Triaged");
+            Assert.Contains(trail, e => e.FromStatus == "Triaged" && e.ToStatus == "Approved" && e.Reason == "looks good");
         }
     }
 
