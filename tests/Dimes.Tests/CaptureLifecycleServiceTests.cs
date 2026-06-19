@@ -84,7 +84,8 @@ public sealed class CaptureLifecycleServiceTests : IDisposable
 
         var export = await _changes.ExportInDevelopmentAsync(seed.ProjectId);
 
-        Assert.EndsWith("-in-development.md", export.FileName);
+        // Filename carries a short UTC timestamp: <slug>-in-development-yyyyMMdd-HHmmss.md
+        Assert.Matches(@"-in-development-\d{8}-\d{6}\.md$", export.FileName);
         Assert.Contains("Claude Code", export.Markdown);
         Assert.Contains("Add CSV export", export.Markdown);
         Assert.Contains("Let users download a CSV.", export.Markdown);
