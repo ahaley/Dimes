@@ -151,7 +151,9 @@ public class ChangeRequestService(DimesDbContext db, LifecycleService lifecycle,
             }
         }
 
-        return new MarkdownExport($"{Slug(project.Name)}-in-development.md", sb.ToString());
+        // Short UTC timestamp keeps successive downloads from colliding/overwriting in the browser.
+        var stamp = DateTimeOffset.UtcNow.ToString("yyyyMMdd-HHmmss");
+        return new MarkdownExport($"{Slug(project.Name)}-in-development-{stamp}.md", sb.ToString());
     }
 
     private static string Slug(string name)
