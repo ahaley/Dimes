@@ -72,9 +72,14 @@ export function Select(props: SelectHTMLAttributes<HTMLSelectElement>) {
 
 export function Modal({ title, onClose, children, wide }: { title: string; onClose: () => void; children: ReactNode; wide?: boolean }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/40 p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/50 p-4 dark:bg-black/70" onClick={onClose}>
       <div
-        className={cx('mt-10 w-full rounded-xl bg-white shadow-xl dark:bg-slate-900', wide ? 'max-w-3xl' : 'max-w-lg')}
+        className={cx(
+          // A border + ring lift the dialog off the dimmed backdrop — in dark mode a borderless
+          // slate-900 panel blends into the darkened page, so the visible edge matters most there.
+          'mt-10 w-full rounded-xl border border-slate-200 bg-white shadow-2xl ring-1 ring-black/5 dark:border-slate-700 dark:bg-slate-900 dark:ring-white/10',
+          wide ? 'max-w-3xl' : 'max-w-lg',
+        )}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-slate-200 px-5 py-3 dark:border-slate-800">
