@@ -15,5 +15,11 @@ public class Actor : Entity
     public Guid? LlmProviderConfigId { get; set; }
     public LlmProviderConfig? LlmProviderConfig { get; set; }
 
+    /// <summary>Archived actors are kept (so their authorship/assignment history stays valid) but
+    /// hidden from active management lists. Archiving is the soft alternative to deletion for actors
+    /// that are referenced and therefore can't be hard-deleted.</summary>
+    public bool IsArchived { get; set; }
+    public DateTimeOffset? ArchivedAt { get; set; }
+
     public ICollection<Membership> Memberships { get; set; } = new List<Membership>();
 }

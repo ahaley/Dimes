@@ -131,8 +131,10 @@ export const api = {
   audit: (id: string) => request<AuditEvent[]>('GET', `/api/changes/${id}/audit`),
 
   // Actors (app-level)
-  listActors: (agentsOnly: boolean) =>
-    request<ActorSummary[]>('GET', `/api/actors?agentsOnly=${agentsOnly}`),
+  listActors: (agentsOnly: boolean, includeArchived = false) =>
+    request<ActorSummary[]>('GET', `/api/actors?agentsOnly=${agentsOnly}&includeArchived=${includeArchived}`),
+  archiveActor: (id: string) => request<void>('POST', `/api/actors/${id}/archive`),
+  unarchiveActor: (id: string) => request<void>('POST', `/api/actors/${id}/unarchive`),
   deleteActor: (id: string) => request<void>('DELETE', `/api/actors/${id}`),
 
   // Export
