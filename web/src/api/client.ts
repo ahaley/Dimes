@@ -1,5 +1,5 @@
 import type {
-  AuditEvent, ChangeKind, ChangeRequest, ChangeRequestDetail, ChangeStatus, Comment, LlmProviderConfig,
+  ActorSummary, AuditEvent, ChangeKind, ChangeRequest, ChangeRequestDetail, ChangeStatus, Comment, LlmProviderConfig,
   Member, Observation, ObservationSource, ObservationStatus, Priority, Project, ScmLink,
 } from './types'
 
@@ -129,6 +129,11 @@ export const api = {
   agentComment: (id: string, agentActorId: string) =>
     request<Comment>('POST', `/api/changes/${id}/agent-comment`, { agentActorId }),
   audit: (id: string) => request<AuditEvent[]>('GET', `/api/changes/${id}/audit`),
+
+  // Actors (app-level)
+  listActors: (agentsOnly: boolean) =>
+    request<ActorSummary[]>('GET', `/api/actors?agentsOnly=${agentsOnly}`),
+  deleteActor: (id: string) => request<void>('DELETE', `/api/actors/${id}`),
 
   // Export
   exportInDevelopment: (projectId: string) =>

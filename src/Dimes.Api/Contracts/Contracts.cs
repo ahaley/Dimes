@@ -13,6 +13,11 @@ public record AddMemberRequest(string DisplayName, ActorType Type, string? Email
 public record UpdateMemberRequest(string DisplayName, string? Email, MemberRole Role, Guid? LlmProviderConfigId);
 public record MemberDto(Guid ActorId, Guid ProjectId, string DisplayName, ActorType Type, string? Email, MemberRole Role, Guid? LlmProviderConfigId);
 
+// ----- Actors (app-level management) -----
+public record ActorDto(
+    Guid Id, string DisplayName, ActorType Type, string? Email,
+    Guid? LlmProviderConfigId, string? ProviderName, int ProjectCount, bool Deletable);
+
 // ----- LLM provider configs -----
 public record CreateLlmProviderRequest(LlmProviderType Type, string Name, string? BaseUrl, string Model, string? ApiKeySecretRef);
 public record UpdateLlmProviderRequest(LlmProviderType Type, string Name, string? BaseUrl, string Model, string? ApiKeySecretRef, bool Enabled);

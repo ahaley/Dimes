@@ -51,6 +51,11 @@ export interface LlmProviderConfig {
   id: string; projectId?: string | null; type: LlmProviderType; name: string
   baseUrl?: string | null; model: string; apiKeySecretRef?: string | null; enabled: boolean
 }
+export interface ActorSummary {
+  id: string; displayName: string; type: ActorType; email?: string | null
+  llmProviderConfigId?: string | null; providerName?: string | null
+  projectCount: number; deletable: boolean
+}
 
 // The ordered "happy path" of the change lifecycle, for board columns.
 export const LIFECYCLE_COLUMNS: ChangeStatus[] = [

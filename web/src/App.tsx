@@ -3,15 +3,20 @@ import { useMembers, useProjects } from './api/hooks'
 import { Card, Select } from './components/ui'
 import { Sidebar } from './features/Sidebar'
 import { Workspace } from './features/Workspace'
+import { LlmProvidersView } from './features/LlmProvidersView'
+import { ActorsView } from './features/ActorsView'
 import { SettingsModal } from './features/SettingsModal'
 import { CreateProjectModal } from './features/CreateProjectModal'
 
 const COLLAPSE_KEY = 'dimes.sidebar.collapsed'
 
+type View = 'board' | 'providers' | 'actors'
+
 export default function App() {
   const { data: projects } = useProjects()
   const [projectId, setProjectId] = useState<string>()
   const [actingActorId, setActingActorId] = useState<string>()
+  const [view, setView] = useState<View>('board')
   const [showSettings, setShowSettings] = useState(false)
   const [showCreateProject, setShowCreateProject] = useState(false)
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem(COLLAPSE_KEY) === '1')
@@ -42,11 +47,14 @@ export default function App() {
       <Sidebar
         projects={projects ?? []}
         projectId={projectId}
-        onSelect={setProjectId}
+        onSelect={(id) => { setProjectId(id); setView('board') }}
         collapsed={collapsed}
         onToggleCollapse={toggleCollapsed}
         onNewProject={() => setShowCreateProject(true)}
         onManage={() => setShowSettings(true)}
+        activeView={view}
+        onShowProviders={() => setView('providers')}
+        onShowActors={() => setView('actors')}
       />
 
       <div className="flex min-w-0 flex-1 flex-col">
@@ -59,26 +67,34 @@ export default function App() {
           >
             ☰
           </button>
-          <span className="font-semibold text-slate-800">{currentProject?.name ?? 'Dimes'}</span>
+          <span className="font-semibold text-slate-800">
+            {view === 'providers' ? 'LLM providers' : view === 'actors' ? 'Actors' : (currentProject?.name ?? 'Dimes')}
+          </span>
 
-          <div className="ml-auto flex items-center gap-2">
-            <span className="text-xs text-slate-500">Acting as</span>
-            <Select
-              value={actingActorId ?? ''}
-              onChange={(e) => setActingActorId(e.target.value || undefined)}
-              className="min-w-40"
-              disabled={!members || members.length === 0}
-            >
-              {(members ?? []).length === 0 && <option value="">No members</option>}
-              {(members ?? []).map((m) => (
-                <option key={m.actorId} value={m.actorId}>{m.displayName} · {m.role}</option>
-              ))}
-            </Select>
-          </div>
+          {view === 'board' && (
+            <div className="ml-auto flex items-center gap-2">
+              <span className="text-xs text-slate-500">Acting as</span>
+              <Select
+                value={actingActorId ?? ''}
+                onChange={(e) => setActingActorId(e.target.value || undefined)}
+                className="min-w-40"
+                disabled={!members || members.length === 0}
+              >
+                {(members ?? []).length === 0 && <option value="">No members</option>}
+                {(members ?? []).map((m) => (
+                  <option key={m.actorId} value={m.actorId}>{m.displayName} · {m.role}</option>
+                ))}
+              </Select>
+            </div>
+          )}
         </header>
 
         <main className="min-h-0 flex-1 overflow-auto p-6">
-          {projectId && actingActorId ? (
+          {view === 'providers' ? (
+            <LlmProvidersView projectId={projectId} />
+          ) : view === 'actors' ? (
+            <ActorsView />
+          ) : projectId && actingActorId ? (
             <Workspace projectId={projectId} actingActorId={actingActorId} members={members ?? []} />
           ) : (
             <Card className="p-10 text-center text-slate-500">

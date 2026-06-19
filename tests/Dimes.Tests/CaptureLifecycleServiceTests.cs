@@ -218,6 +218,42 @@ public sealed class CaptureLifecycleServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task Actors_OrphanAgent_BecomesDeletable_AndDeletes()
+    {
+        var seed = await SeedAsync();
+        var llm = await _projects.CreateLlmProviderAsync(seed.ProjectId,
+            new CreateLlmProviderRequest(LlmProviderType.Anthropic, "claude", null, "claude-sonnet-4-6", "K"));
+        var agent = await _projects.AddMemberAsync(seed.ProjectId,
+            new AddMemberRequest("Aria", ActorType.Agent, null, MemberRole.Contributor, llm.Id));
+
+        var listed = await _projects.ListActorsAsync(agentsOnly: true);
+        var row = listed.Single(a => a.Id == agent.ActorId);
+        Assert.Equal(1, row.ProjectCount);
+        Assert.False(row.Deletable);
+        Assert.Equal("claude", row.ProviderName);
+
+        await _projects.RemoveMemberAsync(seed.ProjectId, agent.ActorId);
+        var afterRemove = (await _projects.ListActorsAsync(agentsOnly: true)).Single(a => a.Id == agent.ActorId);
+        Assert.Equal(0, afterRemove.ProjectCount);
+        Assert.True(afterRemove.Deletable);
+
+        await _projects.DeleteActorAsync(agent.ActorId);
+        Assert.DoesNotContain(await _projects.ListActorsAsync(agentsOnly: true), a => a.Id == agent.ActorId);
+    }
+
+    [Fact]
+    public async Task DeleteActor_BlockedWhenReferenced()
+    {
+        var seed = await SeedAsync();
+        // The contributor authors a change, then leaves the project — actor is orphaned but referenced.
+        await _changes.CreateAsync(seed.ProjectId,
+            new CreateChangeRequest(seed.ContributorId, "By cory", null, ChangeKind.Feature));
+        await _projects.RemoveMemberAsync(seed.ProjectId, seed.ContributorId);
+
+        await Assert.ThrowsAsync<BadRequestException>(() => _projects.DeleteActorAsync(seed.ContributorId));
+    }
+
+    [Fact]
     public async Task GlobalLlmProvider_IsAvailableToEveryProject()
     {
         var global = await _projects.CreateLlmProviderAsync(

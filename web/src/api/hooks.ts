@@ -7,6 +7,7 @@ export const keys = {
   members: (projectId: string) => ['members', projectId] as const,
   providers: (projectId: string) => ['providers', projectId] as const,
   sources: (projectId: string) => ['sources', projectId] as const,
+  actors: (agentsOnly: boolean) => ['actors', agentsOnly] as const,
   inbox: (projectId: string, status?: ObservationStatus) => ['inbox', projectId, status ?? 'all'] as const,
   changes: (projectId: string, status?: ChangeStatus) => ['changes', projectId, status ?? 'all'] as const,
   change: (id: string) => ['change', id] as const,
@@ -38,6 +39,13 @@ export function useSources(projectId: string | undefined) {
     queryKey: keys.sources(projectId ?? ''),
     queryFn: () => api.listSources(projectId!),
     enabled: !!projectId,
+  })
+}
+
+export function useActors(agentsOnly: boolean) {
+  return useQuery({
+    queryKey: keys.actors(agentsOnly),
+    queryFn: () => api.listActors(agentsOnly),
   })
 }
 
