@@ -38,6 +38,27 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   return (await res.json()) as T
 }
 
+/** Fetch a file response and trigger a browser download. Filename comes from Content-Disposition. */
+async function download(path: string, fallbackName: string): Promise<void> {
+  const res = await fetch(path)
+  if (!res.ok) {
+    throw new ApiError(res.status, res.statusText, res.statusText)
+  }
+  const blob = await res.blob()
+  const cd = res.headers.get('Content-Disposition') ?? ''
+  const match = /filename\*?=(?:UTF-8'')?"?([^";]+)"?/i.exec(cd)
+  const name = match ? decodeURIComponent(match[1]) : fallbackName
+
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = name
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  URL.revokeObjectURL(url)
+}
+
 export const api = {
   // Projects & members
   listProjects: () => request<Project[]>('GET', '/api/projects'),
@@ -48,6 +69,13 @@ export const api = {
     projectId: string,
     body: { displayName: string; type: Member['type']; email?: string | null; role: Member['role']; llmProviderConfigId?: string | null },
   ) => request<Member>('POST', `/api/projects/${projectId}/members`, body),
+  updateMember: (
+    projectId: string,
+    actorId: string,
+    body: { displayName: string; email?: string | null; role: Member['role']; llmProviderConfigId?: string | null },
+  ) => request<Member>('PATCH', `/api/projects/${projectId}/members/${actorId}`, body),
+  removeMember: (projectId: string, actorId: string) =>
+    request<void>('DELETE', `/api/projects/${projectId}/members/${actorId}`),
   listLlmProviders: (projectId: string) =>
     request<LlmProviderConfig[]>('GET', `/api/projects/${projectId}/llm-providers`),
   listSources: (projectId: string) => request<ObservationSource[]>('GET', `/api/projects/${projectId}/sources`),
@@ -57,6 +85,14 @@ export const api = {
     projectId: string,
     body: { type: LlmProviderConfig['type']; name: string; baseUrl?: string | null; model: string; apiKeySecretRef?: string | null },
   ) => request<LlmProviderConfig>('POST', `/api/projects/${projectId}/llm-providers`, body),
+  createGlobalLlmProvider: (
+    body: { type: LlmProviderConfig['type']; name: string; baseUrl?: string | null; model: string; apiKeySecretRef?: string | null },
+  ) => request<LlmProviderConfig>('POST', `/api/llm-providers`, body),
+  updateLlmProvider: (
+    id: string,
+    body: { type: LlmProviderConfig['type']; name: string; baseUrl?: string | null; model: string; apiKeySecretRef?: string | null; enabled: boolean },
+  ) => request<LlmProviderConfig>('PATCH', `/api/llm-providers/${id}`, body),
+  deleteLlmProvider: (id: string) => request<void>('DELETE', `/api/llm-providers/${id}`),
 
   // Observations
   ingest: (
@@ -80,6 +116,10 @@ export const api = {
   listChanges: (projectId: string, status?: ChangeStatus) =>
     request<ChangeRequest[]>('GET', `/api/projects/${projectId}/changes${status ? `?status=${status}` : ''}`),
   getChange: (id: string) => request<ChangeRequestDetail>('GET', `/api/changes/${id}`),
+  updateChangeDetails: (
+    id: string,
+    body: { actorId: string; title: string; description?: string | null; priority: Priority },
+  ) => request<ChangeRequest>('PATCH', `/api/changes/${id}`, body),
   transition: (id: string, body: { actorId: string; target: ChangeStatus; reason?: string | null; duplicateOfId?: string | null }) =>
     request<ChangeRequest>('POST', `/api/changes/${id}/transition`, body),
   addComment: (id: string, body: { actorId: string; body: string }) =>
@@ -89,4 +129,8 @@ export const api = {
   agentComment: (id: string, agentActorId: string) =>
     request<Comment>('POST', `/api/changes/${id}/agent-comment`, { agentActorId }),
   audit: (id: string) => request<AuditEvent[]>('GET', `/api/changes/${id}/audit`),
+
+  // Export
+  exportInDevelopment: (projectId: string) =>
+    download(`/api/projects/${projectId}/export/in-development`, 'in-development.md'),
 }

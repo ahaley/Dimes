@@ -10,11 +10,15 @@ public record CreateProjectRequest(string Name, string? Description);
 public record ProjectDto(Guid Id, string Name, string? Description, DateTimeOffset CreatedAt);
 
 public record AddMemberRequest(string DisplayName, ActorType Type, string? Email, MemberRole Role, Guid? LlmProviderConfigId = null);
+public record UpdateMemberRequest(string DisplayName, string? Email, MemberRole Role, Guid? LlmProviderConfigId);
 public record MemberDto(Guid ActorId, Guid ProjectId, string DisplayName, ActorType Type, string? Email, MemberRole Role, Guid? LlmProviderConfigId);
 
 // ----- LLM provider configs -----
 public record CreateLlmProviderRequest(LlmProviderType Type, string Name, string? BaseUrl, string Model, string? ApiKeySecretRef);
-public record LlmProviderConfigDto(Guid Id, Guid? ProjectId, LlmProviderType Type, string Name, string? BaseUrl, string Model, bool Enabled);
+public record UpdateLlmProviderRequest(LlmProviderType Type, string Name, string? BaseUrl, string Model, string? ApiKeySecretRef, bool Enabled);
+// ApiKeySecretRef is a non-sensitive reference name (e.g. "ANTHROPIC_KEY"), not the secret itself —
+// safe to expose so the edit form can prefill it.
+public record LlmProviderConfigDto(Guid Id, Guid? ProjectId, LlmProviderType Type, string Name, string? BaseUrl, string Model, string? ApiKeySecretRef, bool Enabled);
 
 // ----- Recommend-only agent commentary -----
 public record AgentCommentRequest(Guid AgentActorId);
@@ -66,6 +70,12 @@ public record ChangeRequestDetailDto(
     IReadOnlyList<ScmLinkDto> ScmLinks);
 
 public record TransitionChangeRequest(Guid ActorId, ChangeStatus Target, string? Reason, Guid? DuplicateOfId);
+
+/// <summary>Post-hoc edit of a change's free-form details (author or Maintainer only).</summary>
+public record UpdateChangeDetailsRequest(Guid ActorId, string Title, string? Description, Priority Priority);
+
+/// <summary>A generated file ready to download (name + UTF-8 text content).</summary>
+public record MarkdownExport(string FileName, string Markdown);
 
 public record AddCommentRequest(Guid ActorId, string Body);
 public record CommentDto(Guid Id, Guid ChangeRequestId, Guid AuthorActorId, string Body, CommentKind Kind, DateTimeOffset CreatedAt);

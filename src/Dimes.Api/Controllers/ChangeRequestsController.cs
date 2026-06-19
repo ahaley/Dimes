@@ -1,3 +1,4 @@
+using System.Text;
 using Dimes.Api.Contracts;
 using Dimes.Api.Services;
 using Dimes.Domain;
@@ -28,6 +29,10 @@ public class ChangeRequestsController(
     public async Task<ActionResult<ChangeRequestDetailDto>> Get(Guid id, CancellationToken ct)
         => Ok(await changes.GetDetailAsync(id, ct));
 
+    [HttpPatch("api/changes/{id:guid}")]
+    public async Task<ActionResult<ChangeRequestDto>> UpdateDetails(Guid id, UpdateChangeDetailsRequest req, CancellationToken ct)
+        => Ok(await changes.UpdateDetailsAsync(id, req, ct));
+
     [HttpPost("api/changes/{id:guid}/transition")]
     public async Task<ActionResult<ChangeRequestDto>> Transition(Guid id, TransitionChangeRequest req, CancellationToken ct)
         => Ok(await changes.TransitionAsync(id, req, ct));
@@ -48,4 +53,12 @@ public class ChangeRequestsController(
     [HttpGet("api/changes/{id:guid}/audit")]
     public async Task<ActionResult<IReadOnlyList<AuditEventDto>>> Audit(Guid id, CancellationToken ct)
         => Ok(await changes.GetAuditAsync(id, ct));
+
+    /// <summary>Download a Claude Code work-order markdown of the project's In-Development changes.</summary>
+    [HttpGet("api/projects/{projectId:guid}/export/in-development")]
+    public async Task<IActionResult> ExportInDevelopment(Guid projectId, CancellationToken ct)
+    {
+        var export = await changes.ExportInDevelopmentAsync(projectId, ct);
+        return File(Encoding.UTF8.GetBytes(export.Markdown), "text/markdown", export.FileName);
+    }
 }

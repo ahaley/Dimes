@@ -65,6 +65,52 @@ public class ProjectService(DimesDbContext db)
         return membership.ToMemberDto();
     }
 
+    /// <summary>Edit a project member: display name, email, role, and (for agents) the LLM binding.</summary>
+    public async Task<MemberDto> UpdateMemberAsync(
+        Guid projectId, Guid actorId, UpdateMemberRequest req, CancellationToken ct = default)
+    {
+        var membership = await db.Memberships
+            .Include(m => m.Actor)
+            .FirstOrDefaultAsync(m => m.ProjectId == projectId && m.ActorId == actorId, ct)
+            ?? throw new NotFoundException($"Member '{actorId}' not found in project '{projectId}'.");
+
+        if (string.IsNullOrWhiteSpace(req.DisplayName))
+        {
+            throw new BadRequestException("Member display name is required.");
+        }
+
+        if (req.LlmProviderConfigId is not null)
+        {
+            if (membership.Actor.Type != ActorType.Agent)
+            {
+                throw new BadRequestException("Only Agent actors can be bound to an LLM provider config.");
+            }
+            if (!await db.LlmProviderConfigs.AnyAsync(c => c.Id == req.LlmProviderConfigId, ct))
+            {
+                throw new NotFoundException($"LLM provider config '{req.LlmProviderConfigId}' not found.");
+            }
+        }
+
+        membership.Actor.DisplayName = req.DisplayName.Trim();
+        membership.Actor.Email = req.Email;
+        membership.Actor.LlmProviderConfigId =
+            membership.Actor.Type == ActorType.Agent ? req.LlmProviderConfigId : null;
+        membership.Role = req.Role;
+        await db.SaveChangesAsync(ct);
+        return membership.ToMemberDto();
+    }
+
+    /// <summary>Remove a member from a project. Deletes the membership only; the actor row is kept so
+    /// their authored changes, comments, and audit entries remain valid.</summary>
+    public async Task RemoveMemberAsync(Guid projectId, Guid actorId, CancellationToken ct = default)
+    {
+        var membership = await db.Memberships
+            .FirstOrDefaultAsync(m => m.ProjectId == projectId && m.ActorId == actorId, ct)
+            ?? throw new NotFoundException($"Member '{actorId}' not found in project '{projectId}'.");
+        db.Memberships.Remove(membership);
+        await db.SaveChangesAsync(ct);
+    }
+
     public async Task<IReadOnlyList<MemberDto>> ListMembersAsync(Guid projectId, CancellationToken ct = default) =>
         await db.Memberships
             .Where(m => m.ProjectId == projectId)
@@ -74,18 +120,33 @@ public class ProjectService(DimesDbContext db)
                 m.ActorId, m.ProjectId, m.Actor.DisplayName, m.Actor.Type, m.Actor.Email, m.Role, m.Actor.LlmProviderConfigId))
             .ToListAsync(ct);
 
+    /// <summary>Providers available to a project: its own plus website-wide (global) ones. Globals
+    /// (ProjectId == null) are sorted first.</summary>
     public async Task<IReadOnlyList<LlmProviderConfigDto>> ListLlmProvidersAsync(Guid projectId, CancellationToken ct = default) =>
         await db.LlmProviderConfigs
-            .Where(c => c.ProjectId == projectId)
+            .Where(c => c.ProjectId == projectId || c.ProjectId == null)
+            .OrderBy(c => c.ProjectId == null ? 0 : 1)
+            .ThenBy(c => c.Name)
+            .Select(c => c.ToDto())
+            .ToListAsync(ct);
+
+    /// <summary>Website-wide providers only (ProjectId == null).</summary>
+    public async Task<IReadOnlyList<LlmProviderConfigDto>> ListGlobalLlmProvidersAsync(CancellationToken ct = default) =>
+        await db.LlmProviderConfigs
+            .Where(c => c.ProjectId == null)
             .OrderBy(c => c.Name)
             .Select(c => c.ToDto())
             .ToListAsync(ct);
 
+    /// <summary>Create an LLM provider config. <paramref name="projectId"/> null = website-wide
+    /// (available to every project); otherwise scoped to that project.</summary>
     public async Task<LlmProviderConfigDto> CreateLlmProviderAsync(
-        Guid projectId, CreateLlmProviderRequest req, CancellationToken ct = default)
+        Guid? projectId, CreateLlmProviderRequest req, CancellationToken ct = default)
     {
-        var project = await db.Projects.FindAsync([projectId], ct)
-            ?? throw new NotFoundException($"Project '{projectId}' not found.");
+        if (projectId is not null && !await db.Projects.AnyAsync(p => p.Id == projectId, ct))
+        {
+            throw new NotFoundException($"Project '{projectId}' not found.");
+        }
 
         if (string.IsNullOrWhiteSpace(req.Name) || string.IsNullOrWhiteSpace(req.Model))
         {
@@ -94,7 +155,7 @@ public class ProjectService(DimesDbContext db)
 
         var config = new LlmProviderConfig
         {
-            ProjectId = project.Id,
+            ProjectId = projectId,
             Type = req.Type,
             Name = req.Name,
             BaseUrl = req.BaseUrl,
@@ -104,5 +165,44 @@ public class ProjectService(DimesDbContext db)
         db.LlmProviderConfigs.Add(config);
         await db.SaveChangesAsync(ct);
         return config.ToDto();
+    }
+
+    /// <summary>Edit an existing provider config (project-scoped or global) — fix the model, base URL,
+    /// key reference, etc., or enable/disable it.</summary>
+    public async Task<LlmProviderConfigDto> UpdateLlmProviderAsync(
+        Guid id, UpdateLlmProviderRequest req, CancellationToken ct = default)
+    {
+        var config = await db.LlmProviderConfigs.FindAsync([id], ct)
+            ?? throw new NotFoundException($"LLM provider config '{id}' not found.");
+
+        if (string.IsNullOrWhiteSpace(req.Name) || string.IsNullOrWhiteSpace(req.Model))
+        {
+            throw new BadRequestException("Provider name and model are required.");
+        }
+
+        config.Type = req.Type;
+        config.Name = req.Name;
+        config.BaseUrl = req.BaseUrl;
+        config.Model = req.Model;
+        config.ApiKeySecretRef = req.ApiKeySecretRef;
+        config.Enabled = req.Enabled;
+        await db.SaveChangesAsync(ct);
+        return config.ToDto();
+    }
+
+    /// <summary>Delete a provider config. Blocked while any agent still references it (reassign first).</summary>
+    public async Task DeleteLlmProviderAsync(Guid id, CancellationToken ct = default)
+    {
+        var config = await db.LlmProviderConfigs.FindAsync([id], ct)
+            ?? throw new NotFoundException($"LLM provider config '{id}' not found.");
+
+        var inUse = await db.Actors.CountAsync(a => a.LlmProviderConfigId == id, ct);
+        if (inUse > 0)
+        {
+            throw new BadRequestException($"Provider is in use by {inUse} agent(s). Reassign them before deleting.");
+        }
+
+        db.LlmProviderConfigs.Remove(config);
+        await db.SaveChangesAsync(ct);
     }
 }
