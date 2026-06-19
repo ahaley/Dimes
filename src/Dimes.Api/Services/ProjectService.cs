@@ -111,6 +111,54 @@ public class ProjectService(DimesDbContext db)
         await db.SaveChangesAsync(ct);
     }
 
+    /// <summary>App-level list of actors with their provider binding, project membership count, and
+    /// whether they can be safely hard-deleted (no memberships and no references anywhere).</summary>
+    public async Task<IReadOnlyList<ActorDto>> ListActorsAsync(bool agentsOnly, CancellationToken ct = default)
+    {
+        var query = db.Actors.AsQueryable();
+        if (agentsOnly)
+        {
+            query = query.Where(a => a.Type == ActorType.Agent);
+        }
+
+        return await query
+            .OrderBy(a => a.DisplayName)
+            .Select(a => new ActorDto(
+                a.Id, a.DisplayName, a.Type, a.Email,
+                a.LlmProviderConfigId,
+                a.LlmProviderConfig != null ? a.LlmProviderConfig.Name : null,
+                db.Memberships.Count(m => m.ActorId == a.Id),
+                db.Memberships.All(m => m.ActorId != a.Id)
+                    && db.ChangeRequests.All(c => c.CreatedByActorId != a.Id && c.AssigneeActorId != a.Id)
+                    && db.Comments.All(c => c.AuthorActorId != a.Id)
+                    && db.AuditEvents.All(e => e.ActorId != a.Id)))
+            .ToListAsync(ct);
+    }
+
+    /// <summary>Hard-delete an actor. Blocked while it belongs to a project or is referenced by any
+    /// change, comment, or audit event (those are kept to preserve history).</summary>
+    public async Task DeleteActorAsync(Guid id, CancellationToken ct = default)
+    {
+        var actor = await db.Actors.FindAsync([id], ct)
+            ?? throw new NotFoundException($"Actor '{id}' not found.");
+
+        if (await db.Memberships.AnyAsync(m => m.ActorId == id, ct))
+        {
+            throw new BadRequestException("Actor is still a member of a project. Remove the membership first.");
+        }
+        var referenced =
+            await db.ChangeRequests.AnyAsync(c => c.CreatedByActorId == id || c.AssigneeActorId == id, ct)
+            || await db.Comments.AnyAsync(c => c.AuthorActorId == id, ct)
+            || await db.AuditEvents.AnyAsync(e => e.ActorId == id, ct);
+        if (referenced)
+        {
+            throw new BadRequestException("Actor is referenced by changes, comments, or audit history and can't be deleted.");
+        }
+
+        db.Actors.Remove(actor);
+        await db.SaveChangesAsync(ct);
+    }
+
     public async Task<IReadOnlyList<MemberDto>> ListMembersAsync(Guid projectId, CancellationToken ct = default) =>
         await db.Memberships
             .Where(m => m.ProjectId == projectId)
@@ -199,6 +247,7 @@ public class ProjectService(DimesDbContext db)
         var inUse = await db.Actors.CountAsync(a => a.LlmProviderConfigId == id, ct);
         if (inUse > 0)
         {
+            var actors = await db.Actors.Where(a => a.LlmProviderConfigId == id).ToListAsync(ct);
             throw new BadRequestException($"Provider is in use by {inUse} agent(s). Reassign them before deleting.");
         }
 

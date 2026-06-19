@@ -4,6 +4,7 @@ import { initials } from '../lifecycle'
 
 export function Sidebar({
   projects, projectId, onSelect, collapsed, onToggleCollapse, onNewProject, onManage,
+  activeView, onShowProviders, onShowActors,
 }: {
   projects: Project[]
   projectId: string | undefined
@@ -12,6 +13,9 @@ export function Sidebar({
   onToggleCollapse: () => void
   onNewProject: () => void
   onManage: () => void
+  activeView: 'board' | 'providers' | 'actors'
+  onShowProviders: () => void
+  onShowActors: () => void
 }) {
   return (
     <aside
@@ -43,7 +47,7 @@ export function Sidebar({
       {/* Project list */}
       <nav className="flex-1 space-y-1 overflow-y-auto px-2 py-1">
         {projects.map((p) => {
-          const active = p.id === projectId
+          const active = p.id === projectId && activeView === 'board'
           return (
             <button
               key={p.id}
@@ -87,6 +91,41 @@ export function Sidebar({
           <span className="text-base leading-none">+</span>
           {!collapsed && <span>New project</span>}
         </button>
+
+        {/* App-level settings */}
+        <div className="pt-3">
+          {!collapsed && (
+            <div className="px-2 pb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">Settings</div>
+          )}
+          <button
+            onClick={onShowProviders}
+            title="LLM providers"
+            className={cx(
+              'flex w-full items-center rounded-md text-sm',
+              collapsed ? 'h-9 w-9 justify-center' : 'gap-2 px-2 py-1.5 text-left',
+              activeView === 'providers'
+                ? 'bg-slate-100 font-medium text-slate-900'
+                : 'text-slate-600 hover:bg-slate-50',
+            )}
+          >
+            <span aria-hidden>⚡</span>
+            {!collapsed && <span>LLM providers</span>}
+          </button>
+          <button
+            onClick={onShowActors}
+            title="Actors"
+            className={cx(
+              'flex w-full items-center rounded-md text-sm',
+              collapsed ? 'h-9 w-9 justify-center' : 'gap-2 px-2 py-1.5 text-left',
+              activeView === 'actors'
+                ? 'bg-slate-100 font-medium text-slate-900'
+                : 'text-slate-600 hover:bg-slate-50',
+            )}
+          >
+            <span aria-hidden>👤</span>
+            {!collapsed && <span>Actors</span>}
+          </button>
+        </div>
       </nav>
 
       {/* Manage (pinned bottom) */}
