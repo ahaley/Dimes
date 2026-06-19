@@ -50,7 +50,7 @@ export function ChangeBoard({
       </div>
 
       {terminal.length > 0 && (
-        <div className="mt-3 rounded-lg border border-slate-200 bg-white">
+        <div className="mt-3 rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
           <button
             onClick={() => setClosedOpen((v) => !v)}
             className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500"
@@ -61,7 +61,7 @@ export function ChangeBoard({
             <ul className="space-y-1 px-3 pb-3">
               {terminal.map((c) => (
                 <li key={c.id}>
-                  <button onClick={() => onSelect(c.id)} className="text-sm text-slate-500 hover:text-slate-800">
+                  <button onClick={() => onSelect(c.id)} className="text-sm text-slate-500 hover:text-slate-800 dark:hover:text-slate-200">
                     {c.title} <span className="text-slate-400">· {c.status}</span>
                   </button>
                 </li>
@@ -88,7 +88,7 @@ function Column({
     <div
       ref={setNodeRef}
       className={cx(
-        'flex w-64 shrink-0 flex-col rounded-lg border bg-slate-50/70 p-2 transition-colors',
+        'flex w-64 shrink-0 flex-col rounded-lg border bg-slate-50/70 p-2 transition-colors dark:bg-slate-800/40',
         isOver ? 'border-indigo-400 bg-indigo-50/60' : 'border-transparent',
       )}
     >
@@ -107,7 +107,7 @@ function Column({
           />
         ))}
         {changes.length === 0 && (
-          <p className="rounded-md border border-dashed border-slate-200 px-2 py-6 text-center text-xs text-slate-300">
+          <p className="rounded-md border border-dashed border-slate-200 px-2 py-6 text-center text-xs text-slate-300 dark:border-slate-700 dark:text-slate-600">
             Drop here
           </p>
         )}

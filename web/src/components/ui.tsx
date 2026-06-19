@@ -9,10 +9,10 @@ type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
 }
 export function Button({ variant = 'default', className, ...props }: ButtonProps) {
   const styles: Record<string, string> = {
-    primary: 'bg-indigo-600 text-white hover:bg-indigo-500 border-transparent',
-    default: 'bg-white text-slate-800 hover:bg-slate-50 border-slate-300',
-    subtle: 'bg-transparent text-slate-600 hover:bg-slate-100 border-transparent',
-    danger: 'bg-white text-red-600 hover:bg-red-50 border-red-300',
+    primary: 'bg-indigo-600 text-white hover:bg-indigo-500 border-transparent dark:bg-indigo-500 dark:hover:bg-indigo-400',
+    default: 'bg-white text-slate-800 hover:bg-slate-50 border-slate-300 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700 dark:border-slate-600',
+    subtle: 'bg-transparent text-slate-600 hover:bg-slate-100 border-transparent dark:text-slate-300 dark:hover:bg-slate-800',
+    danger: 'bg-white text-red-600 hover:bg-red-50 border-red-300 dark:bg-slate-800 dark:text-red-400 dark:border-red-900 dark:hover:bg-red-950/40',
   }
   return (
     <button
@@ -29,12 +29,12 @@ export function Button({ variant = 'default', className, ...props }: ButtonProps
 
 export function Badge({ children, tone = 'slate' }: { children: ReactNode; tone?: string }) {
   const tones: Record<string, string> = {
-    slate: 'bg-slate-100 text-slate-700',
-    indigo: 'bg-indigo-100 text-indigo-700',
-    green: 'bg-green-100 text-green-700',
-    amber: 'bg-amber-100 text-amber-800',
-    red: 'bg-red-100 text-red-700',
-    violet: 'bg-violet-100 text-violet-700',
+    slate: 'bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-200',
+    indigo: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300',
+    green: 'bg-green-100 text-green-700 dark:bg-green-500/20 dark:text-green-300',
+    amber: 'bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-300',
+    red: 'bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-300',
+    violet: 'bg-violet-100 text-violet-700 dark:bg-violet-500/20 dark:text-violet-300',
   }
   return (
     <span className={cx('inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium', tones[tone] ?? tones.slate)}>
@@ -44,19 +44,19 @@ export function Badge({ children, tone = 'slate' }: { children: ReactNode; tone?
 }
 
 export function Card({ children, className }: { children: ReactNode; className?: string }) {
-  return <div className={cx('rounded-lg border border-slate-200 bg-white', className)}>{children}</div>
+  return <div className={cx('rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900', className)}>{children}</div>
 }
 
 export function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     <label className="block space-y-1">
-      <span className="text-xs font-medium text-slate-600">{label}</span>
+      <span className="text-xs font-medium text-slate-600 dark:text-slate-300">{label}</span>
       {children}
     </label>
   )
 }
 
-const inputCx = 'w-full rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-sm outline-none focus:border-indigo-500'
+const inputCx = 'w-full rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-sm outline-none focus:border-indigo-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100'
 
 export function TextInput(props: InputHTMLAttributes<HTMLInputElement>) {
   return <input {...props} className={cx(inputCx, props.className)} />
@@ -74,11 +74,11 @@ export function Modal({ title, onClose, children, wide }: { title: string; onClo
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/40 p-4" onClick={onClose}>
       <div
-        className={cx('mt-10 w-full rounded-xl bg-white shadow-xl', wide ? 'max-w-3xl' : 'max-w-lg')}
+        className={cx('mt-10 w-full rounded-xl bg-white shadow-xl dark:bg-slate-900', wide ? 'max-w-3xl' : 'max-w-lg')}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between border-b border-slate-200 px-5 py-3">
-          <h2 className="text-base font-semibold text-slate-800">{title}</h2>
+        <div className="flex items-center justify-between border-b border-slate-200 px-5 py-3 dark:border-slate-800">
+          <h2 className="text-base font-semibold text-slate-800 dark:text-slate-100">{title}</h2>
           <Button variant="subtle" onClick={onClose}>✕</Button>
         </div>
         <div className="px-5 py-4">{children}</div>
@@ -90,5 +90,5 @@ export function Modal({ title, onClose, children, wide }: { title: string; onClo
 export function ErrorText({ error }: { error: unknown }) {
   if (!error) return null
   const message = error instanceof Error ? error.message : String(error)
-  return <p className="text-sm text-red-600">{message}</p>
+  return <p className="text-sm text-red-600 dark:text-red-400">{message}</p>
 }
