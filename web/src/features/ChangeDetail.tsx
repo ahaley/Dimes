@@ -95,7 +95,7 @@ export function ChangeDetail({
           <ErrorText error={transition.error} />
 
           {editing ? (
-            <div className="space-y-2 rounded-md border border-slate-200 p-3">
+            <div className="space-y-2 rounded-md border border-slate-200 p-3 dark:border-slate-700">
               <Field label="Title">
                 <TextInput value={eTitle} onChange={(e) => setETitle(e.target.value)} autoFocus />
               </Field>
@@ -116,7 +116,7 @@ export function ChangeDetail({
               </div>
             </div>
           ) : detail.change.description ? (
-            <p className="text-sm text-slate-600">{detail.change.description}</p>
+            <p className="text-sm text-slate-600 dark:text-slate-300">{detail.change.description}</p>
           ) : (
             canEdit && <p className="text-sm italic text-slate-400">No description — click Edit to add one.</p>
           )}
@@ -126,7 +126,7 @@ export function ChangeDetail({
             <Section title="Evidence">
               <ul className="space-y-1">
                 {detail.evidence.map((o) => (
-                  <li key={o.id} className="font-mono text-xs text-slate-600">
+                  <li key={o.id} className="font-mono text-xs text-slate-600 dark:text-slate-300">
                     {o.payload} {o.occurrenceCount > 1 && <Badge tone="red">×{o.occurrenceCount}</Badge>}
                   </li>
                 ))}
@@ -138,13 +138,13 @@ export function ChangeDetail({
           <Section title="Comments">
             <ul className="space-y-2">
               {detail.comments.map((c) => (
-                <li key={c.id} className="rounded-md bg-slate-50 p-2">
+                <li key={c.id} className="rounded-md bg-slate-50 p-2 dark:bg-slate-800">
                   <div className="mb-1">
                     <Badge tone={c.kind === 'AgentRecommendation' ? 'violet' : 'slate'}>
                       {c.kind === 'AgentRecommendation' ? 'agent' : 'human'}
                     </Badge>
                   </div>
-                  <p className="whitespace-pre-wrap text-sm text-slate-700">{c.body}</p>
+                  <p className="whitespace-pre-wrap text-sm text-slate-700 dark:text-slate-200">{c.body}</p>
                 </li>
               ))}
               {detail.comments.length === 0 && <li className="text-sm text-slate-400">No comments yet.</li>}
@@ -156,7 +156,7 @@ export function ChangeDetail({
                 <Button variant="default" disabled={!commentBody.trim() || addComment.isPending} onClick={() => addComment.mutate()}>
                   Comment
                 </Button>
-                <span className="mx-1 h-5 w-px bg-slate-200" />
+                <span className="mx-1 h-5 w-px bg-slate-200 dark:bg-slate-700" />
                 {agents.length > 0 ? (
                   <>
                     <Select value={agentId || agents[0].actorId} onChange={(e) => setAgentId(e.target.value)} className="max-w-40">
@@ -198,7 +198,7 @@ export function ChangeDetail({
             <ol className="space-y-1">
               {(audit ?? []).map((e) => (
                 <li key={e.id} className="text-xs text-slate-500">
-                  <span className="font-medium text-slate-700">{e.action}</span>
+                  <span className="font-medium text-slate-700 dark:text-slate-300">{e.action}</span>
                   {e.fromStatus && <> · {e.fromStatus} → {e.toStatus}</>}
                   {!e.fromStatus && e.toStatus && <> · {e.toStatus}</>}
                   {e.reason && <> · “{e.reason}”</>}

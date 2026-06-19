@@ -15,19 +15,19 @@ export function ActorsView() {
     <div className="mx-auto max-w-2xl space-y-4">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-lg font-semibold text-slate-800">Actors</h1>
+          <h1 className="text-lg font-semibold text-slate-800 dark:text-slate-100">Actors</h1>
           <p className="mt-1 text-sm text-slate-500">
             Identities created via project membership. Removing a member keeps the actor (so its history
             stays valid); delete it here once it has no project and no references.
           </p>
         </div>
-        <label className="flex shrink-0 items-center gap-2 pt-1 text-xs text-slate-600">
+        <label className="flex shrink-0 items-center gap-2 pt-1 text-xs text-slate-600 dark:text-slate-300">
           <input type="checkbox" checked={agentsOnly} onChange={(e) => setAgentsOnly(e.target.checked)} />
           Agents only
         </label>
       </div>
 
-      <Card className="divide-y divide-slate-100">
+      <Card className="divide-y divide-slate-100 dark:divide-slate-800">
         {(actors ?? []).map((a) => <ActorRow key={a.id} actor={a} />)}
         {actors?.length === 0 && <p className="p-4 text-sm text-slate-400">No actors to show.</p>}
       </Card>
@@ -52,9 +52,9 @@ function ActorRow({ actor }: { actor: ActorSummary }) {
     : 'Locked — has history (changes, comments, or audit) that is kept, so it can’t be deleted.'
 
   return (
-    <div className="p-3 text-sm text-slate-700">
+    <div className="p-3 text-sm text-slate-700 dark:text-slate-200">
       <div className="flex items-center gap-2">
-        <span className="font-medium text-slate-800">{actor.displayName}</span>
+        <span className="font-medium text-slate-800 dark:text-slate-100">{actor.displayName}</span>
         <Badge tone={actor.type === 'Agent' ? 'violet' : 'slate'}>{actor.type}</Badge>
         <span className="text-slate-400">{actor.providerName ?? '—'}</span>
         <Badge tone={actor.projectCount === 0 ? 'amber' : 'slate'}>{membership}</Badge>
