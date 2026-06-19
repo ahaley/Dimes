@@ -148,9 +148,32 @@ public class ProjectService(DimesDbContext db)
         var actor = await db.Actors.FindAsync([id], ct)
             ?? throw new NotFoundException($"Actor '{id}' not found.");
 
+        if (archived)
+        {
+            await EnsureNotLastSiteAdminAsync(actor, ct);
+        }
+
         actor.IsArchived = archived;
         actor.ArchivedAt = archived ? DateTimeOffset.UtcNow : null;
         await db.SaveChangesAsync(ct);
+    }
+
+    /// <summary>An "effective" site admin can actually sign in (IsSiteAdmin and not archived). Guards
+    /// against removing/disabling the final one, which would lock everyone out of administration.
+    /// No-op for actors that aren't currently effective site admins.</summary>
+    public async Task EnsureNotLastSiteAdminAsync(Actor actor, CancellationToken ct = default)
+    {
+        if (!actor.IsSiteAdmin || actor.IsArchived)
+        {
+            return;
+        }
+
+        var anotherExists = await db.Actors
+            .AnyAsync(a => a.Id != actor.Id && a.IsSiteAdmin && !a.IsArchived, ct);
+        if (!anotherExists)
+        {
+            throw new BadRequestException("Can't remove the last site administrator.");
+        }
     }
 
     /// <summary>Edit an actor's identity fields (display name, email). Like the LLM-provider edit, this
@@ -167,8 +190,17 @@ public class ProjectService(DimesDbContext db)
             throw new BadRequestException("Display name is required.");
         }
 
+        // Email is the login identity, so it must be unique (case-insensitive). Normalize to match
+        // CreateLocalUserAsync and the login/JIT lookups.
+        var email = string.IsNullOrWhiteSpace(req.Email) ? null : req.Email.Trim().ToLowerInvariant();
+        if (email is not null
+            && await db.Actors.AnyAsync(a => a.Id != id && a.Email != null && a.Email.ToLower() == email, ct))
+        {
+            throw new BadRequestException("An actor with that email already exists.");
+        }
+
         actor.DisplayName = req.DisplayName.Trim();
-        actor.Email = string.IsNullOrWhiteSpace(req.Email) ? null : req.Email.Trim();
+        actor.Email = email;
         await db.SaveChangesAsync(ct);
 
         return new ActorDto(
@@ -200,6 +232,15 @@ public class ProjectService(DimesDbContext db)
         if (referenced)
         {
             throw new BadRequestException("Actor is referenced by changes, comments, or audit history and can't be deleted.");
+        }
+        await EnsureNotLastSiteAdminAsync(actor, ct);
+
+        // Remove the login credential first — its FK to Actor is Restrict, so it would otherwise block
+        // the delete. Credentials aren't history, so dropping them with the actor is correct.
+        var credential = await db.LocalCredentials.FirstOrDefaultAsync(c => c.ActorId == id, ct);
+        if (credential is not null)
+        {
+            db.LocalCredentials.Remove(credential);
         }
 
         db.Actors.Remove(actor);
