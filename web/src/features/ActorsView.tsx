@@ -47,24 +47,30 @@ function ActorRow({ actor }: { actor: ActorSummary }) {
   const membership = actor.projectCount === 0
     ? 'no project'
     : `${actor.projectCount} project${actor.projectCount === 1 ? '' : 's'}`
-  const lockReason = actor.projectCount > 0 ? 'Still a member of a project' : 'Referenced by changes, comments, or audit history'
+  const lockReason = actor.projectCount > 0
+    ? `Locked — still a member of ${membership}; remove the membership first.`
+    : 'Locked — has history (changes, comments, or audit) that is kept, so it can’t be deleted.'
 
   return (
-    <div className="flex items-center gap-2 p-3 text-sm text-slate-700">
-      <span className="font-medium text-slate-800">{actor.displayName}</span>
-      <Badge tone={actor.type === 'Agent' ? 'violet' : 'slate'}>{actor.type}</Badge>
-      <span className="text-slate-400">{actor.providerName ?? '—'}</span>
-      <Badge tone={actor.projectCount === 0 ? 'amber' : 'slate'}>{membership}</Badge>
-      <span className="ml-auto">
-        <Button
-          variant="subtle"
-          disabled={!actor.deletable || remove.isPending}
-          title={actor.deletable ? 'Delete actor' : lockReason}
-          onClick={() => { if (window.confirm(`Delete actor "${actor.displayName}"?`)) remove.mutate() }}
-        >
-          Delete
-        </Button>
-      </span>
+    <div className="p-3 text-sm text-slate-700">
+      <div className="flex items-center gap-2">
+        <span className="font-medium text-slate-800">{actor.displayName}</span>
+        <Badge tone={actor.type === 'Agent' ? 'violet' : 'slate'}>{actor.type}</Badge>
+        <span className="text-slate-400">{actor.providerName ?? '—'}</span>
+        <Badge tone={actor.projectCount === 0 ? 'amber' : 'slate'}>{membership}</Badge>
+        {!actor.deletable && <Badge tone="red">locked</Badge>}
+        <span className="ml-auto">
+          <Button
+            variant="subtle"
+            disabled={!actor.deletable || remove.isPending}
+            title={actor.deletable ? 'Delete actor' : lockReason}
+            onClick={() => { if (window.confirm(`Delete actor "${actor.displayName}"?`)) remove.mutate() }}
+          >
+            Delete
+          </Button>
+        </span>
+      </div>
+      {!actor.deletable && <p className="mt-1 text-xs text-slate-500">{lockReason}</p>}
     </div>
   )
 }
