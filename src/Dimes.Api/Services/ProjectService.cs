@@ -153,6 +153,35 @@ public class ProjectService(DimesDbContext db)
         await db.SaveChangesAsync(ct);
     }
 
+    /// <summary>Edit an actor's identity fields (display name, email). Like the LLM-provider edit, this
+    /// is an app-level correction; project role and provider binding are managed via membership.</summary>
+    public async Task<ActorDto> UpdateActorAsync(Guid id, UpdateActorRequest req, CancellationToken ct = default)
+    {
+        var actor = await db.Actors
+            .Include(a => a.LlmProviderConfig)
+            .FirstOrDefaultAsync(a => a.Id == id, ct)
+            ?? throw new NotFoundException($"Actor '{id}' not found.");
+
+        if (string.IsNullOrWhiteSpace(req.DisplayName))
+        {
+            throw new BadRequestException("Display name is required.");
+        }
+
+        actor.DisplayName = req.DisplayName.Trim();
+        actor.Email = string.IsNullOrWhiteSpace(req.Email) ? null : req.Email.Trim();
+        await db.SaveChangesAsync(ct);
+
+        return new ActorDto(
+            actor.Id, actor.DisplayName, actor.Type, actor.Email,
+            actor.LlmProviderConfigId, actor.LlmProviderConfig?.Name,
+            await db.Memberships.CountAsync(m => m.ActorId == actor.Id, ct),
+            !await db.Memberships.AnyAsync(m => m.ActorId == actor.Id, ct)
+                && !await db.ChangeRequests.AnyAsync(c => c.CreatedByActorId == actor.Id || c.AssigneeActorId == actor.Id, ct)
+                && !await db.Comments.AnyAsync(c => c.AuthorActorId == actor.Id, ct)
+                && !await db.AuditEvents.AnyAsync(e => e.ActorId == actor.Id, ct),
+            actor.IsArchived);
+    }
+
     /// <summary>Hard-delete an actor. Blocked while it belongs to a project or is referenced by any
     /// change, comment, or audit event (those are kept to preserve history).</summary>
     public async Task DeleteActorAsync(Guid id, CancellationToken ct = default)

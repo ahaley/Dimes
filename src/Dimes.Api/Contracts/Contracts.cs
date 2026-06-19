@@ -17,6 +17,7 @@ public record MemberDto(Guid ActorId, Guid ProjectId, string DisplayName, ActorT
 public record ActorDto(
     Guid Id, string DisplayName, ActorType Type, string? Email,
     Guid? LlmProviderConfigId, string? ProviderName, int ProjectCount, bool Deletable, bool IsArchived);
+public record UpdateActorRequest(string DisplayName, string? Email);
 
 // ----- LLM provider configs -----
 public record CreateLlmProviderRequest(LlmProviderType Type, string Name, string? BaseUrl, string Model, string? ApiKeySecretRef);

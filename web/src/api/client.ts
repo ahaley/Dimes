@@ -133,6 +133,8 @@ export const api = {
   // Actors (app-level)
   listActors: (agentsOnly: boolean, includeArchived = false) =>
     request<ActorSummary[]>('GET', `/api/actors?agentsOnly=${agentsOnly}&includeArchived=${includeArchived}`),
+  updateActor: (id: string, body: { displayName: string; email?: string | null }) =>
+    request<ActorSummary>('PATCH', `/api/actors/${id}`, body),
   archiveActor: (id: string) => request<void>('POST', `/api/actors/${id}/archive`),
   unarchiveActor: (id: string) => request<void>('POST', `/api/actors/${id}/unarchive`),
   deleteActor: (id: string) => request<void>('DELETE', `/api/actors/${id}`),

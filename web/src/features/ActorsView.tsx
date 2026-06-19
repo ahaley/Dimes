@@ -3,7 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '../api/client'
 import { useActors } from '../api/hooks'
 import type { ActorSummary } from '../api/types'
-import { Badge, Button, Card } from '../components/ui'
+import { Badge, Button, Card, ErrorText, Field, TextInput } from '../components/ui'
 import { useToast } from '../components/Toast'
 
 /** App-level management of created actors — agents by default, with guarded deletion of orphans. */
@@ -46,7 +46,15 @@ export function ActorsView() {
 function ActorRow({ actor }: { actor: ActorSummary }) {
   const qc = useQueryClient()
   const toast = useToast()
+  const [editing, setEditing] = useState(false)
+  const [displayName, setDisplayName] = useState(actor.displayName)
+  const [email, setEmail] = useState(actor.email ?? '')
   const invalidate = () => qc.invalidateQueries({ queryKey: ['actors'] })
+  const save = useMutation({
+    mutationFn: () => api.updateActor(actor.id, { displayName, email: email || null }),
+    onSuccess: () => { invalidate(); setEditing(false); toast.success(`Updated ${displayName}`) },
+    onError: (e) => toast.error(e instanceof Error ? e.message : 'Could not update actor'),
+  })
   const remove = useMutation({
     mutationFn: () => api.deleteActor(actor.id),
     onSuccess: () => { invalidate(); toast.success(`Deleted ${actor.displayName}`) },
@@ -68,6 +76,31 @@ function ActorRow({ actor }: { actor: ActorSummary }) {
     ? `Locked — still a member of ${membership}; remove the membership first.`
     : 'Locked — has history (changes, comments, or audit) that is kept, so it can’t be deleted.'
 
+  if (editing) {
+    return (
+      <div className="space-y-2 p-3">
+        <Field label="Display name">
+          <TextInput value={displayName} onChange={(e) => setDisplayName(e.target.value)} autoFocus />
+        </Field>
+        <Field label="Email">
+          <TextInput value={email} onChange={(e) => setEmail(e.target.value)} placeholder="optional" />
+        </Field>
+        <ErrorText error={save.error} />
+        <div className="flex justify-end gap-2">
+          <Button
+            variant="subtle"
+            onClick={() => { setDisplayName(actor.displayName); setEmail(actor.email ?? ''); setEditing(false) }}
+          >
+            Cancel
+          </Button>
+          <Button variant="primary" disabled={!displayName.trim() || save.isPending} onClick={() => save.mutate()}>
+            Save
+          </Button>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="p-3 text-sm text-slate-700 dark:text-slate-200">
       <div className="flex items-center gap-2">
@@ -78,6 +111,7 @@ function ActorRow({ actor }: { actor: ActorSummary }) {
         {actor.isArchived && <Badge tone="amber">archived</Badge>}
         {!actor.deletable && <Badge tone="red">locked</Badge>}
         <span className="ml-auto flex items-center gap-1">
+          <Button variant="subtle" onClick={() => setEditing(true)}>Edit</Button>
           <Button
             variant="subtle"
             disabled={archive.isPending}

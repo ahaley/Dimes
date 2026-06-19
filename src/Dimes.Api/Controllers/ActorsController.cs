@@ -15,6 +15,10 @@ public class ActorsController(ProjectService projects) : ControllerBase
         [FromQuery] bool agentsOnly = true, [FromQuery] bool includeArchived = false, CancellationToken ct = default)
         => Ok(await projects.ListActorsAsync(agentsOnly, includeArchived, ct));
 
+    [HttpPatch("{id:guid}")]
+    public async Task<ActionResult<ActorDto>> Update(Guid id, UpdateActorRequest req, CancellationToken ct)
+        => Ok(await projects.UpdateActorAsync(id, req, ct));
+
     [HttpPost("{id:guid}/archive")]
     public async Task<IActionResult> Archive(Guid id, CancellationToken ct)
     {
