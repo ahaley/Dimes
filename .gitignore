@@ -22,6 +22,8 @@ obj/
 *.db-wal
 *.db-shm
 *.db-journal
+# Runtime data directory (default SQLite location under the API content root)
+src/Dimes.Api/data/
 
 # ---- Node (in case tooling runs outside web/ and sdk/) ----
 node_modules/
