@@ -1,0 +1,45 @@
+# ---- Secrets (never commit) ----
+# Keys/tokens are resolved via ISecretResolver from env or Secrets:* config — keep those out.
+.env
+.env.*
+!.env.example
+appsettings.*.local.json
+*.secrets.json
+secrets.json
+
+# ---- .NET build output ----
+bin/
+obj/
+[Dd]ebug/
+[Rr]elease/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# ---- SQLite databases (runtime + design-time throwaway) ----
+*.db
+*.db-wal
+*.db-shm
+*.db-journal
+
+# ---- Node (in case tooling runs outside web/ and sdk/) ----
+node_modules/
+dist/
+*.tsbuildinfo
+
+# ---- Test / coverage output ----
+[Tt]est[Rr]esults/
+*.trx
+*.coverage
+*.cobertura.xml
+coverage/
+
+# ---- Editors / OS ----
+.idea/
+.vs/
+.vscode/*
+!.vscode/extensions.json
+.DS_Store
+Thumbs.db
+*.log
