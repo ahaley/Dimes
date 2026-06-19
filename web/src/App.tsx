@@ -7,6 +7,7 @@ import { LlmProvidersView } from './features/LlmProvidersView'
 import { ActorsView } from './features/ActorsView'
 import { SettingsModal } from './features/SettingsModal'
 import { CreateProjectModal } from './features/CreateProjectModal'
+import { applyTheme, getInitialTheme, type Theme } from './theme'
 
 const COLLAPSE_KEY = 'dimes.sidebar.collapsed'
 
@@ -20,6 +21,10 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false)
   const [showCreateProject, setShowCreateProject] = useState(false)
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem(COLLAPSE_KEY) === '1')
+  const [theme, setTheme] = useState<Theme>(getInitialTheme)
+
+  useEffect(() => { applyTheme(theme) }, [theme])
+  const toggleTheme = () => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))
 
   const toggleCollapsed = () => {
     setCollapsed((c) => {
@@ -58,35 +63,45 @@ export default function App() {
       />
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-14 shrink-0 items-center gap-3 border-b border-slate-200 bg-white px-4">
+        <header className="flex h-14 shrink-0 items-center gap-3 border-b border-slate-200 bg-white px-4 dark:border-slate-800 dark:bg-slate-900">
           <button
             onClick={toggleCollapsed}
             title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
             aria-label="Toggle sidebar"
-            className="rounded-md p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+            className="rounded-md p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200"
           >
             ☰
           </button>
-          <span className="font-semibold text-slate-800">
+          <span className="font-semibold text-slate-800 dark:text-slate-100">
             {view === 'providers' ? 'LLM providers' : view === 'actors' ? 'Actors' : (currentProject?.name ?? 'Dimes')}
           </span>
 
-          {view === 'board' && (
-            <div className="ml-auto flex items-center gap-2">
-              <span className="text-xs text-slate-500">Acting as</span>
-              <Select
-                value={actingActorId ?? ''}
-                onChange={(e) => setActingActorId(e.target.value || undefined)}
-                className="min-w-40"
-                disabled={!members || members.length === 0}
-              >
-                {(members ?? []).length === 0 && <option value="">No members</option>}
-                {(members ?? []).map((m) => (
-                  <option key={m.actorId} value={m.actorId}>{m.displayName} · {m.role}</option>
-                ))}
-              </Select>
-            </div>
-          )}
+          <div className="ml-auto flex items-center gap-2">
+            {view === 'board' && (
+              <>
+                <span className="text-xs text-slate-500 dark:text-slate-400">Acting as</span>
+                <Select
+                  value={actingActorId ?? ''}
+                  onChange={(e) => setActingActorId(e.target.value || undefined)}
+                  className="min-w-40"
+                  disabled={!members || members.length === 0}
+                >
+                  {(members ?? []).length === 0 && <option value="">No members</option>}
+                  {(members ?? []).map((m) => (
+                    <option key={m.actorId} value={m.actorId}>{m.displayName} · {m.role}</option>
+                  ))}
+                </Select>
+              </>
+            )}
+            <button
+              onClick={toggleTheme}
+              title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+              aria-label="Toggle dark mode"
+              className="rounded-md p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+            >
+              {theme === 'dark' ? '☀' : '☾'}
+            </button>
+          </div>
         </header>
 
         <main className="min-h-0 flex-1 overflow-auto p-6">
@@ -97,7 +112,7 @@ export default function App() {
           ) : projectId && actingActorId ? (
             <Workspace projectId={projectId} actingActorId={actingActorId} members={members ?? []} />
           ) : (
-            <Card className="p-10 text-center text-slate-500">
+            <Card className="p-10 text-center text-slate-500 dark:text-slate-400">
               {(projects ?? []).length === 0
                 ? 'Create a project to get started — use “New project” in the sidebar.'
                 : 'Add a member to this project (Manage) to start working.'}

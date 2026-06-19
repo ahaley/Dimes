@@ -20,7 +20,7 @@ export function Sidebar({
   return (
     <aside
       className={cx(
-        'flex h-screen shrink-0 flex-col border-r border-slate-200 bg-white transition-[width] duration-150',
+        'flex h-screen shrink-0 flex-col border-r border-slate-200 bg-white transition-[width] duration-150 dark:border-slate-800 dark:bg-slate-900',
         collapsed ? 'w-14' : 'w-60',
       )}
     >
@@ -32,7 +32,7 @@ export function Sidebar({
           title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           className={cx(
-            'rounded-md p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-700',
+            'rounded-md p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200',
             collapsed && 'flex h-8 w-8 items-center justify-center font-semibold text-indigo-700',
           )}
         >
@@ -57,15 +57,15 @@ export function Sidebar({
                 'flex w-full items-center rounded-md text-sm',
                 collapsed ? 'h-9 w-9 justify-center' : 'gap-2 px-2 py-1.5 text-left',
                 active
-                  ? 'bg-slate-100 font-medium text-slate-900'
-                  : 'text-slate-600 hover:bg-slate-50',
+                  ? 'bg-slate-100 font-medium text-slate-900 dark:bg-slate-800 dark:text-slate-100'
+                  : 'text-slate-600 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-800',
               )}
             >
               {collapsed ? (
                 <span
                   className={cx(
                     'flex h-7 w-7 items-center justify-center rounded-md text-xs font-semibold',
-                    active ? 'bg-indigo-600 text-white' : 'bg-slate-200 text-slate-600',
+                    active ? 'bg-indigo-600 text-white' : 'bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-300',
                   )}
                 >
                   {initials(p.name)}
@@ -84,7 +84,7 @@ export function Sidebar({
           onClick={onNewProject}
           title="New project"
           className={cx(
-            'flex w-full items-center rounded-md text-sm text-slate-500 hover:bg-slate-50 hover:text-slate-700',
+            'flex w-full items-center rounded-md text-sm text-slate-500 hover:bg-slate-50 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200',
             collapsed ? 'h-9 w-9 justify-center' : 'gap-2 px-2 py-1.5',
           )}
         >
@@ -104,8 +104,8 @@ export function Sidebar({
               'flex w-full items-center rounded-md text-sm',
               collapsed ? 'h-9 w-9 justify-center' : 'gap-2 px-2 py-1.5 text-left',
               activeView === 'providers'
-                ? 'bg-slate-100 font-medium text-slate-900'
-                : 'text-slate-600 hover:bg-slate-50',
+                ? 'bg-slate-100 font-medium text-slate-900 dark:bg-slate-800 dark:text-slate-100'
+                : 'text-slate-600 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-800',
             )}
           >
             <span aria-hidden>⚡</span>
@@ -118,8 +118,8 @@ export function Sidebar({
               'flex w-full items-center rounded-md text-sm',
               collapsed ? 'h-9 w-9 justify-center' : 'gap-2 px-2 py-1.5 text-left',
               activeView === 'actors'
-                ? 'bg-slate-100 font-medium text-slate-900'
-                : 'text-slate-600 hover:bg-slate-50',
+                ? 'bg-slate-100 font-medium text-slate-900 dark:bg-slate-800 dark:text-slate-100'
+                : 'text-slate-600 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-800',
             )}
           >
             <span aria-hidden>👤</span>
@@ -129,13 +129,13 @@ export function Sidebar({
       </nav>
 
       {/* Manage (pinned bottom) */}
-      <div className="border-t border-slate-200 p-2">
+      <div className="border-t border-slate-200 p-2 dark:border-slate-800">
         <button
           onClick={onManage}
           disabled={!projectId}
           title="Manage project"
           className={cx(
-            'flex w-full items-center rounded-md text-sm text-slate-600 hover:bg-slate-50 disabled:opacity-40',
+            'flex w-full items-center rounded-md text-sm text-slate-600 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-800 disabled:opacity-40',
             collapsed ? 'h-9 w-9 justify-center' : 'gap-2 px-2 py-1.5',
           )}
         >

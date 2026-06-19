@@ -10,7 +10,7 @@ export function LlmProvidersView({ projectId }: { projectId: string | undefined 
   return (
     <div className="mx-auto max-w-2xl space-y-4">
       <div>
-        <h1 className="text-lg font-semibold text-slate-800">LLM providers</h1>
+        <h1 className="text-lg font-semibold text-slate-800 dark:text-slate-100">LLM providers</h1>
         <p className="mt-1 text-sm text-slate-500">
           Endpoints used for recommend-only agent commentary. A provider can be website-wide
           (available to every project) or scoped to the current project.
@@ -34,7 +34,7 @@ export function LlmProvidersView({ projectId }: { projectId: string | undefined 
 function ProviderList({ projectId }: { projectId: string }) {
   const { data: providers } = useLlmProviders(projectId)
   return (
-    <Card className="divide-y divide-slate-100">
+    <Card className="divide-y divide-slate-100 dark:divide-slate-800">
       {(providers ?? []).map((p) => <ProviderRow key={p.id} provider={p} />)}
       {providers?.length === 0 && <p className="p-4 text-sm text-slate-400">No providers configured yet.</p>}
     </Card>
@@ -63,7 +63,7 @@ function AddProviderForm({ projectId }: { projectId: string }) {
 
   return (
     <Card className="space-y-2 p-4">
-      <h2 className="text-sm font-semibold text-slate-700">Add provider</h2>
+      <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Add provider</h2>
       <div className="grid grid-cols-2 gap-2">
         <Field label="Type">
           <Select value={type} onChange={(e) => setType(e.target.value as LlmProviderType)}>
@@ -82,7 +82,7 @@ function AddProviderForm({ projectId }: { projectId: string }) {
       <Field label="API key secret ref">
         <TextInput value={apiKeySecretRef} onChange={(e) => setSecret(e.target.value)} placeholder="ANTHROPIC_KEY" />
       </Field>
-      <label className="flex items-center gap-2 text-xs text-slate-600">
+      <label className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300">
         <input type="checkbox" checked={websiteWide} onChange={(e) => setWebsiteWide(e.target.checked)} />
         Website-wide (available to all projects)
       </label>
@@ -119,7 +119,7 @@ function ProviderRow({ provider }: { provider: LlmProviderConfig }) {
 
   if (!editing) {
     return (
-      <div className="flex items-center gap-2 p-3 text-sm text-slate-700">
+      <div className="flex items-center gap-2 p-3 text-sm text-slate-700 dark:text-slate-200">
         <span>{provider.name} · <span className="text-slate-400">{provider.type} / {provider.model}</span></span>
         {provider.projectId === null && <Badge tone="indigo">website-wide</Badge>}
         {!provider.enabled && <Badge tone="red">disabled</Badge>}
@@ -152,7 +152,7 @@ function ProviderRow({ provider }: { provider: LlmProviderConfig }) {
       <Field label="Model"><TextInput value={model} onChange={(e) => setModel(e.target.value)} /></Field>
       <Field label="Base URL"><TextInput value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} placeholder="http://localhost:11434/v1" /></Field>
       <Field label="API key secret ref"><TextInput value={apiKeySecretRef} onChange={(e) => setSecret(e.target.value)} placeholder="ANTHROPIC_KEY" /></Field>
-      <label className="flex items-center gap-2 text-xs text-slate-600">
+      <label className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300">
         <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} /> Enabled
       </label>
       <ErrorText error={save.error} />
