@@ -51,7 +51,6 @@ export default function App() {
         collapsed={collapsed}
         onToggleCollapse={toggleCollapsed}
         onNewProject={() => setShowCreateProject(true)}
-        onManage={() => setShowSettings(true)}
         activeView={view}
         onShowProviders={() => setView('providers')}
         onShowActors={() => setView('actors')}
@@ -70,6 +69,17 @@ export default function App() {
           <span className="font-semibold text-slate-800">
             {view === 'providers' ? 'LLM providers' : view === 'actors' ? 'Actors' : (currentProject?.name ?? 'Dimes')}
           </span>
+
+          {view === 'board' && projectId && (
+            <button
+              onClick={() => setShowSettings(true)}
+              title="Manage project"
+              className="flex items-center gap-1.5 rounded-md px-2 py-1 text-sm text-slate-600 hover:bg-slate-100 hover:text-slate-700"
+            >
+              <span aria-hidden>⚙</span>
+              <span>Manage</span>
+            </button>
+          )}
 
           {view === 'board' && (
             <div className="ml-auto flex items-center gap-2">
