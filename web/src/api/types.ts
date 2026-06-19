@@ -54,7 +54,7 @@ export interface LlmProviderConfig {
 export interface ActorSummary {
   id: string; displayName: string; type: ActorType; email?: string | null
   llmProviderConfigId?: string | null; providerName?: string | null
-  projectCount: number; deletable: boolean
+  projectCount: number; deletable: boolean; isArchived: boolean
 }
 
 // The ordered "happy path" of the change lifecycle, for board columns.
