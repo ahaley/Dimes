@@ -42,7 +42,7 @@ function MembersSection({ projectId }: { projectId: string }) {
 
   return (
     <section className="space-y-3">
-      <h3 className="text-sm font-semibold text-slate-700">Members</h3>
+      <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Members</h3>
       <ul className="space-y-1">
         {(members ?? []).map((m) => (
           <MemberRow key={m.actorId} projectId={projectId} member={m} providers={providers ?? []} />
@@ -50,7 +50,7 @@ function MembersSection({ projectId }: { projectId: string }) {
         {members?.length === 0 && <li className="text-sm text-slate-400">No members yet.</li>}
       </ul>
 
-      <div className="space-y-2 rounded-md border border-slate-200 p-3">
+      <div className="space-y-2 rounded-md border border-slate-200 dark:border-slate-700 p-3">
         <Field label="Display name">
           <TextInput value={displayName} onChange={(e) => setDisplayName(e.target.value)} placeholder="Jordan" />
         </Field>
@@ -116,7 +116,7 @@ function MemberRow({
   if (!editing) {
     return (
       <li className="flex items-center gap-2 text-sm">
-        <span className="text-slate-800">{member.displayName}</span>
+        <span className="text-slate-800 dark:text-slate-100">{member.displayName}</span>
         <Badge tone={member.type === 'Agent' ? 'violet' : 'slate'}>{member.type}</Badge>
         <Badge tone={member.role === 'Maintainer' ? 'indigo' : 'slate'}>{member.role}</Badge>
         <span className="ml-auto flex items-center gap-1">
@@ -134,7 +134,7 @@ function MemberRow({
   }
 
   return (
-    <li className="space-y-2 rounded-md border border-slate-200 p-2">
+    <li className="space-y-2 rounded-md border border-slate-200 dark:border-slate-700 p-2">
       <Field label="Display name">
         <TextInput value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
       </Field>
@@ -178,14 +178,14 @@ function SourcesSection({ projectId }: { projectId: string }) {
 
   return (
     <section className="space-y-2">
-      <h3 className="text-sm font-semibold text-slate-700">Observation sources</h3>
+      <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Observation sources</h3>
       <ul className="space-y-1 text-sm">
         {(sources ?? []).map((s) => (
-          <li key={s.id} className="text-slate-700">{s.name} · <span className="text-slate-400">{s.type}</span></li>
+          <li key={s.id} className="text-slate-700 dark:text-slate-200">{s.name} · <span className="text-slate-400">{s.type}</span></li>
         ))}
         {sources?.length === 0 && <li className="text-sm text-slate-400">None configured.</li>}
       </ul>
-      <div className="flex items-end gap-2 rounded-md border border-slate-200 p-3">
+      <div className="flex items-end gap-2 rounded-md border border-slate-200 dark:border-slate-700 p-3">
         <Field label="Type">
           <Select value={type} onChange={(e) => setType(e.target.value as ObservationSourceType)}>
             <option value="Sdk">SDK</option>

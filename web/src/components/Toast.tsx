@@ -48,8 +48,8 @@ export function ToastProvider({ children }: { children: ReactNode }) {
             className={cx(
               'flex items-start justify-between gap-3 rounded-md border px-3 py-2 text-sm shadow-sm',
               t.tone === 'error'
-                ? 'border-red-200 bg-red-50 text-red-700'
-                : 'border-green-200 bg-green-50 text-green-700',
+                ? 'border-red-200 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-950/60 dark:text-red-300'
+                : 'border-green-200 bg-green-50 text-green-700 dark:border-green-900 dark:bg-green-950/60 dark:text-green-300',
             )}
           >
             <span className="min-w-0 break-words">{t.message}</span>

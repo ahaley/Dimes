@@ -23,13 +23,13 @@ export function InboxDrawer({
 
         <ul className="flex-1 space-y-2">
           {open.map((o) => (
-            <li key={o.id} className="rounded-md border border-slate-200 p-3">
+            <li key={o.id} className="rounded-md border border-slate-200 p-3 dark:border-slate-700">
               <div className="flex flex-wrap items-center gap-2">
                 <Badge tone="amber">{o.kind}</Badge>
                 {o.occurrenceCount > 1 && <Badge tone="red">×{o.occurrenceCount}</Badge>}
                 {o.status === 'Clustered' && <Badge tone="slate">clustered</Badge>}
               </div>
-              <p className="mt-2 line-clamp-3 break-words font-mono text-xs text-slate-600">{o.payload}</p>
+              <p className="mt-2 line-clamp-3 break-words font-mono text-xs text-slate-600 dark:text-slate-300">{o.payload}</p>
               <div className="mt-3 flex gap-2">
                 <Button variant="primary" onClick={() => setPromote(o)}>Promote</Button>
                 <DismissButton id={o.id} projectId={projectId} actingActorId={actingActorId} />
@@ -37,7 +37,7 @@ export function InboxDrawer({
             </li>
           ))}
           {open.length === 0 && (
-            <li className="rounded-md border border-dashed border-slate-200 p-6 text-center text-sm text-slate-400">
+            <li className="rounded-md border border-dashed border-slate-200 p-6 text-center text-sm text-slate-400 dark:border-slate-700">
               Inbox is empty. Captured signals will land here for triage.
             </li>
           )}
@@ -83,7 +83,7 @@ function PromoteModal({
   return (
     <Modal title="Promote to change request" onClose={onClose}>
       <div className="space-y-3">
-        <p className="rounded bg-slate-50 p-2 font-mono text-xs text-slate-600">{observation.payload}</p>
+        <p className="rounded bg-slate-50 p-2 font-mono text-xs text-slate-600 dark:bg-slate-800 dark:text-slate-300">{observation.payload}</p>
         <Field label="Change title">
           <TextInput value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Summarize the change" autoFocus />
         </Field>
@@ -124,7 +124,7 @@ function SimulateCapture({ projectId }: { projectId: string }) {
     <details
       open={expanded}
       onToggle={(e) => setExpanded((e.target as HTMLDetailsElement).open)}
-      className="mt-3 border-t border-slate-200 pt-3"
+      className="mt-3 border-t border-slate-200 pt-3 dark:border-slate-800"
     >
       <summary className="cursor-pointer text-xs font-medium text-slate-500">Dev: simulate capture</summary>
       {!sources || sources.length === 0 ? (
