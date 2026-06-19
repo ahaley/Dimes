@@ -21,7 +21,7 @@ public record LoginRequest(string Email, string Password);
 public record MeDto(Guid ActorId, string DisplayName, string? Email, bool IsSiteAdmin);
 
 // ----- Site administration (app-level user management; site-admin only) -----
-public record SiteUserDto(Guid Id, string DisplayName, string? Email, ActorType Type, bool IsSiteAdmin, bool HasLocalCredential, bool IsArchived);
+public record SiteUserDto(Guid Id, string DisplayName, string? Email, ActorType Type, bool IsSiteAdmin, bool HasLocalCredential, bool IsArchived, bool Deletable);
 public record CreateLocalUserRequest(string DisplayName, string Email, string Password, bool IsSiteAdmin);
 public record ResetPasswordRequest(string Password);
 public record SetSiteAdminRequest(bool IsSiteAdmin);

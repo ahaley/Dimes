@@ -112,6 +112,11 @@ public static class AuthExtensions
 
         var db = ctx.HttpContext.RequestServices.GetRequiredService<DimesDbContext>();
         var actor = await JitProvisioning.ProvisionAsync(db, email, name, ctx.HttpContext.RequestAborted);
+        if (actor.IsArchived)
+        {
+            ctx.Fail("This account has been archived.");
+            return;
+        }
 
         identity.AddClaim(new Claim(DimesClaims.ActorId, actor.Id.ToString()));
         if (actor.IsSiteAdmin)

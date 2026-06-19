@@ -21,6 +21,31 @@ public class UsersController(SiteAdminService admin) : ControllerBase
     public async Task<ActionResult<SiteUserDto>> CreateLocal(CreateLocalUserRequest req, CancellationToken ct)
         => Ok(await admin.CreateLocalUserAsync(req, ct));
 
+    [HttpPatch("{id:guid}")]
+    public async Task<ActionResult<SiteUserDto>> Update(Guid id, UpdateActorRequest req, CancellationToken ct)
+        => Ok(await admin.UpdateUserAsync(id, req, ct));
+
+    [HttpPost("{id:guid}/archive")]
+    public async Task<IActionResult> Archive(Guid id, CancellationToken ct)
+    {
+        await admin.ArchiveUserAsync(id, archived: true, ct);
+        return NoContent();
+    }
+
+    [HttpPost("{id:guid}/unarchive")]
+    public async Task<IActionResult> Unarchive(Guid id, CancellationToken ct)
+    {
+        await admin.ArchiveUserAsync(id, archived: false, ct);
+        return NoContent();
+    }
+
+    [HttpDelete("{id:guid}")]
+    public async Task<IActionResult> Delete(Guid id, CancellationToken ct)
+    {
+        await admin.DeleteUserAsync(id, ct);
+        return NoContent();
+    }
+
     [HttpPost("{id:guid}/reset-password")]
     public async Task<IActionResult> ResetPassword(Guid id, ResetPasswordRequest req, CancellationToken ct)
     {

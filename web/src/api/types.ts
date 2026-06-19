@@ -63,7 +63,7 @@ export interface AuthConfig { mode: AuthMode }
 export interface Me { actorId: string; displayName: string; email?: string | null; isSiteAdmin: boolean }
 export interface SiteUser {
   id: string; displayName: string; email?: string | null; type: ActorType
-  isSiteAdmin: boolean; hasLocalCredential: boolean; isArchived: boolean
+  isSiteAdmin: boolean; hasLocalCredential: boolean; isArchived: boolean; deletable: boolean
 }
 
 // The ordered "happy path" of the change lifecycle, for board columns.

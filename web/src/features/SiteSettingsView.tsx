@@ -52,18 +52,60 @@ function UserRow({ user }: { user: SiteUser }) {
   const qc = useQueryClient()
   const toast = useToast()
   const invalidate = () => qc.invalidateQueries({ queryKey: keys.users })
+  const onError = (verb: string) => (e: unknown) => toast.error(e instanceof Error ? e.message : `Could not ${verb}`)
 
+  const [editing, setEditing] = useState(false)
+  const [displayName, setDisplayName] = useState(user.displayName)
+  const [email, setEmail] = useState(user.email ?? '')
+
+  const save = useMutation({
+    mutationFn: () => api.updateUser(user.id, { displayName, email: email || null }),
+    onSuccess: () => { invalidate(); setEditing(false); toast.success(`Updated ${displayName}`) },
+    onError: onError('update user'),
+  })
   const resetPassword = useMutation({
     mutationFn: (password: string) => api.resetPassword(user.id, { password }),
     onSuccess: () => toast.success(`Password reset for ${user.displayName}`),
-    onError: (e) => toast.error(e instanceof Error ? e.message : 'Could not reset password'),
+    onError: onError('reset password'),
   })
   const toggleAdmin = useMutation({
     mutationFn: () => api.setSiteAdmin(user.id, { isSiteAdmin: !user.isSiteAdmin }),
     onSuccess: () => { invalidate(); toast.success(`Updated ${user.displayName}`) },
-    onError: (e) => toast.error(e instanceof Error ? e.message : 'Could not update user'),
+    onError: onError('update user'),
+  })
+  const archive = useMutation({
+    mutationFn: () => (user.isArchived ? api.unarchiveUser(user.id) : api.archiveUser(user.id)),
+    onSuccess: () => { invalidate(); toast.success(`${user.isArchived ? 'Unarchived' : 'Archived'} ${user.displayName}`) },
+    onError: onError('update user'),
+  })
+  const remove = useMutation({
+    mutationFn: () => api.deleteUser(user.id),
+    onSuccess: () => { invalidate(); toast.success(`Deleted ${user.displayName}`) },
+    onError: onError('delete user'),
   })
 
+  if (editing) {
+    return (
+      <div className="space-y-2 p-3">
+        <div className="grid grid-cols-2 gap-2">
+          <Field label="Display name"><TextInput value={displayName} onChange={(e) => setDisplayName(e.target.value)} autoFocus /></Field>
+          <Field label="Email"><TextInput type="email" value={email} onChange={(e) => setEmail(e.target.value)} /></Field>
+        </div>
+        <ErrorText error={save.error} />
+        <div className="flex justify-end gap-2">
+          <Button
+            variant="subtle"
+            onClick={() => { setDisplayName(user.displayName); setEmail(user.email ?? ''); setEditing(false) }}
+          >
+            Cancel
+          </Button>
+          <Button variant="primary" disabled={!displayName.trim() || save.isPending} onClick={() => save.mutate()}>Save</Button>
+        </div>
+      </div>
+    )
+  }
+
+  const lockReason = 'Referenced by changes, comments, or audit history — archive instead of deleting.'
   return (
     <div className="flex items-center gap-2 p-3 text-sm text-slate-700 dark:text-slate-200">
       <span className="font-medium text-slate-800 dark:text-slate-100">{user.displayName}</span>
@@ -71,7 +113,9 @@ function UserRow({ user }: { user: SiteUser }) {
       {user.isSiteAdmin && <Badge tone="violet">site admin</Badge>}
       {!user.hasLocalCredential && <Badge tone="amber">no password</Badge>}
       {user.isArchived && <Badge tone="amber">archived</Badge>}
+      {!user.deletable && <Badge tone="slate">locked</Badge>}
       <span className="ml-auto flex items-center gap-1">
+        <Button variant="subtle" onClick={() => setEditing(true)}>Edit</Button>
         <Button
           variant="subtle"
           disabled={resetPassword.isPending}
@@ -84,6 +128,22 @@ function UserRow({ user }: { user: SiteUser }) {
         </Button>
         <Button variant="subtle" disabled={toggleAdmin.isPending} onClick={() => toggleAdmin.mutate()}>
           {user.isSiteAdmin ? 'Revoke admin' : 'Make admin'}
+        </Button>
+        <Button
+          variant="subtle"
+          disabled={archive.isPending}
+          title={user.isArchived ? 'Restore sign-in access' : 'Block sign-in; keep history'}
+          onClick={() => archive.mutate()}
+        >
+          {user.isArchived ? 'Unarchive' : 'Archive'}
+        </Button>
+        <Button
+          variant="subtle"
+          disabled={!user.deletable || remove.isPending}
+          title={user.deletable ? 'Delete user' : lockReason}
+          onClick={() => { if (window.confirm(`Delete user "${user.displayName}"?`)) remove.mutate() }}
+        >
+          Delete
         </Button>
       </span>
     </div>

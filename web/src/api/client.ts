@@ -154,8 +154,13 @@ export const api = {
   listUsers: () => request<SiteUser[]>('GET', '/api/admin/users'),
   createLocalUser: (body: { displayName: string; email: string; password: string; isSiteAdmin: boolean }) =>
     request<SiteUser>('POST', '/api/admin/users', body),
+  updateUser: (id: string, body: { displayName: string; email?: string | null }) =>
+    request<SiteUser>('PATCH', `/api/admin/users/${id}`, body),
   resetPassword: (id: string, body: { password: string }) =>
     request<void>('POST', `/api/admin/users/${id}/reset-password`, body),
   setSiteAdmin: (id: string, body: { isSiteAdmin: boolean }) =>
     request<SiteUser>('POST', `/api/admin/users/${id}/site-admin`, body),
+  archiveUser: (id: string) => request<void>('POST', `/api/admin/users/${id}/archive`),
+  unarchiveUser: (id: string) => request<void>('POST', `/api/admin/users/${id}/unarchive`),
+  deleteUser: (id: string) => request<void>('DELETE', `/api/admin/users/${id}`),
 }
