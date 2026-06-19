@@ -8,8 +8,8 @@ import { useToast } from '../components/Toast'
 import { ChangeCard } from './ChangeCard'
 
 export function ChangeBoard({
-  projectId, actingActorId, members, onSelect,
-}: { projectId: string; actingActorId: string; members: Member[]; onSelect: (id: string) => void }) {
+  projectId, members, onSelect,
+}: { projectId: string; members: Member[]; onSelect: (id: string) => void }) {
   const { data: changes } = useChanges(projectId)
   const transition = useTransition(projectId)
   const toast = useToast()
@@ -23,7 +23,7 @@ export function ChangeBoard({
   const requestTransition = (change: ChangeRequest, target: ChangeStatus) => {
     if (target === change.status) return
     transition.mutate(
-      { id: change.id, actorId: actingActorId, target },
+      { id: change.id, target },
       {
         onSuccess: () => toast.success(`Moved “${change.title}” to ${target}`),
         onError: (e) => toast.error(e instanceof Error ? e.message : 'Transition failed'),

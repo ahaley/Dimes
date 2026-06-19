@@ -24,6 +24,7 @@ public class DimesDbContext(DbContextOptions<DimesDbContext> options) : DbContex
     public DbSet<ScmLink> ScmLinks => Set<ScmLink>();
     public DbSet<LlmProviderConfig> LlmProviderConfigs => Set<LlmProviderConfig>();
     public DbSet<ScmProviderConfig> ScmProviderConfigs => Set<ScmProviderConfig>();
+    public DbSet<LocalCredential> LocalCredentials => Set<LocalCredential>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -104,6 +105,14 @@ public class DimesDbContext(DbContextOptions<DimesDbContext> options) : DbContex
         {
             b.HasOne(c => c.Project).WithMany()
                 .HasForeignKey(c => c.ProjectId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<LocalCredential>(b =>
+        {
+            // One credential per actor; Restrict matches the actor-FK convention (keep history valid).
+            b.HasIndex(c => c.ActorId).IsUnique();
+            b.HasOne(c => c.Actor).WithOne()
+                .HasForeignKey<LocalCredential>(c => c.ActorId).OnDelete(DeleteBehavior.Restrict);
         });
 
         StoreEnumsAsStrings(modelBuilder);

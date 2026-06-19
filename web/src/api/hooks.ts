@@ -3,6 +3,9 @@ import { api } from './client'
 import type { ChangeRequest, ChangeStatus, ObservationStatus } from './types'
 
 export const keys = {
+  me: ['me'] as const,
+  authConfig: ['authConfig'] as const,
+  users: ['users'] as const,
   projects: ['projects'] as const,
   members: (projectId: string) => ['members', projectId] as const,
   providers: (projectId: string) => ['providers', projectId] as const,
@@ -12,6 +15,20 @@ export const keys = {
   changes: (projectId: string, status?: ChangeStatus) => ['changes', projectId, status ?? 'all'] as const,
   change: (id: string) => ['change', id] as const,
   audit: (id: string) => ['audit', id] as const,
+}
+
+/** The auth mode (Local | Oidc) so the login screen renders the right control. Public endpoint. */
+export function useAuthConfig() {
+  return useQuery({ queryKey: keys.authConfig, queryFn: api.getAuthConfig, staleTime: Infinity })
+}
+
+/** The current session. A 401 means "logged out" — don't retry it as a transient failure. */
+export function useMe() {
+  return useQuery({ queryKey: keys.me, queryFn: api.getMe, retry: false })
+}
+
+export function useSiteUsers(enabled: boolean) {
+  return useQuery({ queryKey: keys.users, queryFn: api.listUsers, enabled })
 }
 
 export function useProjects() {
@@ -95,7 +112,7 @@ export function useProjectInvalidator(projectId: string | undefined) {
   }
 }
 
-type TransitionVars = { id: string; actorId: string; target: ChangeStatus; reason?: string | null; duplicateOfId?: string | null }
+type TransitionVars = { id: string; target: ChangeStatus; reason?: string | null; duplicateOfId?: string | null }
 
 /** Optimistically moves the card in the board's change list, rolling back if the API rejects
  * (e.g. RBAC 403 / illegal 409), then reconciles with the server. */
@@ -105,7 +122,8 @@ export function useTransition(projectId: string | undefined) {
   const listKey = keys.changes(projectId ?? '', undefined)
 
   return useMutation({
-    mutationFn: (vars: TransitionVars) => api.transition(vars.id, vars),
+    mutationFn: (vars: TransitionVars) =>
+      api.transition(vars.id, { target: vars.target, reason: vars.reason, duplicateOfId: vars.duplicateOfId }),
     onMutate: async (vars) => {
       await qc.cancelQueries({ queryKey: listKey })
       const previous = qc.getQueryData<ChangeRequest[]>(listKey)

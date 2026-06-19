@@ -64,8 +64,7 @@ public sealed class ProviderServiceTests : IDisposable
         var agent = await _projects.AddMemberAsync(project.Id,
             new AddMemberRequest("Aria", ActorType.Agent, null, MemberRole.Contributor, llm.Id));
 
-        var change = await _changes.CreateAsync(project.Id,
-            new CreateChangeRequest(human.ActorId, "Improve logging", "Add structured logs", ChangeKind.Feature));
+        var change = await _changes.CreateAsync(project.Id, human.ActorId, new CreateChangeRequest("Improve logging", "Add structured logs", ChangeKind.Feature));
 
         var commentary = new CommentaryService(
             _db,
@@ -89,8 +88,7 @@ public sealed class ProviderServiceTests : IDisposable
         var project = await _projects.CreateAsync(new CreateProjectRequest("P", null));
         var human = await _projects.AddMemberAsync(project.Id,
             new AddMemberRequest("Cory", ActorType.Human, null, MemberRole.Contributor));
-        var change = await _changes.CreateAsync(project.Id,
-            new CreateChangeRequest(human.ActorId, "x", null, ChangeKind.Problem));
+        var change = await _changes.CreateAsync(project.Id, human.ActorId, new CreateChangeRequest("x", null, ChangeKind.Problem));
 
         var commentary = new CommentaryService(
             _db, [new StubLlm(LlmProviderType.Anthropic, "x")], new StubSecrets(), new MembershipResolver(_db));
@@ -105,8 +103,7 @@ public sealed class ProviderServiceTests : IDisposable
         var project = await _projects.CreateAsync(new CreateProjectRequest("P", null));
         var human = await _projects.AddMemberAsync(project.Id,
             new AddMemberRequest("Cory", ActorType.Human, null, MemberRole.Contributor));
-        var change = await _changes.CreateAsync(project.Id,
-            new CreateChangeRequest(human.ActorId, "x", null, ChangeKind.Feature));
+        var change = await _changes.CreateAsync(project.Id, human.ActorId, new CreateChangeRequest("x", null, ChangeKind.Feature));
 
         var scm = new ScmService(
             _db,
@@ -126,8 +123,7 @@ public sealed class ProviderServiceTests : IDisposable
         var project = await _projects.CreateAsync(new CreateProjectRequest("P", null));
         var human = await _projects.AddMemberAsync(project.Id,
             new AddMemberRequest("Cory", ActorType.Human, null, MemberRole.Contributor));
-        var change = await _changes.CreateAsync(project.Id,
-            new CreateChangeRequest(human.ActorId, "x", null, ChangeKind.Feature));
+        var change = await _changes.CreateAsync(project.Id, human.ActorId, new CreateChangeRequest("x", null, ChangeKind.Feature));
 
         var scm = new ScmService(
             _db, [new StubScm(new ScmContext("ignored", null, null, "ignored"))], new StubSecrets());

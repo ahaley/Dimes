@@ -4,7 +4,7 @@ import { initials } from '../lifecycle'
 
 export function Sidebar({
   projects, projectId, onSelect, collapsed, onToggleCollapse, onNewProject,
-  activeView, onShowProviders, onShowActors,
+  activeView, onShowProviders, onShowActors, onShowSettings, showSettings,
 }: {
   projects: Project[]
   projectId: string | undefined
@@ -12,9 +12,11 @@ export function Sidebar({
   collapsed: boolean
   onToggleCollapse: () => void
   onNewProject: () => void
-  activeView: 'board' | 'providers' | 'actors'
+  activeView: 'board' | 'providers' | 'actors' | 'settings'
   onShowProviders: () => void
   onShowActors: () => void
+  onShowSettings: () => void
+  showSettings: boolean
 }) {
   return (
     <aside
@@ -124,6 +126,22 @@ export function Sidebar({
             <span aria-hidden>👤</span>
             {!collapsed && <span>Actors</span>}
           </button>
+          {showSettings && (
+            <button
+              onClick={onShowSettings}
+              title="Site settings"
+              className={cx(
+                'flex w-full items-center rounded-md text-sm',
+                collapsed ? 'h-9 w-9 justify-center' : 'gap-2 px-2 py-1.5 text-left',
+                activeView === 'settings'
+                  ? 'bg-slate-100 font-medium text-slate-900 dark:bg-slate-800 dark:text-slate-100'
+                  : 'text-slate-600 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-800',
+              )}
+            >
+              <span aria-hidden>⚙</span>
+              {!collapsed && <span>Site settings</span>}
+            </button>
+          )}
         </div>
       </nav>
     </aside>

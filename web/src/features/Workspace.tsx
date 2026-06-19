@@ -52,16 +52,15 @@ export function Workspace({
 
       <ChangeBoard
         projectId={projectId}
-        actingActorId={actingActorId}
         members={members}
         onSelect={setSelectedChangeId}
       />
 
       {inboxOpen && (
-        <InboxDrawer projectId={projectId} actingActorId={actingActorId} onClose={() => setInboxOpen(false)} />
+        <InboxDrawer projectId={projectId} onClose={() => setInboxOpen(false)} />
       )}
       {creating && (
-        <CreateChangeModal projectId={projectId} actingActorId={actingActorId} onClose={() => setCreating(false)} />
+        <CreateChangeModal projectId={projectId} onClose={() => setCreating(false)} />
       )}
       {selectedChangeId && (
         <ChangeDetail

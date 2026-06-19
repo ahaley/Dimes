@@ -1,6 +1,6 @@
 import type {
-  ActorSummary, AuditEvent, ChangeKind, ChangeRequest, ChangeRequestDetail, ChangeStatus, Comment, LlmProviderConfig,
-  Member, Observation, ObservationSource, ObservationStatus, Priority, Project, ScmLink,
+  ActorSummary, AuthConfig, AuditEvent, ChangeKind, ChangeRequest, ChangeRequestDetail, ChangeStatus, Comment,
+  LlmProviderConfig, Me, Member, Observation, ObservationSource, ObservationStatus, Priority, Project, ScmLink, SiteUser,
 } from './types'
 
 /** Error carrying the HTTP status + ProblemDetails so the UI can show 403/409 guard failures nicely. */
@@ -17,6 +17,7 @@ export class ApiError extends Error {
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
   const res = await fetch(path, {
     method,
+    credentials: 'same-origin', // carry the session cookie
     headers: body !== undefined ? { 'Content-Type': 'application/json' } : undefined,
     body: body !== undefined ? JSON.stringify(body) : undefined,
   })
@@ -40,7 +41,7 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
 
 /** Fetch a file response and trigger a browser download. Filename comes from Content-Disposition. */
 async function download(path: string, fallbackName: string): Promise<void> {
-  const res = await fetch(path)
+  const res = await fetch(path, { credentials: 'same-origin' })
   if (!res.ok) {
     throw new ApiError(res.status, res.statusText, res.statusText)
   }
@@ -101,28 +102,28 @@ export const api = {
   ) => request<Observation>('POST', `/api/sources/${sourceId}/observations`, body),
   inbox: (projectId: string, status?: ObservationStatus) =>
     request<Observation[]>('GET', `/api/projects/${projectId}/observations${status ? `?status=${status}` : ''}`),
-  clusterObservation: (id: string, actorId: string) =>
-    request<Observation>('POST', `/api/observations/${id}/cluster`, { actorId }),
-  dismissObservation: (id: string, actorId: string, reason?: string | null) =>
-    request<Observation>('POST', `/api/observations/${id}/dismiss`, { actorId, reason }),
-  promoteObservation: (id: string, body: { actorId: string; title: string; description?: string | null }) =>
+  clusterObservation: (id: string) =>
+    request<Observation>('POST', `/api/observations/${id}/cluster`),
+  dismissObservation: (id: string, reason?: string | null) =>
+    request<Observation>('POST', `/api/observations/${id}/dismiss`, { reason }),
+  promoteObservation: (id: string, body: { title: string; description?: string | null }) =>
     request<ChangeRequest>('POST', `/api/observations/${id}/promote`, body),
 
   // Change requests
   createChange: (
     projectId: string,
-    body: { actorId: string; title: string; description?: string | null; kind: ChangeKind; priority?: Priority },
+    body: { title: string; description?: string | null; kind: ChangeKind; priority?: Priority },
   ) => request<ChangeRequest>('POST', `/api/projects/${projectId}/changes`, body),
   listChanges: (projectId: string, status?: ChangeStatus) =>
     request<ChangeRequest[]>('GET', `/api/projects/${projectId}/changes${status ? `?status=${status}` : ''}`),
   getChange: (id: string) => request<ChangeRequestDetail>('GET', `/api/changes/${id}`),
   updateChangeDetails: (
     id: string,
-    body: { actorId: string; title: string; description?: string | null; priority: Priority },
+    body: { title: string; description?: string | null; priority: Priority },
   ) => request<ChangeRequest>('PATCH', `/api/changes/${id}`, body),
-  transition: (id: string, body: { actorId: string; target: ChangeStatus; reason?: string | null; duplicateOfId?: string | null }) =>
+  transition: (id: string, body: { target: ChangeStatus; reason?: string | null; duplicateOfId?: string | null }) =>
     request<ChangeRequest>('POST', `/api/changes/${id}/transition`, body),
-  addComment: (id: string, body: { actorId: string; body: string }) =>
+  addComment: (id: string, body: { body: string }) =>
     request<Comment>('POST', `/api/changes/${id}/comments`, body),
   addScmLink: (id: string, body: { url: string; contextSnapshot?: string | null }) =>
     request<ScmLink>('POST', `/api/changes/${id}/scm-links`, body),
@@ -142,4 +143,19 @@ export const api = {
   // Export
   exportInDevelopment: (projectId: string) =>
     download(`/api/projects/${projectId}/export/in-development`, 'in-development.md'),
+
+  // Authentication
+  getAuthConfig: () => request<AuthConfig>('GET', '/api/auth/config'),
+  getMe: () => request<Me>('GET', '/api/auth/me'),
+  login: (body: { email: string; password: string }) => request<Me>('POST', '/api/auth/login', body),
+  logout: () => request<void>('POST', '/api/auth/logout'),
+
+  // Site administration (site-admin only)
+  listUsers: () => request<SiteUser[]>('GET', '/api/admin/users'),
+  createLocalUser: (body: { displayName: string; email: string; password: string; isSiteAdmin: boolean }) =>
+    request<SiteUser>('POST', '/api/admin/users', body),
+  resetPassword: (id: string, body: { password: string }) =>
+    request<void>('POST', `/api/admin/users/${id}/reset-password`, body),
+  setSiteAdmin: (id: string, body: { isSiteAdmin: boolean }) =>
+    request<SiteUser>('POST', `/api/admin/users/${id}/site-admin`, body),
 }

@@ -6,8 +6,8 @@ import type { ChangeKind, Priority } from '../api/types'
 import { Button, ErrorText, Field, Modal, Select, TextInput, Textarea } from '../components/ui'
 
 export function CreateChangeModal({
-  projectId, actingActorId, onClose,
-}: { projectId: string; actingActorId: string; onClose: () => void }) {
+  projectId, onClose,
+}: { projectId: string; onClose: () => void }) {
   const invalidate = useProjectInvalidator(projectId)
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
@@ -16,7 +16,7 @@ export function CreateChangeModal({
 
   const create = useMutation({
     mutationFn: () =>
-      api.createChange(projectId, { actorId: actingActorId, title, description: description || null, kind, priority }),
+      api.createChange(projectId, { title, description: description || null, kind, priority }),
     onSuccess: () => {
       invalidate()
       onClose()

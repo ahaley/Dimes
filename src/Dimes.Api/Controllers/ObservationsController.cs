@@ -1,14 +1,19 @@
+using Dimes.Api.Auth;
 using Dimes.Api.Contracts;
 using Dimes.Api.Services;
 using Dimes.Domain;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Dimes.Api.Controllers;
 
 [ApiController]
-public class ObservationsController(ObservationService observations) : ControllerBase
+public class ObservationsController(ObservationService observations, ICurrentActor currentActor) : ControllerBase
 {
-    /// <summary>Capture entry point for sources (SDK, Seq). Aggregates by fingerprint.</summary>
+    /// <summary>Capture entry point for sources (SDK, Seq). Aggregates by fingerprint. Anonymous: the
+    /// host app has no Dimes session, and the unguessable source id acts as the capability. (A future
+    /// slice may add per-source ingest tokens.)</summary>
+    [AllowAnonymous]
     [HttpPost("api/sources/{sourceId:guid}/observations")]
     public async Task<ActionResult<ObservationDto>> Ingest(
         Guid sourceId, IngestObservationRequest req, CancellationToken ct)
@@ -21,14 +26,14 @@ public class ObservationsController(ObservationService observations) : Controlle
         => Ok(await observations.ListInboxAsync(projectId, status, ct));
 
     [HttpPost("api/observations/{id:guid}/cluster")]
-    public async Task<ActionResult<ObservationDto>> Cluster(Guid id, ActorActionRequest req, CancellationToken ct)
-        => Ok(await observations.ClusterAsync(id, req.ActorId, ct));
+    public async Task<ActionResult<ObservationDto>> Cluster(Guid id, CancellationToken ct)
+        => Ok(await observations.ClusterAsync(id, currentActor.ActorId, ct));
 
     [HttpPost("api/observations/{id:guid}/dismiss")]
     public async Task<ActionResult<ObservationDto>> Dismiss(Guid id, DismissObservationRequest req, CancellationToken ct)
-        => Ok(await observations.DismissAsync(id, req.ActorId, req.Reason, ct));
+        => Ok(await observations.DismissAsync(id, currentActor.ActorId, req.Reason, ct));
 
     [HttpPost("api/observations/{id:guid}/promote")]
     public async Task<ActionResult<ChangeRequestDto>> Promote(Guid id, PromoteObservationRequest req, CancellationToken ct)
-        => Ok(await observations.PromoteAsync(id, req, ct));
+        => Ok(await observations.PromoteAsync(id, currentActor.ActorId, req, ct));
 }

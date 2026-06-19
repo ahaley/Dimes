@@ -8,8 +8,8 @@ import { Drawer } from '../components/Drawer'
 import { useToast } from '../components/Toast'
 
 export function InboxDrawer({
-  projectId, actingActorId, onClose,
-}: { projectId: string; actingActorId: string; onClose: () => void }) {
+  projectId, onClose,
+}: { projectId: string; onClose: () => void }) {
   const { data: observations } = useInbox(projectId)
   const open = (observations ?? []).filter((o) => o.status === 'New' || o.status === 'Clustered')
   const [promote, setPromote] = useState<Observation | null>(null)
@@ -32,7 +32,7 @@ export function InboxDrawer({
               <p className="mt-2 line-clamp-3 break-words font-mono text-xs text-slate-600 dark:text-slate-300">{o.payload}</p>
               <div className="mt-3 flex gap-2">
                 <Button variant="primary" onClick={() => setPromote(o)}>Promote</Button>
-                <DismissButton id={o.id} projectId={projectId} actingActorId={actingActorId} />
+                <DismissButton id={o.id} projectId={projectId} />
               </div>
             </li>
           ))}
@@ -50,7 +50,6 @@ export function InboxDrawer({
         <PromoteModal
           observation={promote}
           projectId={projectId}
-          actingActorId={actingActorId}
           onClose={() => setPromote(null)}
         />
       )}
@@ -58,11 +57,11 @@ export function InboxDrawer({
   )
 }
 
-function DismissButton({ id, projectId, actingActorId }: { id: string; projectId: string; actingActorId: string }) {
+function DismissButton({ id, projectId }: { id: string; projectId: string }) {
   const invalidate = useProjectInvalidator(projectId)
   const toast = useToast()
   const dismiss = useMutation({
-    mutationFn: () => api.dismissObservation(id, actingActorId, 'noise'),
+    mutationFn: () => api.dismissObservation(id, 'noise'),
     onSuccess: () => { invalidate(); toast.success('Observation dismissed') },
     onError: (e) => toast.error(e instanceof Error ? e.message : 'Could not dismiss'),
   })
@@ -70,13 +69,13 @@ function DismissButton({ id, projectId, actingActorId }: { id: string; projectId
 }
 
 function PromoteModal({
-  observation, projectId, actingActorId, onClose,
-}: { observation: Observation; projectId: string; actingActorId: string; onClose: () => void }) {
+  observation, projectId, onClose,
+}: { observation: Observation; projectId: string; onClose: () => void }) {
   const invalidate = useProjectInvalidator(projectId)
   const toast = useToast()
   const [title, setTitle] = useState('')
   const promote = useMutation({
-    mutationFn: () => api.promoteObservation(observation.id, { actorId: actingActorId, title, description: observation.payload }),
+    mutationFn: () => api.promoteObservation(observation.id, { title, description: observation.payload }),
     onSuccess: () => { invalidate(); toast.success('Promoted to a change request'); onClose() },
     onError: (e) => toast.error(e instanceof Error ? e.message : 'Could not promote'),
   })

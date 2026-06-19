@@ -1,4 +1,5 @@
 using System.Text;
+using Dimes.Api.Auth;
 using Dimes.Api.Contracts;
 using Dimes.Api.Services;
 using Dimes.Domain;
@@ -10,13 +11,14 @@ namespace Dimes.Api.Controllers;
 public class ChangeRequestsController(
     ChangeRequestService changes,
     CommentaryService commentary,
-    ScmService scm) : ControllerBase
+    ScmService scm,
+    ICurrentActor currentActor) : ControllerBase
 {
     [HttpPost("api/projects/{projectId:guid}/changes")]
     public async Task<ActionResult<ChangeRequestDto>> Create(
         Guid projectId, CreateChangeRequest req, CancellationToken ct)
     {
-        var change = await changes.CreateAsync(projectId, req, ct);
+        var change = await changes.CreateAsync(projectId, currentActor.ActorId, req, ct);
         return CreatedAtAction(nameof(Get), new { id = change.Id }, change);
     }
 
@@ -31,15 +33,15 @@ public class ChangeRequestsController(
 
     [HttpPatch("api/changes/{id:guid}")]
     public async Task<ActionResult<ChangeRequestDto>> UpdateDetails(Guid id, UpdateChangeDetailsRequest req, CancellationToken ct)
-        => Ok(await changes.UpdateDetailsAsync(id, req, ct));
+        => Ok(await changes.UpdateDetailsAsync(id, currentActor.ActorId, req, ct));
 
     [HttpPost("api/changes/{id:guid}/transition")]
     public async Task<ActionResult<ChangeRequestDto>> Transition(Guid id, TransitionChangeRequest req, CancellationToken ct)
-        => Ok(await changes.TransitionAsync(id, req, ct));
+        => Ok(await changes.TransitionAsync(id, currentActor.ActorId, req, ct));
 
     [HttpPost("api/changes/{id:guid}/comments")]
     public async Task<ActionResult<CommentDto>> AddComment(Guid id, AddCommentRequest req, CancellationToken ct)
-        => Ok(await changes.AddCommentAsync(id, req, ct));
+        => Ok(await changes.AddCommentAsync(id, currentActor.ActorId, req, ct));
 
     [HttpPost("api/changes/{id:guid}/scm-links")]
     public async Task<ActionResult<ScmLinkDto>> AddScmLink(Guid id, AddScmLinkRequest req, CancellationToken ct)

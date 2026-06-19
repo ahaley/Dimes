@@ -42,7 +42,6 @@ export function ChangeDetail({
   const saveDetails = useMutation({
     mutationFn: () =>
       api.updateChangeDetails(changeId, {
-        actorId: actingActorId,
         title: eTitle,
         description: eDesc || null,
         priority: ePriority,
@@ -52,7 +51,7 @@ export function ChangeDetail({
   })
 
   const addComment = useMutation({
-    mutationFn: () => api.addComment(changeId, { actorId: actingActorId, body: commentBody }),
+    mutationFn: () => api.addComment(changeId, { body: commentBody }),
     onSuccess: () => { invalidate(changeId); setCommentBody('') },
   })
   const askAgent = useMutation({
@@ -86,7 +85,7 @@ export function ChangeDetail({
                   key={target}
                   variant={target === 'Rejected' ? 'danger' : 'default'}
                   disabled={transition.isPending}
-                  onClick={() => transition.mutate({ id: changeId, actorId: actingActorId, target: target as ChangeStatus })}
+                  onClick={() => transition.mutate({ id: changeId, target: target as ChangeStatus })}
                 >
                   → {target}
                 </Button>
