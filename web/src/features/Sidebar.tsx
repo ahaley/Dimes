@@ -3,7 +3,7 @@ import { cx } from '../components/ui'
 import { initials } from '../lifecycle'
 
 export function Sidebar({
-  projects, projectId, onSelect, collapsed, onToggleCollapse, onNewProject, onManage,
+  projects, projectId, onSelect, collapsed, onToggleCollapse, onNewProject,
   activeView, onShowProviders, onShowActors,
 }: {
   projects: Project[]
@@ -12,7 +12,6 @@ export function Sidebar({
   collapsed: boolean
   onToggleCollapse: () => void
   onNewProject: () => void
-  onManage: () => void
   activeView: 'board' | 'providers' | 'actors'
   onShowProviders: () => void
   onShowActors: () => void
@@ -127,22 +126,6 @@ export function Sidebar({
           </button>
         </div>
       </nav>
-
-      {/* Manage (pinned bottom) */}
-      <div className="border-t border-slate-200 p-2 dark:border-slate-800">
-        <button
-          onClick={onManage}
-          disabled={!projectId}
-          title="Manage project"
-          className={cx(
-            'flex w-full items-center rounded-md text-sm text-slate-600 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-800 disabled:opacity-40',
-            collapsed ? 'h-9 w-9 justify-center' : 'gap-2 px-2 py-1.5',
-          )}
-        >
-          <span aria-hidden>⚙</span>
-          {!collapsed && <span>Manage</span>}
-        </button>
-      </div>
     </aside>
   )
 }
