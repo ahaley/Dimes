@@ -2,9 +2,12 @@ import { useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { api } from '../api/client'
 import { useAudit, useChangeDetail, useProjectInvalidator, useTransition } from '../api/hooks'
-import type { ChangeStatus, Member } from '../api/types'
+import type { ChangeStatus, Member, Priority } from '../api/types'
 import { ALLOWED_TRANSITIONS, STATUS_TONE } from '../lifecycle'
-import { Badge, Button, ErrorText, Modal, Select, TextInput, Textarea } from '../components/ui'
+import { Badge, Button, ErrorText, Field, Modal, Select, TextInput, Textarea } from '../components/ui'
+import { useToast } from '../components/Toast'
+
+const PRIORITIES: Priority[] = ['None', 'Low', 'Medium', 'High', 'Critical']
 
 export function ChangeDetail({
   changeId, projectId, actingActorId, members, onClose,
@@ -14,10 +17,39 @@ export function ChangeDetail({
   const invalidate = useProjectInvalidator(projectId)
   const transition = useTransition(projectId)
 
+  const toast = useToast()
   const agents = members.filter((m) => m.type === 'Agent')
   const [commentBody, setCommentBody] = useState('')
   const [agentId, setAgentId] = useState('')
   const [scmUrl, setScmUrl] = useState('')
+
+  const canEdit = !!detail && (
+    detail.change.createdByActorId === actingActorId ||
+    members.find((m) => m.actorId === actingActorId)?.role === 'Maintainer'
+  )
+  const [editing, setEditing] = useState(false)
+  const [eTitle, setETitle] = useState('')
+  const [eDesc, setEDesc] = useState('')
+  const [ePriority, setEPriority] = useState<Priority>('None')
+
+  const startEdit = () => {
+    if (!detail) return
+    setETitle(detail.change.title)
+    setEDesc(detail.change.description ?? '')
+    setEPriority(detail.change.priority)
+    setEditing(true)
+  }
+  const saveDetails = useMutation({
+    mutationFn: () =>
+      api.updateChangeDetails(changeId, {
+        actorId: actingActorId,
+        title: eTitle,
+        description: eDesc || null,
+        priority: ePriority,
+      }),
+    onSuccess: () => { invalidate(changeId); setEditing(false); toast.success('Change updated') },
+    onError: (e) => toast.error(e instanceof Error ? e.message : 'Could not save changes'),
+  })
 
   const addComment = useMutation({
     mutationFn: () => api.addComment(changeId, { actorId: actingActorId, body: commentBody }),
@@ -46,6 +78,7 @@ export function ChangeDetail({
             <Badge tone="slate">{detail.change.kind}</Badge>
             {detail.change.priority !== 'None' && <Badge tone="amber">{detail.change.priority}</Badge>}
             <span className="ml-auto" />
+            {canEdit && !editing && <Button variant="subtle" onClick={startEdit}>Edit</Button>}
             {ALLOWED_TRANSITIONS[detail.change.status]
               .filter((t) => t !== 'Duplicate')
               .map((target) => (
@@ -60,7 +93,33 @@ export function ChangeDetail({
               ))}
           </div>
           <ErrorText error={transition.error} />
-          {detail.change.description && <p className="text-sm text-slate-600">{detail.change.description}</p>}
+
+          {editing ? (
+            <div className="space-y-2 rounded-md border border-slate-200 p-3">
+              <Field label="Title">
+                <TextInput value={eTitle} onChange={(e) => setETitle(e.target.value)} autoFocus />
+              </Field>
+              <Field label="Description">
+                <Textarea value={eDesc} onChange={(e) => setEDesc(e.target.value)} />
+              </Field>
+              <Field label="Priority">
+                <Select value={ePriority} onChange={(e) => setEPriority(e.target.value as Priority)}>
+                  {PRIORITIES.map((p) => <option key={p} value={p}>{p}</option>)}
+                </Select>
+              </Field>
+              <ErrorText error={saveDetails.error} />
+              <div className="flex justify-end gap-2">
+                <Button variant="subtle" onClick={() => setEditing(false)}>Cancel</Button>
+                <Button variant="primary" disabled={!eTitle.trim() || saveDetails.isPending} onClick={() => saveDetails.mutate()}>
+                  Save
+                </Button>
+              </div>
+            </div>
+          ) : detail.change.description ? (
+            <p className="text-sm text-slate-600">{detail.change.description}</p>
+          ) : (
+            canEdit && <p className="text-sm italic text-slate-400">No description — click Edit to add one.</p>
+          )}
 
           {/* Evidence */}
           {detail.evidence.length > 0 && (

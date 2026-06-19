@@ -27,6 +27,17 @@ public class ProjectsController(ProjectService projects, ObservationService obse
     public async Task<ActionResult<MemberDto>> AddMember(Guid projectId, AddMemberRequest req, CancellationToken ct)
         => Ok(await projects.AddMemberAsync(projectId, req, ct));
 
+    [HttpPatch("{projectId:guid}/members/{actorId:guid}")]
+    public async Task<ActionResult<MemberDto>> UpdateMember(Guid projectId, Guid actorId, UpdateMemberRequest req, CancellationToken ct)
+        => Ok(await projects.UpdateMemberAsync(projectId, actorId, req, ct));
+
+    [HttpDelete("{projectId:guid}/members/{actorId:guid}")]
+    public async Task<IActionResult> RemoveMember(Guid projectId, Guid actorId, CancellationToken ct)
+    {
+        await projects.RemoveMemberAsync(projectId, actorId, ct);
+        return NoContent();
+    }
+
     [HttpGet("{projectId:guid}/llm-providers")]
     public async Task<ActionResult<IReadOnlyList<LlmProviderConfigDto>>> ListLlmProviders(Guid projectId, CancellationToken ct)
         => Ok(await projects.ListLlmProvidersAsync(projectId, ct));

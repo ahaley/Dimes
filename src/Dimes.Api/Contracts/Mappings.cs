@@ -11,7 +11,7 @@ public static class Mappings
         new(m.ActorId, m.ProjectId, m.Actor.DisplayName, m.Actor.Type, m.Actor.Email, m.Role, m.Actor.LlmProviderConfigId);
 
     public static LlmProviderConfigDto ToDto(this LlmProviderConfig c) =>
-        new(c.Id, c.ProjectId, c.Type, c.Name, c.BaseUrl, c.Model, c.Enabled);
+        new(c.Id, c.ProjectId, c.Type, c.Name, c.BaseUrl, c.Model, c.ApiKeySecretRef, c.Enabled);
 
     public static ObservationSourceDto ToDto(this ObservationSource s) =>
         new(s.Id, s.ProjectId, s.Type, s.Name, s.Enabled);

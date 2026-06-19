@@ -62,6 +62,165 @@ public sealed class CaptureLifecycleServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task ExportInDevelopment_IncludesOnlyInDevChanges_AsWorkOrder()
+    {
+        var seed = await SeedAsync();
+
+        async Task<Guid> InDev(string title, string desc)
+        {
+            var c = await _changes.CreateAsync(seed.ProjectId,
+                new CreateChangeRequest(seed.MaintainerId, title, desc, ChangeKind.Feature));
+            foreach (var target in new[] { ChangeStatus.Triaged, ChangeStatus.Approved, ChangeStatus.InDevelopment })
+            {
+                await _changes.TransitionAsync(c.Id, new TransitionChangeRequest(seed.MaintainerId, target, null, null));
+            }
+            return c.Id;
+        }
+
+        await InDev("Add CSV export", "Let users download a CSV.");
+        await InDev("Fix login redirect", "Redirect loops on expired session.");
+        await _changes.CreateAsync(seed.ProjectId,
+            new CreateChangeRequest(seed.MaintainerId, "Not started yet", "still captured", ChangeKind.Problem));
+
+        var export = await _changes.ExportInDevelopmentAsync(seed.ProjectId);
+
+        Assert.EndsWith("-in-development.md", export.FileName);
+        Assert.Contains("Claude Code", export.Markdown);
+        Assert.Contains("Add CSV export", export.Markdown);
+        Assert.Contains("Let users download a CSV.", export.Markdown);
+        Assert.Contains("Fix login redirect", export.Markdown);
+        Assert.Contains("- [ ] Implemented & verified", export.Markdown);
+        Assert.DoesNotContain("Not started yet", export.Markdown);
+    }
+
+    [Fact]
+    public async Task UpdateDetails_AsAuthor_EditsFieldsAndAudits()
+    {
+        var seed = await SeedAsync();
+        var change = await _changes.CreateAsync(seed.ProjectId,
+            new CreateChangeRequest(seed.ContributorId, "Original", "old", ChangeKind.Feature));
+
+        var updated = await _changes.UpdateDetailsAsync(change.Id,
+            new UpdateChangeDetailsRequest(seed.ContributorId, "Renamed", "new body", Priority.High));
+
+        Assert.Equal("Renamed", updated.Title);
+        Assert.Equal("new body", updated.Description);
+        Assert.Equal(Priority.High, updated.Priority);
+
+        var trail = await _changes.GetAuditAsync(change.Id);
+        Assert.Contains(trail, e => e.Action == "DetailsEdited");
+    }
+
+    [Fact]
+    public async Task UpdateDetails_AsMaintainerNonAuthor_Succeeds()
+    {
+        var seed = await SeedAsync();
+        var change = await _changes.CreateAsync(seed.ProjectId,
+            new CreateChangeRequest(seed.ContributorId, "Original", null, ChangeKind.Feature));
+
+        var updated = await _changes.UpdateDetailsAsync(change.Id,
+            new UpdateChangeDetailsRequest(seed.MaintainerId, "Maintainer edit", null, Priority.None));
+
+        Assert.Equal("Maintainer edit", updated.Title);
+    }
+
+    [Fact]
+    public async Task UpdateDetails_AsOtherContributor_IsForbidden()
+    {
+        var seed = await SeedAsync();
+        var other = await _projects.AddMemberAsync(seed.ProjectId,
+            new AddMemberRequest("Other", ActorType.Human, null, MemberRole.Contributor));
+        var change = await _changes.CreateAsync(seed.ProjectId,
+            new CreateChangeRequest(seed.ContributorId, "Original", null, ChangeKind.Feature));
+
+        await Assert.ThrowsAsync<ForbiddenException>(() =>
+            _changes.UpdateDetailsAsync(change.Id,
+                new UpdateChangeDetailsRequest(other.ActorId, "hijack", null, Priority.None)));
+    }
+
+    [Fact]
+    public async Task UpdateDetails_AsNonMember_IsForbidden()
+    {
+        var seed = await SeedAsync();
+        var change = await _changes.CreateAsync(seed.ProjectId,
+            new CreateChangeRequest(seed.ContributorId, "Original", null, ChangeKind.Feature));
+
+        await Assert.ThrowsAsync<ForbiddenException>(() =>
+            _changes.UpdateDetailsAsync(change.Id,
+                new UpdateChangeDetailsRequest(Guid.NewGuid(), "x", null, Priority.None)));
+    }
+
+    [Fact]
+    public async Task UpdateMember_ChangesRole_AndRemoveDropsMembershipButKeepsActor()
+    {
+        var seed = await SeedAsync();
+        // The contributor authored a change, so their actor must survive removal.
+        var change = await _changes.CreateAsync(seed.ProjectId,
+            new CreateChangeRequest(seed.ContributorId, "By cory", null, ChangeKind.Feature));
+
+        var updated = await _projects.UpdateMemberAsync(seed.ProjectId, seed.ContributorId,
+            new UpdateMemberRequest("Cory Renamed", null, MemberRole.Maintainer, null));
+        Assert.Equal("Cory Renamed", updated.DisplayName);
+        Assert.Equal(MemberRole.Maintainer, updated.Role);
+
+        await _projects.RemoveMemberAsync(seed.ProjectId, seed.ContributorId);
+        var members = await _projects.ListMembersAsync(seed.ProjectId);
+        Assert.DoesNotContain(members, m => m.ActorId == seed.ContributorId);
+
+        // Actor row retained → the authored change still resolves.
+        var detail = await _changes.GetDetailAsync(change.Id);
+        Assert.Equal(seed.ContributorId, detail.Change.CreatedByActorId);
+    }
+
+    [Fact]
+    public async Task UpdateLlmProvider_EditsFields()
+    {
+        var seed = await SeedAsync();
+        var created = await _projects.CreateLlmProviderAsync(seed.ProjectId,
+            new CreateLlmProviderRequest(LlmProviderType.Anthropic, "claude", null, "claude-haiku-4-5", "OLD_KEY"));
+
+        var updated = await _projects.UpdateLlmProviderAsync(created.Id,
+            new UpdateLlmProviderRequest(LlmProviderType.Anthropic, "claude", null, "claude-opus-4-8", "NEW_KEY", Enabled: false));
+
+        Assert.Equal("claude-opus-4-8", updated.Model);
+        Assert.Equal("NEW_KEY", updated.ApiKeySecretRef);
+        Assert.False(updated.Enabled);
+    }
+
+    [Fact]
+    public async Task DeleteLlmProvider_BlockedWhenInUse_ThenAllowed()
+    {
+        var seed = await SeedAsync();
+        var llm = await _projects.CreateLlmProviderAsync(seed.ProjectId,
+            new CreateLlmProviderRequest(LlmProviderType.Anthropic, "claude", null, "claude-sonnet-4-6", "K"));
+        var agent = await _projects.AddMemberAsync(seed.ProjectId,
+            new AddMemberRequest("Aria", ActorType.Agent, null, MemberRole.Contributor, llm.Id));
+
+        await Assert.ThrowsAsync<BadRequestException>(() => _projects.DeleteLlmProviderAsync(llm.Id));
+
+        // Unbind the agent, then deletion succeeds.
+        await _projects.UpdateMemberAsync(seed.ProjectId, agent.ActorId,
+            new UpdateMemberRequest("Aria", null, MemberRole.Contributor, null));
+        await _projects.DeleteLlmProviderAsync(llm.Id);
+
+        var providers = await _projects.ListLlmProvidersAsync(seed.ProjectId);
+        Assert.DoesNotContain(providers, p => p.Id == llm.Id);
+    }
+
+    [Fact]
+    public async Task GlobalLlmProvider_IsAvailableToEveryProject()
+    {
+        var global = await _projects.CreateLlmProviderAsync(
+            null, new CreateLlmProviderRequest(LlmProviderType.Anthropic, "shared-claude", null, "claude-sonnet-4-6", "ANTHROPIC_KEY"));
+        Assert.Null(global.ProjectId);
+
+        var project = await _projects.CreateAsync(new CreateProjectRequest("Fresh", null));
+        var available = await _projects.ListLlmProvidersAsync(project.Id);
+
+        Assert.Contains(available, p => p.Id == global.Id && p.ProjectId == null);
+    }
+
+    [Fact]
     public async Task Ingest_SameFingerprint_AggregatesIntoOneObservation()
     {
         var seed = await SeedAsync();
