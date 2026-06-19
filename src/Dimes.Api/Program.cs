@@ -7,9 +7,16 @@ using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// SQLite by default — "one command up". Override ConnectionStrings:Dimes for Postgres later.
-var connectionString = builder.Configuration.GetConnectionString("Dimes")
-    ?? "Data Source=dimes.db";
+// Resolve the database connection. An explicit ConnectionStrings:Dimes (env or config) wins —
+// e.g. an absolute path, or Postgres later. Otherwise default to an absolute, cwd-independent SQLite
+// file under <contentRoot>/data so projects persist across runs no matter where the app is launched.
+var connectionString = builder.Configuration.GetConnectionString("Dimes");
+if (string.IsNullOrWhiteSpace(connectionString))
+{
+    var dataDir = Path.Combine(builder.Environment.ContentRootPath, "data");
+    Directory.CreateDirectory(dataDir);
+    connectionString = $"Data Source={Path.Combine(dataDir, "dimes.db")}";
+}
 
 builder.Services.AddDimesPersistence(connectionString);
 builder.Services.AddDimesProviders();
