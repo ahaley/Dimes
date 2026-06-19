@@ -16,7 +16,7 @@ public record MemberDto(Guid ActorId, Guid ProjectId, string DisplayName, ActorT
 // ----- Actors (app-level management) -----
 public record ActorDto(
     Guid Id, string DisplayName, ActorType Type, string? Email,
-    Guid? LlmProviderConfigId, string? ProviderName, int ProjectCount, bool Deletable);
+    Guid? LlmProviderConfigId, string? ProviderName, int ProjectCount, bool Deletable, bool IsArchived);
 
 // ----- LLM provider configs -----
 public record CreateLlmProviderRequest(LlmProviderType Type, string Name, string? BaseUrl, string Model, string? ApiKeySecretRef);

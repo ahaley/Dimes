@@ -113,12 +113,17 @@ public class ProjectService(DimesDbContext db)
 
     /// <summary>App-level list of actors with their provider binding, project membership count, and
     /// whether they can be safely hard-deleted (no memberships and no references anywhere).</summary>
-    public async Task<IReadOnlyList<ActorDto>> ListActorsAsync(bool agentsOnly, CancellationToken ct = default)
+    public async Task<IReadOnlyList<ActorDto>> ListActorsAsync(
+        bool agentsOnly, bool includeArchived = false, CancellationToken ct = default)
     {
         var query = db.Actors.AsQueryable();
         if (agentsOnly)
         {
             query = query.Where(a => a.Type == ActorType.Agent);
+        }
+        if (!includeArchived)
+        {
+            query = query.Where(a => !a.IsArchived);
         }
 
         return await query
@@ -131,8 +136,21 @@ public class ProjectService(DimesDbContext db)
                 db.Memberships.All(m => m.ActorId != a.Id)
                     && db.ChangeRequests.All(c => c.CreatedByActorId != a.Id && c.AssigneeActorId != a.Id)
                     && db.Comments.All(c => c.AuthorActorId != a.Id)
-                    && db.AuditEvents.All(e => e.ActorId != a.Id)))
+                    && db.AuditEvents.All(e => e.ActorId != a.Id),
+                a.IsArchived))
             .ToListAsync(ct);
+    }
+
+    /// <summary>Archive an actor: keep it (preserving history) but hide it from active lists. Unlike
+    /// deletion this is never blocked — archiving is exactly what referenced actors use instead.</summary>
+    public async Task ArchiveActorAsync(Guid id, bool archived, CancellationToken ct = default)
+    {
+        var actor = await db.Actors.FindAsync([id], ct)
+            ?? throw new NotFoundException($"Actor '{id}' not found.");
+
+        actor.IsArchived = archived;
+        actor.ArchivedAt = archived ? DateTimeOffset.UtcNow : null;
+        await db.SaveChangesAsync(ct);
     }
 
     /// <summary>Hard-delete an actor. Blocked while it belongs to a project or is referenced by any

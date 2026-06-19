@@ -9,7 +9,8 @@ import { useToast } from '../components/Toast'
 /** App-level management of created actors — agents by default, with guarded deletion of orphans. */
 export function ActorsView() {
   const [agentsOnly, setAgentsOnly] = useState(true)
-  const { data: actors } = useActors(agentsOnly)
+  const [includeArchived, setIncludeArchived] = useState(false)
+  const { data: actors } = useActors(agentsOnly, includeArchived)
 
   return (
     <div className="mx-auto max-w-2xl space-y-4">
@@ -18,13 +19,20 @@ export function ActorsView() {
           <h1 className="text-lg font-semibold text-slate-800 dark:text-slate-100">Actors</h1>
           <p className="mt-1 text-sm text-slate-500">
             Identities created via project membership. Removing a member keeps the actor (so its history
-            stays valid); delete it here once it has no project and no references.
+            stays valid); archive it to hide it from active lists, or delete it once it has no project and
+            no references.
           </p>
         </div>
-        <label className="flex shrink-0 items-center gap-2 pt-1 text-xs text-slate-600 dark:text-slate-300">
-          <input type="checkbox" checked={agentsOnly} onChange={(e) => setAgentsOnly(e.target.checked)} />
-          Agents only
-        </label>
+        <div className="flex shrink-0 flex-col items-end gap-1 pt-1 text-xs text-slate-600 dark:text-slate-300">
+          <label className="flex items-center gap-2">
+            <input type="checkbox" checked={agentsOnly} onChange={(e) => setAgentsOnly(e.target.checked)} />
+            Agents only
+          </label>
+          <label className="flex items-center gap-2">
+            <input type="checkbox" checked={includeArchived} onChange={(e) => setIncludeArchived(e.target.checked)} />
+            Show archived
+          </label>
+        </div>
       </div>
 
       <Card className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -38,10 +46,19 @@ export function ActorsView() {
 function ActorRow({ actor }: { actor: ActorSummary }) {
   const qc = useQueryClient()
   const toast = useToast()
+  const invalidate = () => qc.invalidateQueries({ queryKey: ['actors'] })
   const remove = useMutation({
     mutationFn: () => api.deleteActor(actor.id),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['actors'] }); toast.success(`Deleted ${actor.displayName}`) },
+    onSuccess: () => { invalidate(); toast.success(`Deleted ${actor.displayName}`) },
     onError: (e) => toast.error(e instanceof Error ? e.message : 'Could not delete actor'),
+  })
+  const archive = useMutation({
+    mutationFn: () => (actor.isArchived ? api.unarchiveActor(actor.id) : api.archiveActor(actor.id)),
+    onSuccess: () => {
+      invalidate()
+      toast.success(`${actor.isArchived ? 'Unarchived' : 'Archived'} ${actor.displayName}`)
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : 'Could not update actor'),
   })
 
   const membership = actor.projectCount === 0
@@ -58,8 +75,17 @@ function ActorRow({ actor }: { actor: ActorSummary }) {
         <Badge tone={actor.type === 'Agent' ? 'violet' : 'slate'}>{actor.type}</Badge>
         <span className="text-slate-400">{actor.providerName ?? '—'}</span>
         <Badge tone={actor.projectCount === 0 ? 'amber' : 'slate'}>{membership}</Badge>
+        {actor.isArchived && <Badge tone="amber">archived</Badge>}
         {!actor.deletable && <Badge tone="red">locked</Badge>}
-        <span className="ml-auto">
+        <span className="ml-auto flex items-center gap-1">
+          <Button
+            variant="subtle"
+            disabled={archive.isPending}
+            title={actor.isArchived ? 'Restore to active lists' : 'Hide from active lists'}
+            onClick={() => archive.mutate()}
+          >
+            {actor.isArchived ? 'Unarchive' : 'Archive'}
+          </Button>
           <Button
             variant="subtle"
             disabled={!actor.deletable || remove.isPending}
