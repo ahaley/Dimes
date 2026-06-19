@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from './client'
-import type { ChangeStatus, ObservationStatus } from './types'
+import type { ChangeRequest, ChangeStatus, ObservationStatus } from './types'
 
 export const keys = {
   projects: ['projects'] as const,
@@ -87,11 +87,31 @@ export function useProjectInvalidator(projectId: string | undefined) {
   }
 }
 
+type TransitionVars = { id: string; actorId: string; target: ChangeStatus; reason?: string | null; duplicateOfId?: string | null }
+
+/** Optimistically moves the card in the board's change list, rolling back if the API rejects
+ * (e.g. RBAC 403 / illegal 409), then reconciles with the server. */
 export function useTransition(projectId: string | undefined) {
+  const qc = useQueryClient()
   const invalidate = useProjectInvalidator(projectId)
+  const listKey = keys.changes(projectId ?? '', undefined)
+
   return useMutation({
-    mutationFn: (vars: { id: string; actorId: string; target: ChangeStatus; reason?: string | null; duplicateOfId?: string | null }) =>
-      api.transition(vars.id, vars),
-    onSuccess: (_data, vars) => invalidate(vars.id),
+    mutationFn: (vars: TransitionVars) => api.transition(vars.id, vars),
+    onMutate: async (vars) => {
+      await qc.cancelQueries({ queryKey: listKey })
+      const previous = qc.getQueryData<ChangeRequest[]>(listKey)
+      if (previous) {
+        qc.setQueryData<ChangeRequest[]>(
+          listKey,
+          previous.map((c) => (c.id === vars.id ? { ...c, status: vars.target } : c)),
+        )
+      }
+      return { previous }
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.previous) qc.setQueryData(listKey, context.previous)
+    },
+    onSettled: (_data, _err, vars) => invalidate(vars.id),
   })
 }

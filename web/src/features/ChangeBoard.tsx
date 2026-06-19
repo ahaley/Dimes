@@ -1,68 +1,128 @@
 import { useState } from 'react'
-import { useChanges } from '../api/hooks'
-import { LIFECYCLE_COLUMNS, type ChangeRequest } from '../api/types'
+import { DndContext, PointerSensor, useDroppable, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core'
+import { useChanges, useTransition } from '../api/hooks'
+import { LIFECYCLE_COLUMNS, type ChangeRequest, type ChangeStatus, type Member } from '../api/types'
 import { STATUS_TONE } from '../lifecycle'
-import { Badge, Button, Card } from '../components/ui'
-import { CreateChangeModal } from './CreateChangeModal'
+import { Badge, cx } from '../components/ui'
+import { useToast } from '../components/Toast'
+import { ChangeCard } from './ChangeCard'
 
 export function ChangeBoard({
-  projectId, actingActorId, onSelect,
-}: { projectId: string; actingActorId: string; onSelect: (id: string) => void }) {
+  projectId, actingActorId, members, onSelect,
+}: { projectId: string; actingActorId: string; members: Member[]; onSelect: (id: string) => void }) {
   const { data: changes } = useChanges(projectId)
-  const [creating, setCreating] = useState(false)
+  const transition = useTransition(projectId)
+  const toast = useToast()
+  const [closedOpen, setClosedOpen] = useState(false)
 
-  const byStatus = (status: string) => (changes ?? []).filter((c) => c.status === status)
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }))
+
+  const byStatus = (status: ChangeStatus) => (changes ?? []).filter((c) => c.status === status)
   const terminal = (changes ?? []).filter((c) => c.status === 'Rejected' || c.status === 'Duplicate')
 
-  return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-slate-700">Change board</h2>
-        <Button variant="primary" onClick={() => setCreating(true)}>+ New change</Button>
-      </div>
+  const requestTransition = (change: ChangeRequest, target: ChangeStatus) => {
+    if (target === change.status) return
+    transition.mutate(
+      { id: change.id, actorId: actingActorId, target },
+      {
+        onSuccess: () => toast.success(`Moved “${change.title}” to ${target}`),
+        onError: (e) => toast.error(e instanceof Error ? e.message : 'Transition failed'),
+      },
+    )
+  }
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-6">
+  const onDragEnd = (e: DragEndEvent) => {
+    const target = e.over?.id as ChangeStatus | undefined
+    if (!target) return
+    const change = (changes ?? []).find((c) => c.id === e.active.id)
+    if (change) requestTransition(change, target)
+  }
+
+  return (
+    <DndContext sensors={sensors} onDragEnd={onDragEnd}>
+      <div className="flex gap-3 overflow-x-auto pb-3">
         {LIFECYCLE_COLUMNS.map((status) => (
-          <div key={status} className="rounded-lg bg-slate-100/70 p-2">
-            <div className="mb-2 flex items-center justify-between px-1">
-              <span className="text-xs font-semibold text-slate-600">{status}</span>
-              <Badge tone={STATUS_TONE[status]}>{byStatus(status).length}</Badge>
-            </div>
-            <div className="space-y-2">
-              {byStatus(status).map((c) => <ChangeCard key={c.id} change={c} onClick={() => onSelect(c.id)} />)}
-            </div>
+          <div key={status} className="flex">
+            {status === 'Approved' && <Gate />}
+            <Column status={status} changes={byStatus(status)} members={members} onSelect={onSelect} onTransition={requestTransition} />
           </div>
         ))}
       </div>
 
       {terminal.length > 0 && (
-        <div className="flex flex-wrap items-center gap-2 pt-1">
-          <span className="text-xs text-slate-400">Closed:</span>
-          {terminal.map((c) => (
-            <button key={c.id} onClick={() => onSelect(c.id)} className="text-xs text-slate-500 underline-offset-2 hover:underline">
-              {c.title} <span className="text-slate-400">({c.status})</span>
-            </button>
-          ))}
+        <div className="mt-3 rounded-lg border border-slate-200 bg-white">
+          <button
+            onClick={() => setClosedOpen((v) => !v)}
+            className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500"
+          >
+            <span>{closedOpen ? '▾' : '▸'}</span> Closed <Badge tone="slate">{terminal.length}</Badge>
+          </button>
+          {closedOpen && (
+            <ul className="space-y-1 px-3 pb-3">
+              {terminal.map((c) => (
+                <li key={c.id}>
+                  <button onClick={() => onSelect(c.id)} className="text-sm text-slate-500 hover:text-slate-800">
+                    {c.title} <span className="text-slate-400">· {c.status}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       )}
+    </DndContext>
+  )
+}
 
-      {creating && (
-        <CreateChangeModal projectId={projectId} actingActorId={actingActorId} onClose={() => setCreating(false)} />
+function Column({
+  status, changes, members, onSelect, onTransition,
+}: {
+  status: ChangeStatus
+  changes: ChangeRequest[]
+  members: Member[]
+  onSelect: (id: string) => void
+  onTransition: (change: ChangeRequest, target: ChangeStatus) => void
+}) {
+  const { setNodeRef, isOver } = useDroppable({ id: status })
+  return (
+    <div
+      ref={setNodeRef}
+      className={cx(
+        'flex w-64 shrink-0 flex-col rounded-lg border bg-slate-50/70 p-2 transition-colors',
+        isOver ? 'border-indigo-400 bg-indigo-50/60' : 'border-transparent',
       )}
+    >
+      <div className="mb-2 flex items-center justify-between px-1">
+        <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">{status}</span>
+        <Badge tone={STATUS_TONE[status]}>{changes.length}</Badge>
+      </div>
+      <div className="space-y-2">
+        {changes.map((c) => (
+          <ChangeCard
+            key={c.id}
+            change={c}
+            members={members}
+            onSelect={() => onSelect(c.id)}
+            onTransition={(target) => onTransition(c, target)}
+          />
+        ))}
+        {changes.length === 0 && (
+          <p className="rounded-md border border-dashed border-slate-200 px-2 py-6 text-center text-xs text-slate-300">
+            Drop here
+          </p>
+        )}
+      </div>
     </div>
   )
 }
 
-function ChangeCard({ change, onClick }: { change: ChangeRequest; onClick: () => void }) {
+/** The whitelist gate — the signature divider between candidate columns and committed work. */
+function Gate() {
   return (
-    <Card className="cursor-pointer p-2.5 hover:border-indigo-300" >
-      <button onClick={onClick} className="w-full text-left">
-        <p className="text-sm font-medium text-slate-800">{change.title}</p>
-        <div className="mt-1.5 flex items-center gap-1.5">
-          <Badge tone="slate">{change.kind}</Badge>
-          {change.priority !== 'None' && <Badge tone="amber">{change.priority}</Badge>}
-        </div>
-      </button>
-    </Card>
+    <div className="mr-3 flex w-8 shrink-0 flex-col items-center justify-center" title="Whitelist gate — Maintainer approval required">
+      <div className="flex-1 border-l border-dashed border-violet-300" />
+      <span className="my-2 select-none rounded bg-violet-100 px-1 py-0.5 text-[10px] font-semibold text-violet-700">🔒</span>
+      <div className="flex-1 border-l border-dashed border-violet-300" />
+    </div>
   )
 }
