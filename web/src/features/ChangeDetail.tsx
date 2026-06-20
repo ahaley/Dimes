@@ -12,6 +12,20 @@ const PRIORITIES: Priority[] = ['None', 'Low', 'Medium', 'High', 'Critical']
 export function ChangeDetail({
   changeId, projectId, actingActorId, members, onClose,
 }: { changeId: string; projectId: string; actingActorId: string; members: Member[]; onClose: () => void }) {
+  const { data: detail } = useChangeDetail(changeId)
+  const title = detail?.change.title ?? 'Change'
+  return (
+    <Modal title={title} onClose={onClose} wide>
+      <ChangeDetailBody changeId={changeId} projectId={projectId} actingActorId={actingActorId} members={members} />
+    </Modal>
+  )
+}
+
+/** The change detail content, without the surrounding Modal — reused by the board modal and by
+ * Focus Mode's detail pane. */
+export function ChangeDetailBody({
+  changeId, projectId, actingActorId, members,
+}: { changeId: string; projectId: string; actingActorId: string; members: Member[] }) {
   const { data: detail, isLoading } = useChangeDetail(changeId)
   const { data: audit } = useAudit(changeId)
   const invalidate = useProjectInvalidator(projectId)
@@ -63,10 +77,8 @@ export function ChangeDetail({
     onSuccess: () => { invalidate(changeId); setScmUrl('') },
   })
 
-  const title = detail?.change.title ?? 'Change'
-
   return (
-    <Modal title={title} onClose={onClose} wide>
+    <>
       {isLoading || !detail ? (
         <p className="text-sm text-slate-400">Loading…</p>
       ) : (
@@ -207,7 +219,7 @@ export function ChangeDetail({
           </Section>
         </div>
       )}
-    </Modal>
+    </>
   )
 }
 

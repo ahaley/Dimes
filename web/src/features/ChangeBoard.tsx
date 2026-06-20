@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { DndContext, PointerSensor, useDroppable, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core'
 import { useActors, useChanges, useTransition } from '../api/hooks'
 import { LIFECYCLE_COLUMNS, type ChangeRequest, type ChangeStatus, type Member } from '../api/types'
@@ -13,6 +14,7 @@ export function ChangeBoard({
   const { data: changes } = useChanges(projectId)
   const transition = useTransition(projectId)
   const toast = useToast()
+  const navigate = useNavigate()
   const [closedOpen, setClosedOpen] = useState(false)
 
   // Resolve an author's name from members plus all actors (incl. archived/removed) so authors who
@@ -55,7 +57,15 @@ export function ChangeBoard({
         {LIFECYCLE_COLUMNS.map((status) => (
           <div key={status} className="flex">
             {status === 'Approved' && <Gate />}
-            <Column status={status} changes={byStatus(status)} members={members} authorOf={authorOf} onSelect={onSelect} onTransition={requestTransition} />
+            <Column
+              status={status}
+              changes={byStatus(status)}
+              members={members}
+              authorOf={authorOf}
+              onSelect={onSelect}
+              onTransition={requestTransition}
+              onFocus={() => navigate(`/projects/${projectId}/focus/${status}`)}
+            />
           </div>
         ))}
       </div>
@@ -86,7 +96,7 @@ export function ChangeBoard({
 }
 
 function Column({
-  status, changes, members, authorOf, onSelect, onTransition,
+  status, changes, members, authorOf, onSelect, onTransition, onFocus,
 }: {
   status: ChangeStatus
   changes: ChangeRequest[]
@@ -94,19 +104,33 @@ function Column({
   authorOf: (change: ChangeRequest) => string
   onSelect: (id: string) => void
   onTransition: (change: ChangeRequest, target: ChangeStatus) => void
+  onFocus: () => void
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: status })
+  // Focus mode is a "work through one by one" queue — meaningful for the active spine columns, not
+  // the terminal Done state.
+  const canFocus = status !== 'Done'
   return (
     <div
       ref={setNodeRef}
       className={cx(
-        'flex w-64 shrink-0 flex-col rounded-lg border bg-slate-50/70 p-2 transition-colors dark:bg-slate-800/40',
+        'group/col flex w-64 shrink-0 flex-col rounded-lg border bg-slate-50/70 p-2 transition-colors dark:bg-slate-800/40',
         isOver ? 'border-indigo-400 bg-indigo-50/60' : 'border-transparent',
       )}
     >
-      <div className="mb-2 flex items-center justify-between px-1">
+      <div className="mb-2 flex items-center gap-1 px-1">
         <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">{status}</span>
         <Badge tone={STATUS_TONE[status]}>{changes.length}</Badge>
+        {canFocus && (
+          <button
+            onClick={onFocus}
+            title={`Focus ${status} — work through one by one`}
+            aria-label={`Focus ${status}`}
+            className="ml-auto rounded p-0.5 text-slate-400 opacity-0 transition-opacity hover:bg-slate-200 hover:text-slate-600 focus:opacity-100 group-hover/col:opacity-100 dark:hover:bg-slate-700 dark:hover:text-slate-200"
+          >
+            ⤢
+          </button>
+        )}
       </div>
       <div className="space-y-2">
         {changes.map((c) => (

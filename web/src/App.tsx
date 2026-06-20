@@ -5,6 +5,7 @@ import { useMe, useMembers, useProjects } from './api/hooks'
 import { Button, Card } from './components/ui'
 import { Sidebar } from './features/Sidebar'
 import { Workspace } from './features/Workspace'
+import { FocusView } from './features/FocusView'
 import { LlmProvidersView } from './features/LlmProvidersView'
 import { ActorsView } from './features/ActorsView'
 import { ActorDetailView } from './features/ActorDetailView'
@@ -153,6 +154,10 @@ export default function App() {
               element={<Workspace actingActorId={me.actorId} members={members ?? []} />}
             />
             <Route path="/projects/:projectId/capture" element={<CaptureAssistView />} />
+            <Route
+              path="/projects/:projectId/focus/:status"
+              element={<FocusView actingActorId={me.actorId} members={members ?? []} />}
+            />
             <Route path="/providers" element={<LlmProvidersView projectId={projectId ?? lastProjectId} />} />
             <Route path="/actors" element={<ActorsView />} />
             <Route path="/actors/:actorId" element={<ActorDetailView />} />
