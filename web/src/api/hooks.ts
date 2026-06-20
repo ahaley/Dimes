@@ -39,8 +39,8 @@ export function useUserMemberships(userId: string | undefined) {
   })
 }
 
-export function useProjects() {
-  return useQuery({ queryKey: keys.projects, queryFn: api.listProjects })
+export function useProjects(enabled = true) {
+  return useQuery({ queryKey: keys.projects, queryFn: api.listProjects, enabled })
 }
 
 export function useMembers(projectId: string | undefined) {
