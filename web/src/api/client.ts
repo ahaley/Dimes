@@ -1,5 +1,5 @@
 import type {
-  ActorSummary, AuthConfig, AuditEvent, ChangeKind, ChangeRequest, ChangeRequestDetail, ChangeStatus, ChatTurn, CaptureAssistReply, Comment,
+  ActorDetail, ActorSummary, AuthConfig, AuditEvent, ChangeKind, ChangeRequest, ChangeRequestDetail, ChangeStatus, ChatTurn, CaptureAssistReply, Comment,
   LlmProviderConfig, Me, Member, Observation, ObservationSource, ObservationStatus, Priority, Project, ScmLink, SiteUser, UserMembership,
 } from './types'
 
@@ -141,6 +141,7 @@ export const api = {
   // Actors (app-level)
   listActors: (agentsOnly: boolean, includeArchived = false) =>
     request<ActorSummary[]>('GET', `/api/actors?agentsOnly=${agentsOnly}&includeArchived=${includeArchived}`),
+  getActor: (id: string) => request<ActorDetail>('GET', `/api/actors/${id}`),
   updateActor: (id: string, body: { displayName: string; email?: string | null }) =>
     request<ActorSummary>('PATCH', `/api/actors/${id}`, body),
   archiveActor: (id: string) => request<void>('POST', `/api/actors/${id}/archive`),

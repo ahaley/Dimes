@@ -11,6 +11,7 @@ export const keys = {
   providers: (projectId: string) => ['providers', projectId] as const,
   sources: (projectId: string) => ['sources', projectId] as const,
   actors: (agentsOnly: boolean, includeArchived: boolean) => ['actors', agentsOnly, includeArchived] as const,
+  actor: (id: string) => ['actor', id] as const,
   inbox: (projectId: string, status?: ObservationStatus) => ['inbox', projectId, status ?? 'all'] as const,
   changes: (projectId: string, status?: ChangeStatus) => ['changes', projectId, status ?? 'all'] as const,
   change: (id: string) => ['change', id] as const,
@@ -71,6 +72,14 @@ export function useActors(agentsOnly: boolean, includeArchived = false) {
   return useQuery({
     queryKey: keys.actors(agentsOnly, includeArchived),
     queryFn: () => api.listActors(agentsOnly, includeArchived),
+  })
+}
+
+export function useActor(id: string | undefined) {
+  return useQuery({
+    queryKey: keys.actor(id ?? ''),
+    queryFn: () => api.getActor(id!),
+    enabled: !!id,
   })
 }
 

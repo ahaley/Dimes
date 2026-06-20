@@ -39,6 +39,14 @@ public record ActorDto(
     Guid? LlmProviderConfigId, string? ProviderName, int ProjectCount, bool Deletable, bool IsArchived);
 public record UpdateActorRequest(string DisplayName, string? Email);
 
+// Actor-centric "presentation": identity + provider binding + the actor's per-project memberships
+// (project + role), so an agent's role and project assignments are visible in one place. Memberships
+// reuses UserMembershipDto (ProjectId, ProjectName, Role).
+public record ActorDetailDto(
+    Guid Id, string DisplayName, ActorType Type, string? Email,
+    Guid? LlmProviderConfigId, string? ProviderName, bool Deletable, bool IsArchived,
+    IReadOnlyList<UserMembershipDto> Memberships);
+
 // ----- LLM provider configs -----
 public record CreateLlmProviderRequest(LlmProviderType Type, string Name, string? BaseUrl, string Model, string? ApiKeySecretRef);
 public record UpdateLlmProviderRequest(LlmProviderType Type, string Name, string? BaseUrl, string Model, string? ApiKeySecretRef, bool Enabled);
