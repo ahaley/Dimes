@@ -50,6 +50,19 @@ public class ObservationService(
             throw new BadRequestException("Observation payload is required.");
         }
 
+        // Bound the stored fields. The endpoint is anonymous, so cap payload/context size to keep a
+        // leaked source id from filling storage with oversized rows (the request body is also capped at
+        // the transport layer via [RequestSizeLimit]).
+        const int maxFieldLength = 32 * 1024;
+        if (req.Payload.Length > maxFieldLength)
+        {
+            throw new BadRequestException($"Observation payload exceeds the {maxFieldLength}-character limit.");
+        }
+        if (req.ContextMetadata is { Length: > maxFieldLength })
+        {
+            throw new BadRequestException($"Observation context metadata exceeds the {maxFieldLength}-character limit.");
+        }
+
         if (!string.IsNullOrEmpty(req.Fingerprint))
         {
             var existing = await db.Observations.FirstOrDefaultAsync(

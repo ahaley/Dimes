@@ -27,7 +27,7 @@ public sealed class SiteAdminServiceTests : IDisposable
         _db = new DimesDbContext(options);
         _db.Database.Migrate();
 
-        _projects = new ProjectService(_db);
+        _projects = new ProjectService(_db, new MembershipResolver(_db));
         _admin = new SiteAdminService(_db, new PasswordHasher<Actor>(), _projects);
     }
 

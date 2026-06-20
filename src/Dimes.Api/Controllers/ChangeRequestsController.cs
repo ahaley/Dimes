@@ -12,6 +12,7 @@ public class ChangeRequestsController(
     ChangeRequestService changes,
     CommentaryService commentary,
     ScmService scm,
+    ProjectService projects,
     ICurrentActor currentActor) : ControllerBase
 {
     [HttpPost("api/projects/{projectId:guid}/changes")]
@@ -25,11 +26,17 @@ public class ChangeRequestsController(
     [HttpGet("api/projects/{projectId:guid}/changes")]
     public async Task<ActionResult<IReadOnlyList<ChangeRequestDto>>> List(
         Guid projectId, [FromQuery] ChangeStatus? status, CancellationToken ct)
-        => Ok(await changes.ListAsync(projectId, status, ct));
+    {
+        await projects.EnsureProjectReadAsync(projectId, currentActor.ActorId, currentActor.IsSiteAdmin, ct);
+        return Ok(await changes.ListAsync(projectId, status, ct));
+    }
 
     [HttpGet("api/changes/{id:guid}")]
     public async Task<ActionResult<ChangeRequestDetailDto>> Get(Guid id, CancellationToken ct)
-        => Ok(await changes.GetDetailAsync(id, ct));
+    {
+        await changes.EnsureCanReadChangeAsync(id, currentActor.ActorId, currentActor.IsSiteAdmin, ct);
+        return Ok(await changes.GetDetailAsync(id, ct));
+    }
 
     [HttpPatch("api/changes/{id:guid}")]
     public async Task<ActionResult<ChangeRequestDto>> UpdateDetails(Guid id, UpdateChangeDetailsRequest req, CancellationToken ct)
@@ -45,7 +52,7 @@ public class ChangeRequestsController(
 
     [HttpPost("api/changes/{id:guid}/scm-links")]
     public async Task<ActionResult<ScmLinkDto>> AddScmLink(Guid id, AddScmLinkRequest req, CancellationToken ct)
-        => Ok(await scm.AddLinkAsync(id, req, ct));
+        => Ok(await scm.AddLinkAsync(id, currentActor.ActorId, req, ct));
 
     /// <summary>Recommend-only agent commentary — posts a comment, never changes state.</summary>
     [HttpPost("api/changes/{id:guid}/agent-comment")]
@@ -54,12 +61,16 @@ public class ChangeRequestsController(
 
     [HttpGet("api/changes/{id:guid}/audit")]
     public async Task<ActionResult<IReadOnlyList<AuditEventDto>>> Audit(Guid id, CancellationToken ct)
-        => Ok(await changes.GetAuditAsync(id, ct));
+    {
+        await changes.EnsureCanReadChangeAsync(id, currentActor.ActorId, currentActor.IsSiteAdmin, ct);
+        return Ok(await changes.GetAuditAsync(id, ct));
+    }
 
     /// <summary>Download a Claude Code work-order markdown of the project's In-Development changes.</summary>
     [HttpGet("api/projects/{projectId:guid}/export/in-development")]
     public async Task<IActionResult> ExportInDevelopment(Guid projectId, CancellationToken ct)
     {
+        await projects.EnsureProjectReadAsync(projectId, currentActor.ActorId, currentActor.IsSiteAdmin, ct);
         var export = await changes.ExportInDevelopmentAsync(projectId, ct);
         return File(Encoding.UTF8.GetBytes(export.Markdown), "text/markdown", export.FileName);
     }

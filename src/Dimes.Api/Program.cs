@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using System.Threading.RateLimiting;
 using Dimes.Api;
 using Dimes.Api.Auth;
 using Dimes.Api.Realtime;
@@ -40,6 +41,27 @@ builder.Services.AddScoped<SiteAdminService>();
 builder.Services.AddSignalR();
 builder.Services.AddSingleton<IBoardNotifier, SignalRBoardNotifier>();
 
+// Throttle the anonymous capture endpoint. It's [AllowAnonymous] (host apps have no Dimes session),
+// so the only control is the unguessable source id — a leaked id could otherwise flood unbounded
+// observations. Partition a fixed window per source id (falling back to client IP), and reject excess
+// with 429 rather than queueing.
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.AddPolicy(RateLimitPolicies.Ingest, httpContext =>
+    {
+        var key = httpContext.Request.RouteValues.TryGetValue("sourceId", out var sourceId) && sourceId is not null
+            ? sourceId.ToString()!
+            : httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        return RateLimitPartition.GetFixedWindowLimiter(key, _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = 300,
+            Window = TimeSpan.FromMinutes(1),
+            QueueLimit = 0,
+        });
+    });
+});
+
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddProblemDetails();
 builder.Services
@@ -69,6 +91,7 @@ app.UseStaticFiles();
 
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseRateLimiter();
 
 if (app.Environment.IsDevelopment())
 {
