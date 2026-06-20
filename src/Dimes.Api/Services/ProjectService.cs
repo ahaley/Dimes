@@ -29,6 +29,22 @@ public class ProjectService(DimesDbContext db, MembershipResolver members)
         }
     }
 
+    /// <summary>Read authority for a project: any member, or a site admin. Project-scoped GET endpoints
+    /// gate on this so the membership boundary that <see cref="ListAsync"/> already applies to the
+    /// project list also covers a project's changes, observations, audit, members, sources, and
+    /// providers — closing cross-project read disclosure. Throws <see cref="ForbiddenException"/> for
+    /// non-members.</summary>
+    public async Task EnsureProjectReadAsync(
+        Guid projectId, Guid callerActorId, bool callerIsSiteAdmin, CancellationToken ct = default)
+    {
+        if (callerIsSiteAdmin)
+        {
+            return;
+        }
+
+        await members.ResolveAsync(projectId, callerActorId, ct); // throws ForbiddenException for non-members
+    }
+
     /// <summary>Authority to manage a specific LLM provider config. A project-scoped config is governed
     /// by that project's Maintainer (or a site admin); a website-wide (global) config — usable by every
     /// project — is governed by a site admin only. Throws if the config is missing or the caller lacks

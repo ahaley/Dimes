@@ -129,6 +129,66 @@ public sealed class CaptureLifecycleServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task EnsureProjectRead_AllowsAnyMember_ForbidsNonMember()
+    {
+        var seed = await SeedAsync();
+
+        // Any role can read — a Contributor is fine; an outsider is not.
+        await _projects.EnsureProjectReadAsync(seed.ProjectId, seed.ContributorId, callerIsSiteAdmin: false);
+        await Assert.ThrowsAsync<ForbiddenException>(() =>
+            _projects.EnsureProjectReadAsync(seed.ProjectId, Guid.NewGuid(), callerIsSiteAdmin: false));
+    }
+
+    [Fact]
+    public async Task EnsureProjectRead_AllowsSiteAdminNonMember()
+    {
+        var seed = await SeedAsync();
+        await _projects.EnsureProjectReadAsync(seed.ProjectId, Guid.NewGuid(), callerIsSiteAdmin: true);
+    }
+
+    [Fact]
+    public async Task EnsureCanReadChange_GatesByProjectMembership()
+    {
+        var seed = await SeedAsync();
+        var change = await _changes.CreateAsync(seed.ProjectId, seed.ContributorId,
+            new CreateChangeRequest("x", null, ChangeKind.Feature));
+
+        await _changes.EnsureCanReadChangeAsync(change.Id, seed.ContributorId, callerIsSiteAdmin: false);
+        await Assert.ThrowsAsync<ForbiddenException>(() =>
+            _changes.EnsureCanReadChangeAsync(change.Id, Guid.NewGuid(), callerIsSiteAdmin: false));
+    }
+
+    [Fact]
+    public async Task EnsureCanReadChange_MissingChange_NotFound()
+    {
+        await Assert.ThrowsAsync<NotFoundException>(() =>
+            _changes.EnsureCanReadChangeAsync(Guid.NewGuid(), Guid.NewGuid(), callerIsSiteAdmin: false));
+    }
+
+    [Fact]
+    public async Task ObservationTransition_DoesNotOverwriteLastSeen()
+    {
+        var seed = await SeedAsync();
+        var obs = await _observations.IngestAsync(seed.SourceId,
+            new IngestObservationRequest(ObservationKind.TechnicalError, "{}", null, "sig-x"));
+
+        // Clustering is a moderation transition, not a new sighting — LastSeen must be preserved.
+        var clustered = await _observations.ClusterAsync(obs.Id, seed.ContributorId);
+
+        Assert.Equal(obs.LastSeen, clustered.LastSeen);
+    }
+
+    [Fact]
+    public async Task Ingest_OversizedPayload_IsRejected()
+    {
+        var seed = await SeedAsync();
+        var huge = new string('x', (32 * 1024) + 1);
+
+        await Assert.ThrowsAsync<BadRequestException>(() => _observations.IngestAsync(seed.SourceId,
+            new IngestObservationRequest(ObservationKind.TechnicalError, huge, null, null)));
+    }
+
+    [Fact]
     public async Task ExportInDevelopment_IncludesOnlyInDevChanges_AsWorkOrder()
     {
         var seed = await SeedAsync();

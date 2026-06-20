@@ -168,6 +168,25 @@ public class ChangeRequestService(
         return string.IsNullOrEmpty(slug) ? "project" : slug;
     }
 
+    /// <summary>Read authority for a change by id: a member of its project, or a site admin. Used by the
+    /// id-routed GET endpoints (detail, audit) which carry no projectId in the route. Throws
+    /// <see cref="ForbiddenException"/> for non-members and <see cref="NotFoundException"/> if absent.</summary>
+    public async Task EnsureCanReadChangeAsync(
+        Guid changeId, Guid callerActorId, bool callerIsSiteAdmin, CancellationToken ct = default)
+    {
+        if (callerIsSiteAdmin)
+        {
+            return;
+        }
+
+        var projectId = await db.ChangeRequests
+            .Where(c => c.Id == changeId)
+            .Select(c => (Guid?)c.ProjectId)
+            .FirstOrDefaultAsync(ct)
+            ?? throw new NotFoundException($"Change request '{changeId}' not found.");
+        await members.ResolveAsync(projectId, callerActorId, ct); // throws ForbiddenException for non-members
+    }
+
     public async Task<IReadOnlyList<ChangeRequestDto>> ListAsync(
         Guid projectId, ChangeStatus? status, CancellationToken ct = default)
     {
