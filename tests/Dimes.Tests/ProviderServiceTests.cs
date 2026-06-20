@@ -29,7 +29,7 @@ public sealed class ProviderServiceTests : IDisposable
         _db.Database.Migrate();
 
         var resolver = new MembershipResolver(_db);
-        _projects = new ProjectService(_db);
+        _projects = new ProjectService(_db, resolver);
         _changes = new ChangeRequestService(_db, new LifecycleService(), resolver, new FakeBoardNotifier());
     }
 

@@ -6,8 +6,50 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Dimes.Api.Services;
 
-public class ProjectService(DimesDbContext db)
+public class ProjectService(DimesDbContext db, MembershipResolver members)
 {
+    /// <summary>Authority to manage a project's membership: a Maintainer of that project, or a site
+    /// admin. Callers MUST invoke this before any membership mutation. Without it any authenticated
+    /// user could write the <see cref="Membership"/> rows the lifecycle RBAC trusts and escalate
+    /// themselves to Maintainer — bypassing the elevated approval gate the spec locks down. Throws
+    /// <see cref="ForbiddenException"/> for non-members (via the resolver) and members below Maintainer.</summary>
+    public async Task EnsureProjectAdminAsync(
+        Guid projectId, Guid callerActorId, bool callerIsSiteAdmin, CancellationToken ct = default)
+    {
+        if (callerIsSiteAdmin)
+        {
+            return;
+        }
+
+        var (_, role) = await members.ResolveAsync(projectId, callerActorId, ct);
+        if (role < MemberRole.Maintainer)
+        {
+            throw new ForbiddenException(
+                $"Only a project Maintainer or site administrator can manage members of project '{projectId}'.");
+        }
+    }
+
+    /// <summary>Authority to manage a specific LLM provider config. A project-scoped config is governed
+    /// by that project's Maintainer (or a site admin); a website-wide (global) config — usable by every
+    /// project — is governed by a site admin only. Throws if the config is missing or the caller lacks
+    /// the authority. Gating these mutations also closes the SSRF path: only trusted operators can set
+    /// the outbound <c>BaseUrl</c> the agent-comment call targets.</summary>
+    public async Task EnsureProviderAdminAsync(
+        Guid configId, Guid callerActorId, bool callerIsSiteAdmin, CancellationToken ct = default)
+    {
+        var config = await db.LlmProviderConfigs.FindAsync([configId], ct)
+            ?? throw new NotFoundException($"LLM provider config '{configId}' not found.");
+
+        if (config.ProjectId is Guid projectId)
+        {
+            await EnsureProjectAdminAsync(projectId, callerActorId, callerIsSiteAdmin, ct);
+        }
+        else if (!callerIsSiteAdmin)
+        {
+            throw new ForbiddenException("Only a site administrator can manage website-wide LLM providers.");
+        }
+    }
+
     public async Task<ProjectDto> CreateAsync(CreateProjectRequest req, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(req.Name))
@@ -332,6 +374,8 @@ public class ProjectService(DimesDbContext db)
             throw new BadRequestException("Provider name and model are required.");
         }
 
+        await ProviderUrlValidator.ValidateAsync(req.BaseUrl, ct);
+
         var config = new LlmProviderConfig
         {
             ProjectId = projectId,
@@ -358,6 +402,8 @@ public class ProjectService(DimesDbContext db)
         {
             throw new BadRequestException("Provider name and model are required.");
         }
+
+        await ProviderUrlValidator.ValidateAsync(req.BaseUrl, ct);
 
         config.Type = req.Type;
         config.Name = req.Name;
