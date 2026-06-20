@@ -49,6 +49,13 @@ public record LlmProviderConfigDto(Guid Id, Guid? ProjectId, LlmProviderType Typ
 // ----- Recommend-only agent commentary -----
 public record AgentCommentRequest(Guid AgentActorId);
 
+// ----- Capture Assist (conversational change-request drafting; stateless/ephemeral) -----
+// The conversation is held client-side and replayed each turn; the server persists nothing here.
+// Role is "user" or "assistant".
+public record ChatTurn(string Role, string Content);
+public record CaptureAssistChatRequest(Guid AgentActorId, string? Draft, IReadOnlyList<ChatTurn> Messages);
+public record CaptureAssistReplyDto(string Reply);
+
 // ----- Observation sources -----
 public record CreateSourceRequest(ObservationSourceType Type, string Name, string? ConfigJson);
 public record ObservationSourceDto(Guid Id, Guid ProjectId, ObservationSourceType Type, string Name, bool Enabled);

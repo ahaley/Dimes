@@ -1,5 +1,5 @@
 import type {
-  ActorSummary, AuthConfig, AuditEvent, ChangeKind, ChangeRequest, ChangeRequestDetail, ChangeStatus, Comment,
+  ActorSummary, AuthConfig, AuditEvent, ChangeKind, ChangeRequest, ChangeRequestDetail, ChangeStatus, ChatTurn, CaptureAssistReply, Comment,
   LlmProviderConfig, Me, Member, Observation, ObservationSource, ObservationStatus, Priority, Project, ScmLink, SiteUser, UserMembership,
 } from './types'
 
@@ -132,6 +132,10 @@ export const api = {
     request<ScmLink>('POST', `/api/changes/${id}/scm-links`, body),
   agentComment: (id: string, agentActorId: string) =>
     request<Comment>('POST', `/api/changes/${id}/agent-comment`, { agentActorId }),
+  captureAssistChat: (
+    projectId: string,
+    body: { agentActorId: string; draft?: string | null; messages: ChatTurn[] },
+  ) => request<CaptureAssistReply>('POST', `/api/projects/${projectId}/capture-assist/chat`, body),
   audit: (id: string) => request<AuditEvent[]>('GET', `/api/changes/${id}/audit`),
 
   // Actors (app-level)

@@ -10,6 +10,10 @@ public enum ActorType
 /// <summary>Per-project role. Maintainer is the elevated whitelist authority.</summary>
 public enum MemberRole
 {
+    // Assistant is the lowest authority (ordinal 0) and agent-only: a conversational capture
+    // helper. It sits below Reporter so it can never satisfy any lifecycle role guard
+    // (LifecycleService compares roles with '<'), keeping such agents strictly recommend-only.
+    Assistant,
     Reporter,
     Contributor,
     Maintainer,

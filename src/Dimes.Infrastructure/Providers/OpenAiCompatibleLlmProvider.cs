@@ -18,15 +18,16 @@ public sealed class OpenAiCompatibleLlmProvider(HttpClient http) : ILlmProvider
         LlmCompletionRequest request, LlmConnection connection, CancellationToken ct = default)
     {
         var baseUrl = (connection.BaseUrl ?? DefaultBaseUrl).TrimEnd('/');
+        // system, then any prior turns (replayed for context), then the final user message.
+        var messages = new List<ChatMessage> { new("system", request.System) };
+        messages.AddRange((request.History ?? []).Select(m => new ChatMessage(m.Role, m.Content)));
+        messages.Add(new ChatMessage("user", request.User));
         using var message = new HttpRequestMessage(HttpMethod.Post, $"{baseUrl}/chat/completions")
         {
             Content = JsonContent.Create(new ChatRequest(
                 connection.Model,
                 request.MaxTokens,
-                [
-                    new ChatMessage("system", request.System),
-                    new ChatMessage("user", request.User),
-                ])),
+                messages)),
         };
         if (!string.IsNullOrEmpty(connection.ApiKey))
         {

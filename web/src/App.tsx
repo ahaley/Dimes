@@ -7,6 +7,7 @@ import { Sidebar } from './features/Sidebar'
 import { Workspace } from './features/Workspace'
 import { LlmProvidersView } from './features/LlmProvidersView'
 import { ActorsView } from './features/ActorsView'
+import { CaptureAssistView } from './features/CaptureAssistView'
 import { SettingsModal } from './features/SettingsModal'
 import { CreateProjectModal } from './features/CreateProjectModal'
 import { LoginView } from './features/LoginView'
@@ -150,6 +151,7 @@ export default function App() {
               path="/projects/:projectId/changes/:changeId"
               element={<Workspace actingActorId={me.actorId} members={members ?? []} />}
             />
+            <Route path="/projects/:projectId/capture" element={<CaptureAssistView />} />
             <Route path="/providers" element={<LlmProvidersView projectId={projectId ?? lastProjectId} />} />
             <Route path="/actors" element={<ActorsView />} />
             <Route path="/settings" element={<SiteSettingsView />} />

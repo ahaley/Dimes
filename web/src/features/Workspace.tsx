@@ -52,6 +52,9 @@ export function Workspace({
           >
             Export
           </Button>
+          <Button variant="default" onClick={() => navigate(`/projects/${projectId}/capture`)}>
+            Capture with AI
+          </Button>
           <Button variant="primary" onClick={() => setCreating(true)}>+ New change</Button>
         </div>
       </div>

@@ -4,8 +4,14 @@ namespace Dimes.Domain.Providers;
 /// Kept separate from the config entity so providers stay free of persistence concerns.</summary>
 public sealed record LlmConnection(string? BaseUrl, string Model, string? ApiKey);
 
-/// <summary>A recommend-only completion request: a system instruction plus the user content.</summary>
-public sealed record LlmCompletionRequest(string System, string User, int MaxTokens = 1024);
+/// <summary>One turn in a multi-turn exchange. <see cref="Role"/> is "user" or "assistant".</summary>
+public sealed record LlmMessage(string Role, string Content);
+
+/// <summary>A recommend-only completion request: a system instruction plus the user content.
+/// <see cref="History"/> holds prior conversation turns (oldest first); adapters replay them ahead
+/// of the final <see cref="User"/> turn so the model has context. Null/empty means a one-shot call.</summary>
+public sealed record LlmCompletionRequest(
+    string System, string User, int MaxTokens = 1024, IReadOnlyList<LlmMessage>? History = null);
 
 public sealed record LlmCompletionResult(string Text);
 
