@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Navigate, Route, Routes, useLocation, useMatch, useNavigate } from 'react-router-dom'
 import { api } from './api/client'
 import { useMe, useMembers, useProjects } from './api/hooks'
 import { Button, Card } from './components/ui'
@@ -18,10 +19,17 @@ type View = 'board' | 'providers' | 'actors' | 'settings'
 
 export default function App() {
   const { data: me, isLoading: meLoading, isError: loggedOut } = useMe()
-  // Only fetch app data once we have a session — avoids 401 noise (and stuck-errored queries) on the login screen.
   const { data: projects } = useProjects(!!me)
-  const [projectId, setProjectId] = useState<string>()
-  const [view, setView] = useState<View>('board')
+  const navigate = useNavigate()
+  const location = useLocation()
+
+  // Current project comes from the route (/projects/:projectId[/changes/:changeId]).
+  const projectMatch = useMatch('/projects/:projectId/*')
+  const projectId = projectMatch?.params.projectId
+
+  const [lastProjectId, setLastProjectId] = useState<string>()
+  useEffect(() => { if (projectId) setLastProjectId(projectId) }, [projectId])
+
   const [showSettings, setShowSettings] = useState(false)
   const [showCreateProject, setShowCreateProject] = useState(false)
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem(COLLAPSE_KEY) === '1')
@@ -37,10 +45,6 @@ export default function App() {
       return next
     })
   }
-
-  useEffect(() => {
-    if (!projectId && projects && projects.length > 0) setProjectId(projects[0].id)
-  }, [projects, projectId])
 
   const { data: members } = useMembers(projectId)
   const currentProject = (projects ?? []).find((p) => p.id === projectId)
@@ -58,6 +62,12 @@ export default function App() {
     window.location.reload()
   }
 
+  const view: View =
+    location.pathname.startsWith('/providers') ? 'providers'
+      : location.pathname.startsWith('/actors') ? 'actors'
+        : location.pathname.startsWith('/settings') ? 'settings'
+          : 'board'
+
   const headerTitle =
     view === 'providers' ? 'LLM providers'
       : view === 'actors' ? 'Actors'
@@ -69,14 +79,14 @@ export default function App() {
       <Sidebar
         projects={projects ?? []}
         projectId={projectId}
-        onSelect={(id) => { setProjectId(id); setView('board') }}
+        onSelect={(id) => navigate(`/projects/${id}`)}
         collapsed={collapsed}
         onToggleCollapse={toggleCollapsed}
         onNewProject={() => setShowCreateProject(true)}
         activeView={view}
-        onShowProviders={() => setView('providers')}
-        onShowActors={() => setView('actors')}
-        onShowSettings={() => setView('settings')}
+        onShowProviders={() => navigate('/providers')}
+        onShowActors={() => navigate('/actors')}
+        onShowSettings={() => navigate('/settings')}
         showSettings={me.isSiteAdmin}
       />
 
@@ -120,21 +130,21 @@ export default function App() {
         </header>
 
         <main className="min-h-0 flex-1 overflow-auto p-6">
-          {view === 'providers' ? (
-            <LlmProvidersView projectId={projectId} />
-          ) : view === 'actors' ? (
-            <ActorsView />
-          ) : view === 'settings' ? (
-            <SiteSettingsView />
-          ) : projectId ? (
-            <Workspace projectId={projectId} actingActorId={me.actorId} members={members ?? []} />
-          ) : (
-            <Card className="p-10 text-center text-slate-500 dark:text-slate-400">
-              {(projects ?? []).length === 0
-                ? 'Create a project to get started — use “New project” in the sidebar.'
-                : 'Select a project to start working.'}
-            </Card>
-          )}
+          <Routes>
+            <Route path="/" element={<IndexRedirect projects={projects} onNewProject={() => setShowCreateProject(true)} />} />
+            <Route
+              path="/projects/:projectId"
+              element={<Workspace actingActorId={me.actorId} members={members ?? []} />}
+            />
+            <Route
+              path="/projects/:projectId/changes/:changeId"
+              element={<Workspace actingActorId={me.actorId} members={members ?? []} />}
+            />
+            <Route path="/providers" element={<LlmProvidersView projectId={projectId ?? lastProjectId} />} />
+            <Route path="/actors" element={<ActorsView />} />
+            <Route path="/settings" element={<SiteSettingsView />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
         </main>
       </div>
 
@@ -142,8 +152,8 @@ export default function App() {
         <CreateProjectModal
           onClose={() => setShowCreateProject(false)}
           onCreated={(p) => {
-            setProjectId(p.id)
             setShowCreateProject(false)
+            navigate(`/projects/${p.id}`)
             setShowSettings(true)
           }}
         />
@@ -153,4 +163,22 @@ export default function App() {
       )}
     </div>
   )
+}
+
+function IndexRedirect({
+  projects, onNewProject,
+}: { projects: ReturnType<typeof useProjects>['data']; onNewProject: () => void }) {
+  if (projects === undefined) {
+    return <p className="text-sm text-slate-400">Loading…</p>
+  }
+  if (projects.length === 0) {
+    return (
+      <Card className="p-10 text-center text-slate-500 dark:text-slate-400">
+        No projects yet —{' '}
+        <button className="text-indigo-600 hover:underline" onClick={onNewProject}>create one</button>{' '}
+        to get started.
+      </Card>
+    )
+  }
+  return <Navigate to={`/projects/${projects[0].id}`} replace />
 }
