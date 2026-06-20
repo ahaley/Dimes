@@ -3,8 +3,9 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '../api/client'
 import { keys, useAuthConfig, useSiteUsers } from '../api/hooks'
 import type { SiteUser } from '../api/types'
-import { Badge, Button, Card, ErrorText, Field, TextInput } from '../components/ui'
+import { Badge, Button, Card, cx, ErrorText, Field, TextInput } from '../components/ui'
 import { useToast } from '../components/Toast'
+import { initials } from '../lifecycle'
 
 /** Site-admin screen: shows the (deployment-configured) auth mode and, in local mode, manages users. */
 export function SiteSettingsView() {
@@ -107,14 +108,25 @@ function UserRow({ user }: { user: SiteUser }) {
 
   const lockReason = 'Referenced by changes, comments, or audit history — archive instead of deleting.'
   return (
-    <div className="flex items-center gap-2 p-3 text-sm text-slate-700 dark:text-slate-200">
-      <span className="font-medium text-slate-800 dark:text-slate-100">{user.displayName}</span>
-      <span className="text-slate-400">{user.email ?? '—'}</span>
-      {user.isSiteAdmin && <Badge tone="violet">site admin</Badge>}
-      {!user.hasLocalCredential && <Badge tone="amber">no password</Badge>}
-      {user.isArchived && <Badge tone="amber">archived</Badge>}
-      {!user.deletable && <Badge tone="slate">locked</Badge>}
-      <span className="ml-auto flex items-center gap-1">
+    <div className={cx('p-3', user.isArchived && 'opacity-70')}>
+      {/* Identity: avatar + name/badges that truncate, email beneath. Never overflows. */}
+      <div className="flex min-w-0 items-center gap-3">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100 text-xs font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+          {initials(user.displayName)}
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <span className="min-w-0 truncate font-medium text-slate-800 dark:text-slate-100">{user.displayName}</span>
+            {user.isSiteAdmin && <Badge tone="violet">site admin</Badge>}
+            {user.isArchived && <Badge tone="amber">archived</Badge>}
+            {!user.hasLocalCredential && <Badge tone="slate">no password</Badge>}
+          </div>
+          <div className="truncate text-xs text-slate-400">{user.email ?? 'no email'}</div>
+        </div>
+      </div>
+
+      {/* Actions: right-aligned, wrap onto a second line on narrow widths instead of overflowing. */}
+      <div className="mt-2 flex flex-wrap justify-end gap-1">
         <Button variant="subtle" onClick={() => setEditing(true)}>Edit</Button>
         <Button
           variant="subtle"
@@ -145,7 +157,7 @@ function UserRow({ user }: { user: SiteUser }) {
         >
           Delete
         </Button>
-      </span>
+      </div>
     </div>
   )
 }
