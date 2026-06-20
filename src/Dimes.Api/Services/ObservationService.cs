@@ -1,4 +1,5 @@
 using Dimes.Api.Contracts;
+using Dimes.Api.Realtime;
 using Dimes.Domain;
 using Dimes.Domain.Entities;
 using Dimes.Domain.Lifecycle;
@@ -7,7 +8,8 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Dimes.Api.Services;
 
-public class ObservationService(DimesDbContext db, LifecycleService lifecycle, MembershipResolver members)
+public class ObservationService(
+    DimesDbContext db, LifecycleService lifecycle, MembershipResolver members, IBoardNotifier notifier)
 {
     public async Task<ObservationSourceDto> CreateSourceAsync(
         Guid projectId, CreateSourceRequest req, CancellationToken ct = default)
@@ -158,6 +160,7 @@ public class ObservationService(DimesDbContext db, LifecycleService lifecycle, M
         });
 
         await db.SaveChangesAsync(ct);
+        await notifier.ChangedAsync(change.ProjectId, change.Id, "created", ct);
         return change.ToDto();
     }
 }

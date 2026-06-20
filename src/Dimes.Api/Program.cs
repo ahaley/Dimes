@@ -1,6 +1,7 @@
 using System.Text.Json.Serialization;
 using Dimes.Api;
 using Dimes.Api.Auth;
+using Dimes.Api.Realtime;
 using Dimes.Api.Services;
 using Dimes.Infrastructure;
 using Dimes.Infrastructure.Providers;
@@ -34,6 +35,10 @@ builder.Services.AddScoped<ChangeRequestService>();
 builder.Services.AddScoped<CommentaryService>();
 builder.Services.AddScoped<ScmService>();
 builder.Services.AddScoped<SiteAdminService>();
+
+// Realtime board updates (SignalR).
+builder.Services.AddSignalR();
+builder.Services.AddSingleton<IBoardNotifier, SignalRBoardNotifier>();
 
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddProblemDetails();
@@ -71,6 +76,7 @@ if (app.Environment.IsDevelopment())
 }
 
 app.MapControllers();
+app.MapHub<BoardHub>("/hubs/board");
 app.MapGet("/health", () => Results.Ok(new { status = "ok" })).AllowAnonymous();
 app.MapFallbackToFile("index.html").AllowAnonymous();
 

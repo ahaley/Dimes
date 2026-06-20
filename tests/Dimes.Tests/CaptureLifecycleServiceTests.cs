@@ -21,6 +21,7 @@ public sealed class CaptureLifecycleServiceTests : IDisposable
     private readonly ProjectService _projects;
     private readonly ObservationService _observations;
     private readonly ChangeRequestService _changes;
+    private readonly FakeBoardNotifier _notifier = new();
 
     public CaptureLifecycleServiceTests()
     {
@@ -33,8 +34,8 @@ public sealed class CaptureLifecycleServiceTests : IDisposable
         var lifecycle = new LifecycleService();
         var resolver = new MembershipResolver(_db);
         _projects = new ProjectService(_db);
-        _observations = new ObservationService(_db, lifecycle, resolver);
-        _changes = new ChangeRequestService(_db, lifecycle, resolver);
+        _observations = new ObservationService(_db, lifecycle, resolver, _notifier);
+        _changes = new ChangeRequestService(_db, lifecycle, resolver, _notifier);
     }
 
     private async Task<(Guid ProjectId, Guid MaintainerId, Guid ContributorId, Guid SourceId)> SeedAsync()
@@ -363,6 +364,20 @@ public sealed class CaptureLifecycleServiceTests : IDisposable
         Assert.Contains(trail, e => e.Action == "Created");
         Assert.Contains(trail, e => e.ToStatus == "Done");
         Assert.Contains(trail, e => e.FromStatus == "Triaged" && e.ToStatus == "Approved");
+    }
+
+    [Fact]
+    public async Task BoardNotifier_FiresOnCreateAndTransition()
+    {
+        var seed = await SeedAsync();
+        var change = await _changes.CreateAsync(seed.ProjectId, seed.ContributorId,
+            new CreateChangeRequest("Notify me", null, ChangeKind.Feature));
+        await _changes.TransitionAsync(change.Id, seed.ContributorId,
+            new TransitionChangeRequest(ChangeStatus.Triaged, null, null));
+
+        Assert.Contains(_notifier.Events, e => e.ChangeId == change.Id && e.Kind == "created");
+        Assert.Contains(_notifier.Events, e => e.ChangeId == change.Id && e.Kind == "transitioned");
+        Assert.All(_notifier.Events, e => Assert.Equal(seed.ProjectId, e.ProjectId));
     }
 
     public void Dispose()
