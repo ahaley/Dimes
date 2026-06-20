@@ -6,6 +6,9 @@ import type { LlmProviderConfig, Member, MemberRole, ObservationSourceType } fro
 import { Badge, Button, ErrorText, Field, Modal, Select, TextInput } from '../components/ui'
 
 const ROLES: MemberRole[] = ['Reporter', 'Contributor', 'Maintainer']
+// Agents can additionally take the Assistant role — a conversational capture helper with no
+// lifecycle authority (used by Capture Assist Mode).
+const AGENT_ROLES: MemberRole[] = ['Assistant', 'Reporter', 'Contributor', 'Maintainer']
 
 export function SettingsModal({ projectId, onClose }: { projectId: string; onClose: () => void }) {
   return (
@@ -98,7 +101,7 @@ function MembersSection({ projectId }: { projectId: string }) {
         <div className="grid grid-cols-2 gap-2">
           <Field label="Role">
             <Select value={agentRole} onChange={(e) => setAgentRole(e.target.value as MemberRole)}>
-              {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
+              {AGENT_ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
             </Select>
           </Field>
           <Field label="LLM provider (for commentary)">
@@ -198,7 +201,7 @@ function MemberRow({
       </Field>
       <Field label="Role">
         <Select value={role} onChange={(e) => setRole(e.target.value as MemberRole)}>
-          {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
+          {AGENT_ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
         </Select>
       </Field>
       <Field label="LLM provider (for commentary)">

@@ -18,13 +18,19 @@ public sealed class AnthropicLlmProvider(HttpClient http) : ILlmProvider
         LlmCompletionRequest request, LlmConnection connection, CancellationToken ct = default)
     {
         var baseUrl = (connection.BaseUrl ?? DefaultBaseUrl).TrimEnd('/');
+        // Replay prior turns (if any) ahead of the final user message so the model has the
+        // conversation context; a null/empty history collapses to a one-shot call.
+        var messages = (request.History ?? [])
+            .Select(m => new AnthropicMessage(m.Role, m.Content))
+            .Append(new AnthropicMessage("user", request.User))
+            .ToList();
         using var message = new HttpRequestMessage(HttpMethod.Post, $"{baseUrl}/v1/messages")
         {
             Content = JsonContent.Create(new AnthropicRequest(
                 connection.Model,
                 request.MaxTokens,
                 request.System,
-                [new AnthropicMessage("user", request.User)])),
+                messages)),
         };
         message.Headers.TryAddWithoutValidation("x-api-key", connection.ApiKey);
         message.Headers.TryAddWithoutValidation("anthropic-version", AnthropicVersion);

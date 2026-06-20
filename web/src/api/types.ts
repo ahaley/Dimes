@@ -2,7 +2,7 @@
 // generate these from the ASP.NET OpenAPI document (openapi-typescript) to keep them in lockstep.
 
 export type ActorType = 'Human' | 'Agent'
-export type MemberRole = 'Reporter' | 'Contributor' | 'Maintainer'
+export type MemberRole = 'Assistant' | 'Reporter' | 'Contributor' | 'Maintainer'
 export type ObservationSourceType = 'Sdk' | 'Seq'
 export type ObservationKind = 'ExplicitFeedback' | 'SolicitedFeedback' | 'BehavioralFriction' | 'TechnicalError'
 export type ObservationStatus = 'New' | 'Clustered' | 'Promoted' | 'Dismissed'
@@ -66,6 +66,10 @@ export interface SiteUser {
   isSiteAdmin: boolean; hasLocalCredential: boolean; isArchived: boolean; deletable: boolean
 }
 export interface UserMembership { projectId: string; projectName: string; role: MemberRole }
+
+// ----- Capture Assist (ephemeral conversational drafting) -----
+export interface ChatTurn { role: 'user' | 'assistant'; content: string }
+export interface CaptureAssistReply { reply: string }
 
 // The ordered "happy path" of the change lifecycle, for board columns.
 export const LIFECYCLE_COLUMNS: ChangeStatus[] = [
