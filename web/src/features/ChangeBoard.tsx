@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { DndContext, PointerSensor, useDroppable, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core'
-import { useChanges, useTransition } from '../api/hooks'
+import { useActors, useChanges, useTransition } from '../api/hooks'
 import { LIFECYCLE_COLUMNS, type ChangeRequest, type ChangeStatus, type Member } from '../api/types'
 import { STATUS_TONE } from '../lifecycle'
 import { Badge, cx } from '../components/ui'
@@ -14,6 +14,17 @@ export function ChangeBoard({
   const transition = useTransition(projectId)
   const toast = useToast()
   const [closedOpen, setClosedOpen] = useState(false)
+
+  // Resolve an author's name from members plus all actors (incl. archived/removed) so authors who
+  // are no longer members still show.
+  const { data: actors } = useActors(false, true)
+  const nameById = useMemo(() => {
+    const m = new Map<string, string>()
+    for (const a of actors ?? []) m.set(a.id, a.displayName)
+    for (const mem of members) m.set(mem.actorId, mem.displayName)
+    return m
+  }, [actors, members])
+  const authorOf = (c: ChangeRequest) => nameById.get(c.createdByActorId) ?? 'Unknown'
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }))
 
@@ -44,7 +55,7 @@ export function ChangeBoard({
         {LIFECYCLE_COLUMNS.map((status) => (
           <div key={status} className="flex">
             {status === 'Approved' && <Gate />}
-            <Column status={status} changes={byStatus(status)} members={members} onSelect={onSelect} onTransition={requestTransition} />
+            <Column status={status} changes={byStatus(status)} members={members} authorOf={authorOf} onSelect={onSelect} onTransition={requestTransition} />
           </div>
         ))}
       </div>
@@ -75,11 +86,12 @@ export function ChangeBoard({
 }
 
 function Column({
-  status, changes, members, onSelect, onTransition,
+  status, changes, members, authorOf, onSelect, onTransition,
 }: {
   status: ChangeStatus
   changes: ChangeRequest[]
   members: Member[]
+  authorOf: (change: ChangeRequest) => string
   onSelect: (id: string) => void
   onTransition: (change: ChangeRequest, target: ChangeStatus) => void
 }) {
@@ -102,6 +114,7 @@ function Column({
             key={c.id}
             change={c}
             members={members}
+            author={authorOf(c)}
             onSelect={() => onSelect(c.id)}
             onTransition={(target) => onTransition(c, target)}
           />

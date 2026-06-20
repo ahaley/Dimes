@@ -14,10 +14,11 @@ const TONE_RULE: Record<string, string> = {
 }
 
 export function ChangeCard({
-  change, members, onSelect, onTransition,
+  change, members, author, onSelect, onTransition,
 }: {
   change: ChangeRequest
   members: Member[]
+  author: string
   onSelect: () => void
   onTransition: (target: ChangeStatus) => void
 }) {
@@ -76,6 +77,13 @@ export function ChangeCard({
               </span>
             )}
           </span>
+        </div>
+
+        <div className="mt-1.5 flex items-center gap-1 text-[11px] text-slate-400" title={`Author: ${author}`}>
+          <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-slate-200 text-[9px] font-semibold text-slate-600 dark:bg-slate-700 dark:text-slate-200">
+            {initials(author)}
+          </span>
+          <span className="truncate">by {author}</span>
         </div>
       </div>
 
