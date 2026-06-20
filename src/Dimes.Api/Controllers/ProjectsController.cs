@@ -26,20 +26,30 @@ public class ProjectsController(ProjectService projects, ObservationService obse
 
     [HttpPost("{projectId:guid}/members")]
     public async Task<ActionResult<MemberDto>> AddMember(Guid projectId, AddMemberRequest req, CancellationToken ct)
-        => Ok(await projects.AddMemberAsync(projectId, req, ct));
+    {
+        await projects.EnsureProjectAdminAsync(projectId, currentActor.ActorId, currentActor.IsSiteAdmin, ct);
+        return Ok(await projects.AddMemberAsync(projectId, req, ct));
+    }
 
     [HttpPatch("{projectId:guid}/members/{actorId:guid}")]
     public async Task<ActionResult<MemberDto>> UpdateMember(Guid projectId, Guid actorId, UpdateMemberRequest req, CancellationToken ct)
-        => Ok(await projects.UpdateMemberAsync(projectId, actorId, req, ct));
+    {
+        await projects.EnsureProjectAdminAsync(projectId, currentActor.ActorId, currentActor.IsSiteAdmin, ct);
+        return Ok(await projects.UpdateMemberAsync(projectId, actorId, req, ct));
+    }
 
     /// <summary>Link an existing actor (site user) to the project, or change their role — no new actor.</summary>
     [HttpPut("{projectId:guid}/members/{actorId:guid}")]
     public async Task<ActionResult<MemberDto>> AssignMember(Guid projectId, Guid actorId, SetMemberRoleRequest req, CancellationToken ct)
-        => Ok(await projects.AssignMemberAsync(projectId, actorId, req.Role, ct));
+    {
+        await projects.EnsureProjectAdminAsync(projectId, currentActor.ActorId, currentActor.IsSiteAdmin, ct);
+        return Ok(await projects.AssignMemberAsync(projectId, actorId, req.Role, ct));
+    }
 
     [HttpDelete("{projectId:guid}/members/{actorId:guid}")]
     public async Task<IActionResult> RemoveMember(Guid projectId, Guid actorId, CancellationToken ct)
     {
+        await projects.EnsureProjectAdminAsync(projectId, currentActor.ActorId, currentActor.IsSiteAdmin, ct);
         await projects.RemoveMemberAsync(projectId, actorId, ct);
         return NoContent();
     }
@@ -60,5 +70,8 @@ public class ProjectsController(ProjectService projects, ObservationService obse
     [HttpPost("{projectId:guid}/llm-providers")]
     public async Task<ActionResult<LlmProviderConfigDto>> CreateLlmProvider(
         Guid projectId, CreateLlmProviderRequest req, CancellationToken ct)
-        => Ok(await projects.CreateLlmProviderAsync(projectId, req, ct));
+    {
+        await projects.EnsureProjectAdminAsync(projectId, currentActor.ActorId, currentActor.IsSiteAdmin, ct);
+        return Ok(await projects.CreateLlmProviderAsync(projectId, req, ct));
+    }
 }

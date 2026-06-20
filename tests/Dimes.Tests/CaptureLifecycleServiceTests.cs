@@ -33,7 +33,7 @@ public sealed class CaptureLifecycleServiceTests : IDisposable
 
         var lifecycle = new LifecycleService();
         var resolver = new MembershipResolver(_db);
-        _projects = new ProjectService(_db);
+        _projects = new ProjectService(_db, resolver);
         _observations = new ObservationService(_db, lifecycle, resolver, _notifier);
         _changes = new ChangeRequestService(_db, lifecycle, resolver, _notifier);
     }
@@ -60,6 +60,72 @@ public sealed class CaptureLifecycleServiceTests : IDisposable
         Assert.Equal(2, members.Count);
         Assert.Contains(members, m => m.DisplayName == "Maud" && m.Role == MemberRole.Maintainer);
         Assert.Contains(members, m => m.DisplayName == "Cory" && m.Role == MemberRole.Contributor);
+    }
+
+    [Fact]
+    public async Task EnsureProjectAdmin_AllowsProjectMaintainer()
+    {
+        var seed = await SeedAsync();
+
+        // Does not throw.
+        await _projects.EnsureProjectAdminAsync(seed.ProjectId, seed.MaintainerId, callerIsSiteAdmin: false);
+    }
+
+    [Fact]
+    public async Task EnsureProjectAdmin_ForbidsContributor()
+    {
+        var seed = await SeedAsync();
+
+        await Assert.ThrowsAsync<ForbiddenException>(() =>
+            _projects.EnsureProjectAdminAsync(seed.ProjectId, seed.ContributorId, callerIsSiteAdmin: false));
+    }
+
+    [Fact]
+    public async Task EnsureProjectAdmin_ForbidsNonMember_BlockingSelfPromotion()
+    {
+        var seed = await SeedAsync();
+        // An outsider with no membership in the project — the privilege-escalation vector: without the
+        // guard they could PUT themselves a Maintainer membership and pass the lifecycle approval gate.
+        var outsider = Guid.NewGuid();
+
+        await Assert.ThrowsAsync<ForbiddenException>(() =>
+            _projects.EnsureProjectAdminAsync(seed.ProjectId, outsider, callerIsSiteAdmin: false));
+    }
+
+    [Fact]
+    public async Task EnsureProjectAdmin_AllowsSiteAdminEvenWhenNotAMember()
+    {
+        var seed = await SeedAsync();
+        var outsider = Guid.NewGuid();
+
+        // Site admins manage any project's membership; non-membership is irrelevant. Does not throw.
+        await _projects.EnsureProjectAdminAsync(seed.ProjectId, outsider, callerIsSiteAdmin: true);
+    }
+
+    [Fact]
+    public async Task EnsureProviderAdmin_ProjectScoped_AllowsMaintainerForbidsContributor()
+    {
+        var seed = await SeedAsync();
+        var provider = await _projects.CreateLlmProviderAsync(seed.ProjectId,
+            new CreateLlmProviderRequest(LlmProviderType.Anthropic, "claude", null, "claude-sonnet-4-6", "K"));
+
+        // Project Maintainer may manage their project's provider; a Contributor may not.
+        await _projects.EnsureProviderAdminAsync(provider.Id, seed.MaintainerId, callerIsSiteAdmin: false);
+        await Assert.ThrowsAsync<ForbiddenException>(() =>
+            _projects.EnsureProviderAdminAsync(provider.Id, seed.ContributorId, callerIsSiteAdmin: false));
+    }
+
+    [Fact]
+    public async Task EnsureProviderAdmin_Global_RequiresSiteAdmin()
+    {
+        var seed = await SeedAsync();
+        var global = await _projects.CreateLlmProviderAsync(null,
+            new CreateLlmProviderRequest(LlmProviderType.Anthropic, "shared-claude", null, "claude-sonnet-4-6", "K"));
+
+        // A website-wide provider is site-admin authority — even a project Maintainer can't touch it.
+        await _projects.EnsureProviderAdminAsync(global.Id, Guid.NewGuid(), callerIsSiteAdmin: true);
+        await Assert.ThrowsAsync<ForbiddenException>(() =>
+            _projects.EnsureProviderAdminAsync(global.Id, seed.MaintainerId, callerIsSiteAdmin: false));
     }
 
     [Fact]
