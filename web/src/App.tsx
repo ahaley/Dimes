@@ -18,7 +18,8 @@ type View = 'board' | 'providers' | 'actors' | 'settings'
 
 export default function App() {
   const { data: me, isLoading: meLoading, isError: loggedOut } = useMe()
-  const { data: projects } = useProjects()
+  // Only fetch app data once we have a session — avoids 401 noise (and stuck-errored queries) on the login screen.
+  const { data: projects } = useProjects(!!me)
   const [projectId, setProjectId] = useState<string>()
   const [view, setView] = useState<View>('board')
   const [showSettings, setShowSettings] = useState(false)
