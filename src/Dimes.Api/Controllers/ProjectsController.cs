@@ -22,7 +22,10 @@ public class ProjectsController(ProjectService projects, ObservationService obse
 
     [HttpGet("{projectId:guid}/members")]
     public async Task<ActionResult<IReadOnlyList<MemberDto>>> ListMembers(Guid projectId, CancellationToken ct)
-        => Ok(await projects.ListMembersAsync(projectId, ct));
+    {
+        await projects.EnsureProjectReadAsync(projectId, currentActor.ActorId, currentActor.IsSiteAdmin, ct);
+        return Ok(await projects.ListMembersAsync(projectId, ct));
+    }
 
     [HttpPost("{projectId:guid}/members")]
     public async Task<ActionResult<MemberDto>> AddMember(Guid projectId, AddMemberRequest req, CancellationToken ct)
@@ -56,11 +59,17 @@ public class ProjectsController(ProjectService projects, ObservationService obse
 
     [HttpGet("{projectId:guid}/llm-providers")]
     public async Task<ActionResult<IReadOnlyList<LlmProviderConfigDto>>> ListLlmProviders(Guid projectId, CancellationToken ct)
-        => Ok(await projects.ListLlmProvidersAsync(projectId, ct));
+    {
+        await projects.EnsureProjectReadAsync(projectId, currentActor.ActorId, currentActor.IsSiteAdmin, ct);
+        return Ok(await projects.ListLlmProvidersAsync(projectId, ct));
+    }
 
     [HttpGet("{projectId:guid}/sources")]
     public async Task<ActionResult<IReadOnlyList<ObservationSourceDto>>> ListSources(Guid projectId, CancellationToken ct)
-        => Ok(await observations.ListSourcesAsync(projectId, ct));
+    {
+        await projects.EnsureProjectReadAsync(projectId, currentActor.ActorId, currentActor.IsSiteAdmin, ct);
+        return Ok(await observations.ListSourcesAsync(projectId, ct));
+    }
 
     [HttpPost("{projectId:guid}/sources")]
     public async Task<ActionResult<ObservationSourceDto>> CreateSource(

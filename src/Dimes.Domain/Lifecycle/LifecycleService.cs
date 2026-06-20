@@ -137,7 +137,10 @@ public class LifecycleService
 
         var from = observation.Status;
         observation.Status = target;
-        observation.LastSeen = DateTimeOffset.UtcNow;
+        // Note: LastSeen records when the underlying signal was last observed (set on ingest). A
+        // moderation transition (cluster/dismiss/promote) is NOT a new sighting, so we must not stamp
+        // it here — the transition time is already captured on the AuditEvent below. Overwriting it
+        // would corrupt inbox/evidence ordering, which sorts by LastSeen.
 
         return new AuditEvent
         {

@@ -108,6 +108,16 @@ public static class AuthExtensions
             ctx.Fail("The identity provider did not return an email claim.");
             return;
         }
+
+        // We provision/match an actor by email (including the bootstrapped site admin), so an IdP that
+        // hands out accounts with arbitrary unverified emails would let an attacker claim someone else's
+        // identity — including the configured admin email. Reject when the IdP explicitly marks the
+        // email unverified. (Absent claim is tolerated: not every IdP emits email_verified.)
+        if (string.Equals(principal.FindFirst("email_verified")?.Value, "false", StringComparison.OrdinalIgnoreCase))
+        {
+            ctx.Fail("The identity provider reports this email address as unverified.");
+            return;
+        }
         var name = principal.FindFirst("name")?.Value ?? principal.Identity?.Name ?? email;
 
         var db = ctx.HttpContext.RequestServices.GetRequiredService<DimesDbContext>();

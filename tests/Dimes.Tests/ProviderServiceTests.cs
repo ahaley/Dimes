@@ -134,6 +134,26 @@ public sealed class ProviderServiceTests : IDisposable
         Assert.Equal("manual note", link.ContextSnapshot);
     }
 
+    [Fact]
+    public async Task ScmLink_RejectsNonHttpScheme_BlockingHrefInjection()
+    {
+        var project = await _projects.CreateAsync(new CreateProjectRequest("P", null));
+        var human = await _projects.AddMemberAsync(project.Id,
+            new AddMemberRequest("Cory", ActorType.Human, null, MemberRole.Contributor));
+        var change = await _changes.CreateAsync(project.Id, human.ActorId, new CreateChangeRequest("x", null, ChangeKind.Feature));
+
+        var scm = new ScmService(_db, [new StubScm(new ScmContext("t", null, null, "t"))], new StubSecrets());
+
+        // A "javascript:" link would execute in a viewer's session when rendered as an <a href>.
+        await Assert.ThrowsAsync<BadRequestException>(() => scm.AddLinkAsync(change.Id,
+            new AddScmLinkRequest("javascript:alert(document.cookie)", ContextSnapshot: "x")));
+
+        // A normal https link is still accepted.
+        var link = await scm.AddLinkAsync(change.Id,
+            new AddScmLinkRequest("https://github.com/acme/widget/pull/7", ContextSnapshot: "x"));
+        Assert.Equal("https://github.com/acme/widget/pull/7", link.Url);
+    }
+
     public void Dispose()
     {
         _db.Dispose();
