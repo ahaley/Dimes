@@ -52,7 +52,7 @@ public class ChangeRequestsController(
 
     [HttpPost("api/changes/{id:guid}/scm-links")]
     public async Task<ActionResult<ScmLinkDto>> AddScmLink(Guid id, AddScmLinkRequest req, CancellationToken ct)
-        => Ok(await scm.AddLinkAsync(id, req, ct));
+        => Ok(await scm.AddLinkAsync(id, currentActor.ActorId, req, ct));
 
     /// <summary>Recommend-only agent commentary — posts a comment, never changes state.</summary>
     [HttpPost("api/changes/{id:guid}/agent-comment")]

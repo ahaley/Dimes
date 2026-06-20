@@ -10,12 +10,19 @@ namespace Dimes.Api.Services;
 /// <summary>Links a change to a source-control item and pulls read-only context for it. Context
 /// fetching is best-effort: a private repo without a configured token, an unreachable host, or an
 /// unrecognized URL simply yields a link with no snapshot rather than failing the request.</summary>
-public class ScmService(DimesDbContext db, IEnumerable<IScmProvider> providers, ISecretResolver secrets)
+public class ScmService(
+    DimesDbContext db, IEnumerable<IScmProvider> providers, ISecretResolver secrets, MembershipResolver members)
 {
-    public async Task<ScmLinkDto> AddLinkAsync(Guid changeId, AddScmLinkRequest req, CancellationToken ct = default)
+    public async Task<ScmLinkDto> AddLinkAsync(
+        Guid changeId, Guid actorId, AddScmLinkRequest req, CancellationToken ct = default)
     {
         var change = await db.ChangeRequests.FindAsync([changeId], ct)
             ?? throw new NotFoundException($"Change request '{changeId}' not found.");
+
+        // Authorize the caller against the change's project (any member, as for comments). Throws
+        // ForbiddenException for non-members — without it any authenticated user could attach a link
+        // (and trigger the provider context fetch) on any project's change.
+        await members.ResolveAsync(change.ProjectId, actorId, ct);
 
         if (string.IsNullOrWhiteSpace(req.Url))
         {
