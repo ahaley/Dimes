@@ -1,3 +1,4 @@
+using Dimes.Api.Auth;
 using Dimes.Api.Contracts;
 using Dimes.Api.Services;
 using Microsoft.AspNetCore.Mvc;
@@ -6,7 +7,7 @@ namespace Dimes.Api.Controllers;
 
 [ApiController]
 [Route("api/projects")]
-public class ProjectsController(ProjectService projects, ObservationService observations) : ControllerBase
+public class ProjectsController(ProjectService projects, ObservationService observations, ICurrentActor currentActor) : ControllerBase
 {
     [HttpPost]
     public async Task<ActionResult<ProjectDto>> Create(CreateProjectRequest req, CancellationToken ct)
@@ -17,7 +18,7 @@ public class ProjectsController(ProjectService projects, ObservationService obse
 
     [HttpGet]
     public async Task<ActionResult<IReadOnlyList<ProjectDto>>> List(CancellationToken ct)
-        => Ok(await projects.ListAsync(ct));
+        => Ok(await projects.ListAsync(currentActor.ActorId, currentActor.IsSiteAdmin, ct));
 
     [HttpGet("{projectId:guid}/members")]
     public async Task<ActionResult<IReadOnlyList<MemberDto>>> ListMembers(Guid projectId, CancellationToken ct)

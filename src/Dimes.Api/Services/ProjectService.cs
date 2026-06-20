@@ -21,8 +21,17 @@ public class ProjectService(DimesDbContext db)
         return project.ToDto();
     }
 
-    public async Task<IReadOnlyList<ProjectDto>> ListAsync(CancellationToken ct = default) =>
-        await db.Projects.OrderBy(p => p.Name).Select(p => p.ToDto()).ToListAsync(ct);
+    /// <summary>Projects visible to an actor: site admins see all; everyone else sees only the
+    /// projects they're a member of.</summary>
+    public async Task<IReadOnlyList<ProjectDto>> ListAsync(Guid actorId, bool isSiteAdmin, CancellationToken ct = default)
+    {
+        var query = db.Projects.AsQueryable();
+        if (!isSiteAdmin)
+        {
+            query = query.Where(p => p.Memberships.Any(m => m.ActorId == actorId));
+        }
+        return await query.OrderBy(p => p.Name).Select(p => p.ToDto()).ToListAsync(ct);
+    }
 
     /// <summary>Create an actor and bind them to the project with a role (pass-1 stand-in for an
     /// identity/invite flow).</summary>

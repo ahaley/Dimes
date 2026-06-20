@@ -161,6 +161,21 @@ public sealed class SiteAdminServiceTests : IDisposable
         Assert.False(await _db.LocalCredentials.AnyAsync(c => c.ActorId == user.Id));
     }
 
+    [Fact]
+    public async Task ProjectList_NonAdminSeesOnlyMemberProjects_AdminSeesAll()
+    {
+        var a = await _projects.CreateAsync(new CreateProjectRequest("A", null));
+        await _projects.CreateAsync(new CreateProjectRequest("B", null));
+        var ned = await CreateUser("Ned", "ned@x.com");
+        var boss = await CreateUser("Boss", "boss@x.com", admin: true);
+        await _projects.AssignMemberAsync(a.Id, ned.Id, MemberRole.Contributor);
+
+        var nedSees = await _projects.ListAsync(ned.Id, isSiteAdmin: false);
+        Assert.Equal(a.Id, Assert.Single(nedSees).Id);
+
+        Assert.Equal(2, (await _projects.ListAsync(boss.Id, isSiteAdmin: true)).Count);
+    }
+
     public void Dispose()
     {
         _db.Dispose();
