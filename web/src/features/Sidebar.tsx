@@ -126,24 +126,28 @@ export function Sidebar({
             <span aria-hidden>👤</span>
             {!collapsed && <span>Actors</span>}
           </button>
-          {showSettings && (
-            <button
-              onClick={onShowSettings}
-              title="Site settings"
-              className={cx(
-                'flex w-full items-center rounded-md text-sm',
-                collapsed ? 'h-9 w-9 justify-center' : 'gap-2 px-2 py-1.5 text-left',
-                activeView === 'settings'
-                  ? 'bg-slate-100 font-medium text-slate-900 dark:bg-slate-800 dark:text-slate-100'
-                  : 'text-slate-600 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-800',
-              )}
-            >
-              <span aria-hidden>⚙</span>
-              {!collapsed && <span>Site settings</span>}
-            </button>
-          )}
         </div>
       </nav>
+
+      {/* Site settings pinned to the bottom (global-settings convention). */}
+      {showSettings && (
+        <div className="border-t border-slate-200 px-2 py-2 dark:border-slate-800">
+          <button
+            onClick={onShowSettings}
+            title="Site settings"
+            className={cx(
+              'flex w-full items-center rounded-md text-sm',
+              collapsed ? 'h-9 w-9 justify-center' : 'gap-2 px-2 py-1.5 text-left',
+              activeView === 'settings'
+                ? 'bg-slate-100 font-medium text-slate-900 dark:bg-slate-800 dark:text-slate-100'
+                : 'text-slate-600 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-800',
+            )}
+          >
+            <span aria-hidden>⚙</span>
+            {!collapsed && <span>Site settings</span>}
+          </button>
+        </div>
+      )}
     </aside>
   )
 }
