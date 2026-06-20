@@ -1,5 +1,6 @@
 using System.Text;
 using Dimes.Api.Contracts;
+using Dimes.Api.Realtime;
 using Dimes.Domain;
 using Dimes.Domain.Entities;
 using Dimes.Domain.Lifecycle;
@@ -8,7 +9,8 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Dimes.Api.Services;
 
-public class ChangeRequestService(DimesDbContext db, LifecycleService lifecycle, MembershipResolver members)
+public class ChangeRequestService(
+    DimesDbContext db, LifecycleService lifecycle, MembershipResolver members, IBoardNotifier notifier)
 {
     /// <summary>Explicit human submission — enters the lifecycle directly at Captured.</summary>
     public async Task<ChangeRequestDto> CreateAsync(
@@ -41,6 +43,7 @@ public class ChangeRequestService(DimesDbContext db, LifecycleService lifecycle,
             Action = "Created",
         });
         await db.SaveChangesAsync(ct);
+        await notifier.ChangedAsync(change.ProjectId, change.Id, "created", ct);
         return change.ToDto();
     }
 
@@ -76,6 +79,7 @@ public class ChangeRequestService(DimesDbContext db, LifecycleService lifecycle,
             Action = "DetailsEdited",
         });
         await db.SaveChangesAsync(ct);
+        await notifier.ChangedAsync(change.ProjectId, change.Id, "updated", ct);
         return change.ToDto();
     }
 
@@ -222,6 +226,7 @@ public class ChangeRequestService(DimesDbContext db, LifecycleService lifecycle,
         var audit = lifecycle.TransitionChange(change, req.Target, actor, role, req.Reason);
         db.AuditEvents.Add(audit);
         await db.SaveChangesAsync(ct);
+        await notifier.ChangedAsync(change.ProjectId, change.Id, "transitioned", ct);
         return change.ToDto();
     }
 

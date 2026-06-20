@@ -12,6 +12,8 @@ export default defineConfig({
     proxy: {
       '/api': { target: API, changeOrigin: true },
       '/openapi': { target: API, changeOrigin: true },
+      // SignalR realtime hub — needs WebSocket proxying.
+      '/hubs': { target: API, changeOrigin: true, ws: true },
     },
   },
 })

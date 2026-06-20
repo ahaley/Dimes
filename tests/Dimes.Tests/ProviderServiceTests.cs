@@ -30,7 +30,7 @@ public sealed class ProviderServiceTests : IDisposable
 
         var resolver = new MembershipResolver(_db);
         _projects = new ProjectService(_db);
-        _changes = new ChangeRequestService(_db, new LifecycleService(), resolver);
+        _changes = new ChangeRequestService(_db, new LifecycleService(), resolver, new FakeBoardNotifier());
     }
 
     private sealed class StubLlm(LlmProviderType type, string text) : ILlmProvider

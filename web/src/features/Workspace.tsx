@@ -3,6 +3,7 @@ import { useMutation } from '@tanstack/react-query'
 import { useNavigate, useParams } from 'react-router-dom'
 import type { Member } from '../api/types'
 import { useChanges, useInbox } from '../api/hooks'
+import { useBoardLiveUpdates } from '../api/realtime'
 import { api } from '../api/client'
 import { Badge, Button } from '../components/ui'
 import { useToast } from '../components/Toast'
@@ -19,6 +20,9 @@ export function Workspace({
   const [inboxOpen, setInboxOpen] = useState(false)
   const [creating, setCreating] = useState(false)
   const toast = useToast()
+
+  // Live board updates from other users (create / edit / move / promote).
+  useBoardLiveUpdates(projectId)
 
   const { data: observations } = useInbox(projectId)
   const inboxCount = (observations ?? []).filter((o) => o.status === 'New' || o.status === 'Clustered').length
