@@ -31,6 +31,11 @@ public class ProjectsController(ProjectService projects, ObservationService obse
     public async Task<ActionResult<MemberDto>> UpdateMember(Guid projectId, Guid actorId, UpdateMemberRequest req, CancellationToken ct)
         => Ok(await projects.UpdateMemberAsync(projectId, actorId, req, ct));
 
+    /// <summary>Link an existing actor (site user) to the project, or change their role — no new actor.</summary>
+    [HttpPut("{projectId:guid}/members/{actorId:guid}")]
+    public async Task<ActionResult<MemberDto>> AssignMember(Guid projectId, Guid actorId, SetMemberRoleRequest req, CancellationToken ct)
+        => Ok(await projects.AssignMemberAsync(projectId, actorId, req.Role, ct));
+
     [HttpDelete("{projectId:guid}/members/{actorId:guid}")]
     public async Task<IActionResult> RemoveMember(Guid projectId, Guid actorId, CancellationToken ct)
     {

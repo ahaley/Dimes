@@ -65,6 +65,7 @@ export interface SiteUser {
   id: string; displayName: string; email?: string | null; type: ActorType
   isSiteAdmin: boolean; hasLocalCredential: boolean; isArchived: boolean; deletable: boolean
 }
+export interface UserMembership { projectId: string; projectName: string; role: MemberRole }
 
 // The ordered "happy path" of the change lifecycle, for board columns.
 export const LIFECYCLE_COLUMNS: ChangeStatus[] = [

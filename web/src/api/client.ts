@@ -1,6 +1,6 @@
 import type {
   ActorSummary, AuthConfig, AuditEvent, ChangeKind, ChangeRequest, ChangeRequestDetail, ChangeStatus, Comment,
-  LlmProviderConfig, Me, Member, Observation, ObservationSource, ObservationStatus, Priority, Project, ScmLink, SiteUser,
+  LlmProviderConfig, Me, Member, Observation, ObservationSource, ObservationStatus, Priority, Project, ScmLink, SiteUser, UserMembership,
 } from './types'
 
 /** Error carrying the HTTP status + ProblemDetails so the UI can show 403/409 guard failures nicely. */
@@ -77,6 +77,9 @@ export const api = {
   ) => request<Member>('PATCH', `/api/projects/${projectId}/members/${actorId}`, body),
   removeMember: (projectId: string, actorId: string) =>
     request<void>('DELETE', `/api/projects/${projectId}/members/${actorId}`),
+  // Link an existing actor (site user) to a project, or change their role — no new actor created.
+  assignMember: (projectId: string, actorId: string, body: { role: Member['role'] }) =>
+    request<Member>('PUT', `/api/projects/${projectId}/members/${actorId}`, body),
   listLlmProviders: (projectId: string) =>
     request<LlmProviderConfig[]>('GET', `/api/projects/${projectId}/llm-providers`),
   listSources: (projectId: string) => request<ObservationSource[]>('GET', `/api/projects/${projectId}/sources`),
@@ -152,8 +155,13 @@ export const api = {
 
   // Site administration (site-admin only)
   listUsers: () => request<SiteUser[]>('GET', '/api/admin/users'),
-  createLocalUser: (body: { displayName: string; email: string; password: string; isSiteAdmin: boolean }) =>
+  createLocalUser: (body: { displayName: string; email: string; password?: string | null; isSiteAdmin: boolean }) =>
     request<SiteUser>('POST', '/api/admin/users', body),
+  listUserMemberships: (id: string) => request<UserMembership[]>('GET', `/api/admin/users/${id}/memberships`),
+  assignUserMembership: (id: string, body: { projectId: string; role: Member['role'] }) =>
+    request<void>('POST', `/api/admin/users/${id}/memberships`, body),
+  removeUserMembership: (id: string, projectId: string) =>
+    request<void>('DELETE', `/api/admin/users/${id}/memberships/${projectId}`),
   updateUser: (id: string, body: { displayName: string; email?: string | null }) =>
     request<SiteUser>('PATCH', `/api/admin/users/${id}`, body),
   resetPassword: (id: string, body: { password: string }) =>

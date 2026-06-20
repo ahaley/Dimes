@@ -1,9 +1,9 @@
 import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '../api/client'
-import { keys, useAuthConfig, useSiteUsers } from '../api/hooks'
-import type { SiteUser } from '../api/types'
-import { Badge, Button, Card, cx, ErrorText, Field, TextInput } from '../components/ui'
+import { keys, useAuthConfig, useProjects, useSiteUsers, useUserMemberships } from '../api/hooks'
+import type { MemberRole, SiteUser } from '../api/types'
+import { Badge, Button, Card, cx, ErrorText, Field, Modal, Select, TextInput } from '../components/ui'
 import { useToast } from '../components/Toast'
 import { initials } from '../lifecycle'
 
@@ -56,6 +56,7 @@ function UserRow({ user }: { user: SiteUser }) {
   const onError = (verb: string) => (e: unknown) => toast.error(e instanceof Error ? e.message : `Could not ${verb}`)
 
   const [editing, setEditing] = useState(false)
+  const [managingProjects, setManagingProjects] = useState(false)
   const [displayName, setDisplayName] = useState(user.displayName)
   const [email, setEmail] = useState(user.email ?? '')
 
@@ -108,6 +109,7 @@ function UserRow({ user }: { user: SiteUser }) {
 
   const lockReason = 'Referenced by changes, comments, or audit history — archive instead of deleting.'
   return (
+    <>
     <div className={cx('p-3', user.isArchived && 'opacity-70')}>
       {/* Identity: avatar + name/badges that truncate, email beneath. Never overflows. */}
       <div className="flex min-w-0 items-center gap-3">
@@ -128,6 +130,7 @@ function UserRow({ user }: { user: SiteUser }) {
       {/* Actions: right-aligned, wrap onto a second line on narrow widths instead of overflowing. */}
       <div className="mt-2 flex flex-wrap justify-end gap-1">
         <Button variant="subtle" onClick={() => setEditing(true)}>Edit</Button>
+        <Button variant="subtle" onClick={() => setManagingProjects(true)}>Projects</Button>
         <Button
           variant="subtle"
           disabled={resetPassword.isPending}
@@ -159,6 +162,8 @@ function UserRow({ user }: { user: SiteUser }) {
         </Button>
       </div>
     </div>
+    {managingProjects && <ManageProjectsModal user={user} onClose={() => setManagingProjects(false)} />}
+    </>
   )
 }
 
@@ -171,7 +176,7 @@ function CreateUserForm() {
   const [isSiteAdmin, setIsSiteAdmin] = useState(false)
 
   const create = useMutation({
-    mutationFn: () => api.createLocalUser({ displayName, email, password, isSiteAdmin }),
+    mutationFn: () => api.createLocalUser({ displayName, email, password: password || null, isSiteAdmin }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: keys.users })
       setDisplayName(''); setEmail(''); setPassword(''); setIsSiteAdmin(false)
@@ -181,12 +186,13 @@ function CreateUserForm() {
 
   return (
     <Card className="space-y-2 p-4">
-      <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Add local user</h2>
+      <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Add user</h2>
       <div className="grid grid-cols-2 gap-2">
         <Field label="Display name"><TextInput value={displayName} onChange={(e) => setDisplayName(e.target.value)} /></Field>
         <Field label="Email"><TextInput type="email" value={email} onChange={(e) => setEmail(e.target.value)} /></Field>
       </div>
-      <Field label="Password"><TextInput type="password" value={password} onChange={(e) => setPassword(e.target.value)} /></Field>
+      <Field label="Password (optional)"><TextInput type="password" value={password} onChange={(e) => setPassword(e.target.value)} /></Field>
+      <p className="text-xs text-slate-400">Leave blank to pre-provision — they can sign in once a password is set (Reset password) or via your identity provider.</p>
       <label className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300">
         <input type="checkbox" checked={isSiteAdmin} onChange={(e) => setIsSiteAdmin(e.target.checked)} />
         Site administrator
@@ -194,11 +200,92 @@ function CreateUserForm() {
       <ErrorText error={create.error} />
       <Button
         variant="primary"
-        disabled={!displayName.trim() || !email.trim() || !password || create.isPending}
+        disabled={!displayName.trim() || !email.trim() || create.isPending}
         onClick={() => create.mutate()}
       >
         Add user
       </Button>
     </Card>
+  )
+}
+
+const ROLES: MemberRole[] = ['Reporter', 'Contributor', 'Maintainer']
+
+/** Manage a user's project memberships — assign to projects, change role, remove. */
+function ManageProjectsModal({ user, onClose }: { user: SiteUser; onClose: () => void }) {
+  const qc = useQueryClient()
+  const toast = useToast()
+  const { data: memberships } = useUserMemberships(user.id)
+  const { data: projects } = useProjects()
+  const [projectId, setProjectId] = useState('')
+  const [role, setRole] = useState<MemberRole>('Contributor')
+
+  const invalidate = () => qc.invalidateQueries({ queryKey: ['user-memberships', user.id] })
+  const onError = (verb: string) => (e: unknown) => toast.error(e instanceof Error ? e.message : `Could not ${verb}`)
+
+  const assign = useMutation({
+    mutationFn: (vars: { projectId: string; role: MemberRole }) => api.assignUserMembership(user.id, vars),
+    onSuccess: () => { invalidate(); setProjectId('') },
+    onError: onError('assign project'),
+  })
+  const remove = useMutation({
+    mutationFn: (pid: string) => api.removeUserMembership(user.id, pid),
+    onSuccess: invalidate,
+    onError: onError('remove project'),
+  })
+
+  const memberOf = new Set((memberships ?? []).map((m) => m.projectId))
+  const available = (projects ?? []).filter((p) => !memberOf.has(p.id))
+
+  return (
+    <Modal title={`Projects — ${user.displayName}`} onClose={onClose}>
+      <div className="space-y-4">
+        <ul className="space-y-1">
+          {(memberships ?? []).map((m) => (
+            <li key={m.projectId} className="flex items-center gap-2 text-sm">
+              <span className="min-w-0 flex-1 truncate text-slate-800 dark:text-slate-100">{m.projectName}</span>
+              <Select
+                value={m.role}
+                className="max-w-36"
+                onChange={(e) => assign.mutate({ projectId: m.projectId, role: e.target.value as MemberRole })}
+              >
+                {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
+              </Select>
+              <Button variant="subtle" disabled={remove.isPending} onClick={() => remove.mutate(m.projectId)}>Remove</Button>
+            </li>
+          ))}
+          {memberships?.length === 0 && <li className="text-sm text-slate-400">Not a member of any project.</li>}
+        </ul>
+
+        <div className="space-y-2 rounded-md border border-slate-200 p-3 dark:border-slate-700">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-400">Add to project</h3>
+          {available.length === 0 ? (
+            <p className="text-sm text-slate-400">Already in every project.</p>
+          ) : (
+            <div className="flex items-end gap-2">
+              <Field label="Project">
+                <Select value={projectId} onChange={(e) => setProjectId(e.target.value)}>
+                  <option value="">Select…</option>
+                  {available.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                </Select>
+              </Field>
+              <Field label="Role">
+                <Select value={role} onChange={(e) => setRole(e.target.value as MemberRole)}>
+                  {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
+                </Select>
+              </Field>
+              <Button
+                variant="primary"
+                disabled={!projectId || assign.isPending}
+                onClick={() => assign.mutate({ projectId, role })}
+              >
+                Add
+              </Button>
+            </div>
+          )}
+          <ErrorText error={assign.error ?? remove.error} />
+        </div>
+      </div>
+    </Modal>
   )
 }

@@ -117,6 +117,50 @@ public sealed class SiteAdminServiceTests : IDisposable
         await Assert.ThrowsAsync<BadRequestException>(() => _admin.SetSiteAdminAsync(first.Id, false));
     }
 
+    [Fact]
+    public async Task AssignMember_LinksExistingActor_AndUpsertsRole()
+    {
+        var project = await _projects.CreateAsync(new CreateProjectRequest("P", null));
+        var user = await CreateUser("Mem", "mem@x.com");
+
+        await _projects.AssignMemberAsync(project.Id, user.Id, MemberRole.Reporter);
+        var first = Assert.Single(await _projects.ListMembersAsync(project.Id));
+        Assert.Equal(user.Id, first.ActorId);
+        Assert.Equal(MemberRole.Reporter, first.Role);
+
+        // Re-assign → role updated in place, no duplicate membership (linking, not minting).
+        await _projects.AssignMemberAsync(project.Id, user.Id, MemberRole.Maintainer);
+        var again = Assert.Single(await _projects.ListMembersAsync(project.Id));
+        Assert.Equal(MemberRole.Maintainer, again.Role);
+        Assert.Single(await _db.Actors.Where(a => a.Email == "mem@x.com").ToListAsync()); // still one actor
+    }
+
+    [Fact]
+    public async Task UserMemberships_AssignAndRemove_RoundTrip()
+    {
+        var project = await _projects.CreateAsync(new CreateProjectRequest("P", null));
+        var user = await CreateUser("Mem", "mem@x.com");
+
+        await _admin.AssignMembershipAsync(user.Id, new AssignMembershipRequest(project.Id, MemberRole.Contributor));
+        var m = Assert.Single(await _admin.ListUserMembershipsAsync(user.Id));
+        Assert.Equal(project.Id, m.ProjectId);
+        Assert.Equal("P", m.ProjectName);
+        Assert.Equal(MemberRole.Contributor, m.Role);
+        Assert.Contains(await _projects.ListMembersAsync(project.Id), x => x.ActorId == user.Id);
+
+        await _admin.RemoveMembershipAsync(user.Id, project.Id);
+        Assert.Empty(await _admin.ListUserMembershipsAsync(user.Id));
+    }
+
+    [Fact]
+    public async Task CreateUser_WithoutPassword_HasNoCredential()
+    {
+        var user = await _admin.CreateLocalUserAsync(new CreateLocalUserRequest("NoPass", "nopass@x.com", null, false));
+
+        Assert.False(user.HasLocalCredential);
+        Assert.False(await _db.LocalCredentials.AnyAsync(c => c.ActorId == user.Id));
+    }
+
     public void Dispose()
     {
         _db.Dispose();

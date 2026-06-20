@@ -31,6 +31,14 @@ export function useSiteUsers(enabled: boolean) {
   return useQuery({ queryKey: keys.users, queryFn: api.listUsers, enabled })
 }
 
+export function useUserMemberships(userId: string | undefined) {
+  return useQuery({
+    queryKey: ['user-memberships', userId ?? ''],
+    queryFn: () => api.listUserMemberships(userId!),
+    enabled: !!userId,
+  })
+}
+
 export function useProjects() {
   return useQuery({ queryKey: keys.projects, queryFn: api.listProjects })
 }

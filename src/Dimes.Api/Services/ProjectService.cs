@@ -65,6 +65,40 @@ public class ProjectService(DimesDbContext db)
         return membership.ToMemberDto();
     }
 
+    /// <summary>Link an existing actor (a site user) to a project, or change their role if already a
+    /// member — an upsert over <see cref="Membership"/>. Unlike <see cref="AddMemberAsync"/> this never
+    /// creates an actor, so a human's identity stays single across projects.</summary>
+    public async Task<MemberDto> AssignMemberAsync(
+        Guid projectId, Guid actorId, MemberRole role, CancellationToken ct = default)
+    {
+        if (!await db.Projects.AnyAsync(p => p.Id == projectId, ct))
+        {
+            throw new NotFoundException($"Project '{projectId}' not found.");
+        }
+        if (!await db.Actors.AnyAsync(a => a.Id == actorId, ct))
+        {
+            throw new NotFoundException($"Actor '{actorId}' not found.");
+        }
+
+        var membership = await db.Memberships
+            .Include(m => m.Actor)
+            .FirstOrDefaultAsync(m => m.ProjectId == projectId && m.ActorId == actorId, ct);
+        if (membership is null)
+        {
+            membership = new Membership { ActorId = actorId, ProjectId = projectId, Role = role };
+            db.Memberships.Add(membership);
+        }
+        else
+        {
+            membership.Role = role;
+        }
+        await db.SaveChangesAsync(ct);
+
+        // Reload with the actor navigation for the DTO (the freshly-added row may not have it populated).
+        await db.Entry(membership).Reference(m => m.Actor).LoadAsync(ct);
+        return membership.ToMemberDto();
+    }
+
     /// <summary>Edit a project member: display name, email, role, and (for agents) the LLM binding.</summary>
     public async Task<MemberDto> UpdateMemberAsync(
         Guid projectId, Guid actorId, UpdateMemberRequest req, CancellationToken ct = default)

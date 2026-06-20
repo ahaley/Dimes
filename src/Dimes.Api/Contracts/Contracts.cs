@@ -13,6 +13,8 @@ public record ProjectDto(Guid Id, string Name, string? Description, DateTimeOffs
 public record AddMemberRequest(string DisplayName, ActorType Type, string? Email, MemberRole Role, Guid? LlmProviderConfigId = null);
 public record UpdateMemberRequest(string DisplayName, string? Email, MemberRole Role, Guid? LlmProviderConfigId);
 public record MemberDto(Guid ActorId, Guid ProjectId, string DisplayName, ActorType Type, string? Email, MemberRole Role, Guid? LlmProviderConfigId);
+// Link an existing actor (a site user) to a project, or change their role — pure membership, no new actor.
+public record SetMemberRoleRequest(MemberRole Role);
 
 // ----- Authentication -----
 // Mode is a deployment choice (Local | Oidc); the SPA reads it to render the right login UI.
@@ -22,9 +24,14 @@ public record MeDto(Guid ActorId, string DisplayName, string? Email, bool IsSite
 
 // ----- Site administration (app-level user management; site-admin only) -----
 public record SiteUserDto(Guid Id, string DisplayName, string? Email, ActorType Type, bool IsSiteAdmin, bool HasLocalCredential, bool IsArchived, bool Deletable);
-public record CreateLocalUserRequest(string DisplayName, string Email, string Password, bool IsSiteAdmin);
+// Password is optional: a user can be pre-provisioned (or OIDC-only) and given a password later.
+public record CreateLocalUserRequest(string DisplayName, string Email, string? Password, bool IsSiteAdmin);
 public record ResetPasswordRequest(string Password);
 public record SetSiteAdminRequest(bool IsSiteAdmin);
+
+// A user's project assignments (managed from the Site Users screen).
+public record UserMembershipDto(Guid ProjectId, string ProjectName, MemberRole Role);
+public record AssignMembershipRequest(Guid ProjectId, MemberRole Role);
 
 // ----- Actors (app-level management) -----
 public record ActorDto(
