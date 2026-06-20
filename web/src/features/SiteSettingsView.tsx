@@ -12,6 +12,8 @@ export function SiteSettingsView() {
   const { data: config } = useAuthConfig()
   const isLocal = config?.mode === 'Local'
   const { data: users } = useSiteUsers(isLocal)
+  // The projects modal is lifted out of the row so it isn't rendered inside the users <table>.
+  const [managingUser, setManagingUser] = useState<SiteUser | null>(null)
 
   return (
     <div className="mx-auto max-w-2xl space-y-4">
@@ -38,25 +40,43 @@ export function SiteSettingsView() {
 
       {isLocal && (
         <>
-          <Card className="divide-y divide-slate-100 dark:divide-slate-800">
-            {(users ?? []).map((u) => <UserRow key={u.id} user={u} />)}
-            {users?.length === 0 && <p className="p-4 text-sm text-slate-400">No users yet.</p>}
+          <Card className="overflow-x-auto">
+            <table className="min-w-full text-sm">
+              <thead>
+                <tr className="border-b border-slate-200 text-left text-xs font-semibold uppercase tracking-wide text-slate-400 dark:border-slate-800">
+                  <th className="px-3 py-2 font-semibold">User</th>
+                  <th className="px-3 py-2 font-semibold">Status</th>
+                  <th className="px-3 py-2 text-right font-semibold">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                {(users ?? []).map((u) => (
+                  <UserRow key={u.id} user={u} onManageProjects={() => setManagingUser(u)} />
+                ))}
+                {users?.length === 0 && (
+                  <tr><td colSpan={3} className="px-3 py-4 text-sm text-slate-400">No users yet.</td></tr>
+                )}
+              </tbody>
+            </table>
           </Card>
           <CreateUserForm />
         </>
+      )}
+
+      {managingUser && (
+        <ManageProjectsModal user={managingUser} onClose={() => setManagingUser(null)} />
       )}
     </div>
   )
 }
 
-function UserRow({ user }: { user: SiteUser }) {
+function UserRow({ user, onManageProjects }: { user: SiteUser; onManageProjects: () => void }) {
   const qc = useQueryClient()
   const toast = useToast()
   const invalidate = () => qc.invalidateQueries({ queryKey: keys.users })
   const onError = (verb: string) => (e: unknown) => toast.error(e instanceof Error ? e.message : `Could not ${verb}`)
 
   const [editing, setEditing] = useState(false)
-  const [managingProjects, setManagingProjects] = useState(false)
   const [displayName, setDisplayName] = useState(user.displayName)
   const [email, setEmail] = useState(user.email ?? '')
 
@@ -88,82 +108,94 @@ function UserRow({ user }: { user: SiteUser }) {
 
   if (editing) {
     return (
-      <div className="space-y-2 p-3">
-        <div className="grid grid-cols-2 gap-2">
-          <Field label="Display name"><TextInput value={displayName} onChange={(e) => setDisplayName(e.target.value)} autoFocus /></Field>
-          <Field label="Email"><TextInput type="email" value={email} onChange={(e) => setEmail(e.target.value)} /></Field>
-        </div>
-        <ErrorText error={save.error} />
-        <div className="flex justify-end gap-2">
-          <Button
-            variant="subtle"
-            onClick={() => { setDisplayName(user.displayName); setEmail(user.email ?? ''); setEditing(false) }}
-          >
-            Cancel
-          </Button>
-          <Button variant="primary" disabled={!displayName.trim() || save.isPending} onClick={() => save.mutate()}>Save</Button>
-        </div>
-      </div>
+      <tr>
+        <td colSpan={3} className="px-3 py-3">
+          <div className="space-y-2">
+            <div className="grid grid-cols-2 gap-2">
+              <Field label="Display name"><TextInput value={displayName} onChange={(e) => setDisplayName(e.target.value)} autoFocus /></Field>
+              <Field label="Email"><TextInput type="email" value={email} onChange={(e) => setEmail(e.target.value)} /></Field>
+            </div>
+            <ErrorText error={save.error} />
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="subtle"
+                onClick={() => { setDisplayName(user.displayName); setEmail(user.email ?? ''); setEditing(false) }}
+              >
+                Cancel
+              </Button>
+              <Button variant="primary" disabled={!displayName.trim() || save.isPending} onClick={() => save.mutate()}>Save</Button>
+            </div>
+          </div>
+        </td>
+      </tr>
     )
   }
 
   const lockReason = 'Referenced by changes, comments, or audit history — archive instead of deleting.'
   return (
-    <>
-    <div className={cx('p-3', user.isArchived && 'opacity-70')}>
-      {/* Identity: avatar + name/badges that truncate, email beneath. Never overflows. */}
-      <div className="flex min-w-0 items-center gap-3">
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100 text-xs font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
-          {initials(user.displayName)}
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <span className="min-w-0 truncate font-medium text-slate-800 dark:text-slate-100">{user.displayName}</span>
-            {user.isSiteAdmin && <Badge tone="violet">site admin</Badge>}
-            {user.isArchived && <Badge tone="amber">archived</Badge>}
-            {!user.hasLocalCredential && <Badge tone="slate">no password</Badge>}
+    <tr className={cx('align-top', user.isArchived && 'opacity-70')}>
+      {/* Identity: avatar + name, email beneath. */}
+      <td className="px-3 py-3">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100 text-xs font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+            {initials(user.displayName)}
           </div>
-          <div className="truncate text-xs text-slate-400">{user.email ?? 'no email'}</div>
+          <div className="min-w-0">
+            <div className="truncate font-medium text-slate-800 dark:text-slate-100">{user.displayName}</div>
+            <div className="truncate text-xs text-slate-400">{user.email ?? 'no email'}</div>
+          </div>
         </div>
-      </div>
+      </td>
+
+      {/* Status badges. */}
+      <td className="px-3 py-3">
+        <div className="flex flex-wrap items-center gap-1">
+          {user.isSiteAdmin && <Badge tone="violet">site admin</Badge>}
+          {user.isArchived && <Badge tone="amber">archived</Badge>}
+          {!user.hasLocalCredential && <Badge tone="slate">no password</Badge>}
+          {!user.isSiteAdmin && !user.isArchived && user.hasLocalCredential && (
+            <span className="text-xs text-slate-400">active</span>
+          )}
+        </div>
+      </td>
 
       {/* Actions: right-aligned, wrap onto a second line on narrow widths instead of overflowing. */}
-      <div className="mt-2 flex flex-wrap justify-end gap-1">
-        <Button variant="subtle" onClick={() => setEditing(true)}>Edit</Button>
-        <Button variant="subtle" onClick={() => setManagingProjects(true)}>Projects</Button>
-        <Button
-          variant="subtle"
-          disabled={resetPassword.isPending}
-          onClick={() => {
-            const pw = window.prompt(`New password for ${user.displayName}:`)
-            if (pw) resetPassword.mutate(pw)
-          }}
-        >
-          Reset password
-        </Button>
-        <Button variant="subtle" disabled={toggleAdmin.isPending} onClick={() => toggleAdmin.mutate()}>
-          {user.isSiteAdmin ? 'Revoke admin' : 'Make admin'}
-        </Button>
-        <Button
-          variant="subtle"
-          disabled={archive.isPending}
-          title={user.isArchived ? 'Restore sign-in access' : 'Block sign-in; keep history'}
-          onClick={() => archive.mutate()}
-        >
-          {user.isArchived ? 'Unarchive' : 'Archive'}
-        </Button>
-        <Button
-          variant="subtle"
-          disabled={!user.deletable || remove.isPending}
-          title={user.deletable ? 'Delete user' : lockReason}
-          onClick={() => { if (window.confirm(`Delete user "${user.displayName}"?`)) remove.mutate() }}
-        >
-          Delete
-        </Button>
-      </div>
-    </div>
-    {managingProjects && <ManageProjectsModal user={user} onClose={() => setManagingProjects(false)} />}
-    </>
+      <td className="px-3 py-3">
+        <div className="flex flex-wrap justify-end gap-1">
+          <Button variant="subtle" onClick={() => setEditing(true)}>Edit</Button>
+          <Button variant="subtle" onClick={onManageProjects}>Projects</Button>
+          <Button
+            variant="subtle"
+            disabled={resetPassword.isPending}
+            onClick={() => {
+              const pw = window.prompt(`New password for ${user.displayName}:`)
+              if (pw) resetPassword.mutate(pw)
+            }}
+          >
+            Reset password
+          </Button>
+          <Button variant="subtle" disabled={toggleAdmin.isPending} onClick={() => toggleAdmin.mutate()}>
+            {user.isSiteAdmin ? 'Revoke admin' : 'Make admin'}
+          </Button>
+          <Button
+            variant="subtle"
+            disabled={archive.isPending}
+            title={user.isArchived ? 'Restore sign-in access' : 'Block sign-in; keep history'}
+            onClick={() => archive.mutate()}
+          >
+            {user.isArchived ? 'Unarchive' : 'Archive'}
+          </Button>
+          <Button
+            variant="subtle"
+            disabled={!user.deletable || remove.isPending}
+            title={user.deletable ? 'Delete user' : lockReason}
+            onClick={() => { if (window.confirm(`Delete user "${user.displayName}"?`)) remove.mutate() }}
+          >
+            Delete
+          </Button>
+        </div>
+      </td>
+    </tr>
   )
 }
 
