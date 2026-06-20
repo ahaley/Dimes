@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
+import { useNavigate, useParams } from 'react-router-dom'
 import type { Member } from '../api/types'
 import { useChanges, useInbox } from '../api/hooks'
 import { api } from '../api/client'
@@ -11,9 +12,10 @@ import { InboxDrawer } from './InboxDrawer'
 import { CreateChangeModal } from './CreateChangeModal'
 
 export function Workspace({
-  projectId, actingActorId, members,
-}: { projectId: string; actingActorId: string; members: Member[] }) {
-  const [selectedChangeId, setSelectedChangeId] = useState<string>()
+  actingActorId, members,
+}: { actingActorId: string; members: Member[] }) {
+  const { projectId = '', changeId } = useParams()
+  const navigate = useNavigate()
   const [inboxOpen, setInboxOpen] = useState(false)
   const [creating, setCreating] = useState(false)
   const toast = useToast()
@@ -53,7 +55,7 @@ export function Workspace({
       <ChangeBoard
         projectId={projectId}
         members={members}
-        onSelect={setSelectedChangeId}
+        onSelect={(id) => navigate(`/projects/${projectId}/changes/${id}`)}
       />
 
       {inboxOpen && (
@@ -62,13 +64,13 @@ export function Workspace({
       {creating && (
         <CreateChangeModal projectId={projectId} onClose={() => setCreating(false)} />
       )}
-      {selectedChangeId && (
+      {changeId && (
         <ChangeDetail
-          changeId={selectedChangeId}
+          changeId={changeId}
           projectId={projectId}
           actingActorId={actingActorId}
           members={members}
-          onClose={() => setSelectedChangeId(undefined)}
+          onClose={() => navigate(`/projects/${projectId}`)}
         />
       )}
     </div>
