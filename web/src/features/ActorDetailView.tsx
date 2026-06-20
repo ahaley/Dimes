@@ -58,6 +58,31 @@ export function ActorDetailView() {
           </dd>
         </dl>
       </Card>
+
+      {/* Project assignments: which projects this actor belongs to, and its role in each. */}
+      <Card className="overflow-hidden">
+        <h2 className="border-b border-slate-200 px-5 py-3 text-sm font-semibold text-slate-700 dark:border-slate-800 dark:text-slate-200">
+          Project assignments
+        </h2>
+        {actor.memberships.length === 0 ? (
+          <p className="px-5 py-4 text-sm text-slate-400">Not a member of any project.</p>
+        ) : (
+          <ul className="divide-y divide-slate-100 dark:divide-slate-800">
+            {actor.memberships.map((m) => (
+              <li key={m.projectId} className="flex items-center gap-2 px-5 py-2.5 text-sm">
+                <button
+                  className="min-w-0 flex-1 truncate text-left text-slate-800 hover:text-indigo-600 hover:underline dark:text-slate-100 dark:hover:text-indigo-400"
+                  onClick={() => navigate(`/projects/${m.projectId}`)}
+                  title="Open project board"
+                >
+                  {m.projectName}
+                </button>
+                <Badge tone={m.role === 'Maintainer' ? 'indigo' : 'slate'}>{m.role}</Badge>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
     </div>
   )
 }
