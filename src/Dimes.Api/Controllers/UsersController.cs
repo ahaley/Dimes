@@ -56,4 +56,22 @@ public class UsersController(SiteAdminService admin) : ControllerBase
     [HttpPost("{id:guid}/site-admin")]
     public async Task<ActionResult<SiteUserDto>> SetSiteAdmin(Guid id, SetSiteAdminRequest req, CancellationToken ct)
         => Ok(await admin.SetSiteAdminAsync(id, req.IsSiteAdmin, ct));
+
+    [HttpGet("{id:guid}/memberships")]
+    public async Task<ActionResult<IReadOnlyList<UserMembershipDto>>> Memberships(Guid id, CancellationToken ct)
+        => Ok(await admin.ListUserMembershipsAsync(id, ct));
+
+    [HttpPost("{id:guid}/memberships")]
+    public async Task<IActionResult> AssignMembership(Guid id, AssignMembershipRequest req, CancellationToken ct)
+    {
+        await admin.AssignMembershipAsync(id, req, ct);
+        return NoContent();
+    }
+
+    [HttpDelete("{id:guid}/memberships/{projectId:guid}")]
+    public async Task<IActionResult> RemoveMembership(Guid id, Guid projectId, CancellationToken ct)
+    {
+        await admin.RemoveMembershipAsync(id, projectId, ct);
+        return NoContent();
+    }
 }

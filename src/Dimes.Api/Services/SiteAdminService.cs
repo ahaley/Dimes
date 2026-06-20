@@ -37,10 +37,6 @@ public class SiteAdminService(DimesDbContext db, IPasswordHasher<Actor> hasher, 
         {
             throw new BadRequestException("Email is required.");
         }
-        if (string.IsNullOrWhiteSpace(req.Password))
-        {
-            throw new BadRequestException("Password is required.");
-        }
         if (await db.Actors.AnyAsync(a => a.Email != null && a.Email.ToLower() == email, ct))
         {
             throw new BadRequestException("An actor with that email already exists.");
@@ -54,15 +50,32 @@ public class SiteAdminService(DimesDbContext db, IPasswordHasher<Actor> hasher, 
             IsSiteAdmin = req.IsSiteAdmin,
         };
         db.Actors.Add(actor);
-        db.LocalCredentials.Add(new LocalCredential
+        // Password is optional — a user can be pre-provisioned (or OIDC-only) and given one later.
+        if (!string.IsNullOrWhiteSpace(req.Password))
         {
-            ActorId = actor.Id,
-            PasswordHash = hasher.HashPassword(actor, req.Password),
-        });
+            db.LocalCredentials.Add(new LocalCredential
+            {
+                ActorId = actor.Id,
+                PasswordHash = hasher.HashPassword(actor, req.Password),
+            });
+        }
         await db.SaveChangesAsync(ct);
 
         return await ToDtoAsync(actor.Id, ct);
     }
+
+    public async Task<IReadOnlyList<UserMembershipDto>> ListUserMembershipsAsync(Guid actorId, CancellationToken ct = default) =>
+        await db.Memberships
+            .Where(m => m.ActorId == actorId)
+            .OrderBy(m => m.Project.Name)
+            .Select(m => new UserMembershipDto(m.ProjectId, m.Project.Name, m.Role))
+            .ToListAsync(ct);
+
+    public Task AssignMembershipAsync(Guid actorId, AssignMembershipRequest req, CancellationToken ct = default)
+        => projects.AssignMemberAsync(req.ProjectId, actorId, req.Role, ct);
+
+    public Task RemoveMembershipAsync(Guid actorId, Guid projectId, CancellationToken ct = default)
+        => projects.RemoveMemberAsync(projectId, actorId, ct);
 
     /// <summary>Edit a user's identity (display name + email). Delegates to ProjectService, which
     /// enforces email uniqueness — email is the login identity.</summary>
