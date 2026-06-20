@@ -4,7 +4,7 @@ import { initials } from '../lifecycle'
 
 export function Sidebar({
   projects, projectId, onSelect, collapsed, onToggleCollapse, onNewProject,
-  activeView, onShowProviders, onShowActors, onShowSettings, showSettings,
+  activeView, onShowProviders, onShowActors, onShowSettings, showSettings, mobileOpen,
 }: {
   projects: Project[]
   projectId: string | undefined
@@ -17,31 +17,37 @@ export function Sidebar({
   onShowActors: () => void
   onShowSettings: () => void
   showSettings: boolean
+  mobileOpen: boolean
 }) {
+  // "collapsed" is a desktop-only rail concept; the mobile drawer always shows full labels.
+  const compact = collapsed && !mobileOpen
   return (
     <aside
       className={cx(
-        'flex h-screen shrink-0 flex-col border-r border-slate-200 bg-white transition-[width] duration-150 dark:border-slate-800 dark:bg-slate-900',
-        collapsed ? 'w-14' : 'w-60',
+        'flex h-screen w-60 shrink-0 flex-col border-r border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900',
+        // Off-canvas overlay drawer below md; static rail at md+.
+        'fixed inset-y-0 left-0 z-40 transform transition-transform duration-150 md:static md:z-auto md:translate-x-0',
+        mobileOpen ? 'translate-x-0 shadow-xl md:shadow-none' : '-translate-x-full',
+        collapsed ? 'md:w-14' : 'md:w-60',
       )}
     >
       {/* Brand + collapse toggle */}
-      <div className={cx('flex items-center px-3 py-3', collapsed ? 'justify-center' : 'justify-between')}>
-        {!collapsed && <span className="text-lg font-semibold tracking-tight text-indigo-700">Dimes</span>}
+      <div className={cx('flex items-center px-3 py-3', compact ? 'justify-center' : 'justify-between')}>
+        {!compact && <span className="text-lg font-semibold tracking-tight text-indigo-700">Dimes</span>}
         <button
           onClick={onToggleCollapse}
           title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           className={cx(
-            'rounded-md p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200',
-            collapsed && 'flex h-8 w-8 items-center justify-center font-semibold text-indigo-700',
+            'hidden rounded-md p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-700 md:block dark:hover:bg-slate-800 dark:hover:text-slate-200',
+            compact && 'flex h-8 w-8 items-center justify-center font-semibold text-indigo-700',
           )}
         >
-          {collapsed ? 'D' : '«'}
+          {compact ? 'D' : '«'}
         </button>
       </div>
 
-      {!collapsed && (
+      {!compact && (
         <div className="px-3 pb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">Projects</div>
       )}
 
@@ -56,13 +62,13 @@ export function Sidebar({
               title={p.name}
               className={cx(
                 'flex w-full items-center rounded-md text-sm',
-                collapsed ? 'h-9 w-9 justify-center' : 'gap-2 px-2 py-1.5 text-left',
+                compact ? 'h-9 w-9 justify-center' : 'gap-2 px-2 py-1.5 text-left',
                 active
                   ? 'bg-slate-100 font-medium text-slate-900 dark:bg-slate-800 dark:text-slate-100'
                   : 'text-slate-600 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-800',
               )}
             >
-              {collapsed ? (
+              {compact ? (
                 <span
                   className={cx(
                     'flex h-7 w-7 items-center justify-center rounded-md text-xs font-semibold',
@@ -86,16 +92,16 @@ export function Sidebar({
           title="New project"
           className={cx(
             'flex w-full items-center rounded-md text-sm text-slate-500 hover:bg-slate-50 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200',
-            collapsed ? 'h-9 w-9 justify-center' : 'gap-2 px-2 py-1.5',
+            compact ? 'h-9 w-9 justify-center' : 'gap-2 px-2 py-1.5',
           )}
         >
           <span className="text-base leading-none">+</span>
-          {!collapsed && <span>New project</span>}
+          {!compact && <span>New project</span>}
         </button>
 
         {/* App-level settings */}
         <div className="pt-3">
-          {!collapsed && (
+          {!compact && (
             <div className="px-2 pb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">Settings</div>
           )}
           <button
@@ -103,50 +109,47 @@ export function Sidebar({
             title="LLM providers"
             className={cx(
               'flex w-full items-center rounded-md text-sm',
-              collapsed ? 'h-9 w-9 justify-center' : 'gap-2 px-2 py-1.5 text-left',
+              compact ? 'h-9 w-9 justify-center' : 'gap-2 px-2 py-1.5 text-left',
               activeView === 'providers'
                 ? 'bg-slate-100 font-medium text-slate-900 dark:bg-slate-800 dark:text-slate-100'
                 : 'text-slate-600 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-800',
             )}
           >
             <span aria-hidden>⚡</span>
-            {!collapsed && <span>LLM providers</span>}
+            {!compact && <span>LLM providers</span>}
           </button>
           <button
             onClick={onShowActors}
             title="Actors"
             className={cx(
               'flex w-full items-center rounded-md text-sm',
-              collapsed ? 'h-9 w-9 justify-center' : 'gap-2 px-2 py-1.5 text-left',
+              compact ? 'h-9 w-9 justify-center' : 'gap-2 px-2 py-1.5 text-left',
               activeView === 'actors'
                 ? 'bg-slate-100 font-medium text-slate-900 dark:bg-slate-800 dark:text-slate-100'
                 : 'text-slate-600 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-800',
             )}
           >
             <span aria-hidden>👤</span>
-            {!collapsed && <span>Actors</span>}
+            {!compact && <span>Actors</span>}
           </button>
         </div>
       </nav>
 
-      {/* Site settings pinned to the bottom (global-settings convention). */}
       {showSettings && (
-        <div className="border-t border-slate-200 px-2 py-2 dark:border-slate-800">
-          <button
-            onClick={onShowSettings}
-            title="Site settings"
-            className={cx(
-              'flex w-full items-center rounded-md text-sm',
-              collapsed ? 'h-9 w-9 justify-center' : 'gap-2 px-2 py-1.5 text-left',
-              activeView === 'settings'
-                ? 'bg-slate-100 font-medium text-slate-900 dark:bg-slate-800 dark:text-slate-100'
-                : 'text-slate-600 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-800',
-            )}
-          >
-            <span aria-hidden>⚙</span>
-            {!collapsed && <span>Site settings</span>}
-          </button>
-        </div>
+        <button
+          onClick={onShowSettings}
+          title="Site settings"
+          className={cx(
+            'flex w-full items-center border-t border-slate-200 text-sm dark:border-slate-800',
+            compact ? 'h-12 justify-center' : 'gap-2 px-4 py-3 text-left',
+            activeView === 'settings'
+              ? 'bg-slate-100 font-medium text-slate-900 dark:bg-slate-800 dark:text-slate-100'
+              : 'text-slate-600 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-800',
+          )}
+        >
+          <span aria-hidden>⚙</span>
+          {!compact && <span>Site settings</span>}
+        </button>
       )}
     </aside>
   )

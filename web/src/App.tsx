@@ -33,9 +33,12 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false)
   const [showCreateProject, setShowCreateProject] = useState(false)
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem(COLLAPSE_KEY) === '1')
+  const [mobileOpen, setMobileOpen] = useState(false)
   const [theme, setTheme] = useState<Theme>(getInitialTheme)
 
   useEffect(() => { applyTheme(theme) }, [theme])
+  // Close the mobile drawer whenever the route changes (covers sidebar nav taps).
+  useEffect(() => { setMobileOpen(false) }, [location.pathname])
   const toggleTheme = () => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))
 
   const toggleCollapsed = () => {
@@ -76,6 +79,13 @@ export default function App() {
 
   return (
     <div className="flex h-screen">
+      {mobileOpen && (
+        <div
+          className="fixed inset-0 z-30 bg-slate-900/40 md:hidden"
+          aria-hidden
+          onClick={() => setMobileOpen(false)}
+        />
+      )}
       <Sidebar
         projects={projects ?? []}
         projectId={projectId}
@@ -88,19 +98,19 @@ export default function App() {
         onShowActors={() => navigate('/actors')}
         onShowSettings={() => navigate('/settings')}
         showSettings={me.isSiteAdmin}
+        mobileOpen={mobileOpen}
       />
 
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex h-14 shrink-0 items-center gap-3 border-b border-slate-200 bg-white px-4 dark:border-slate-800 dark:bg-slate-900">
           <button
-            onClick={toggleCollapsed}
-            title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-            aria-label="Toggle sidebar"
-            className="rounded-md p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+            onClick={() => setMobileOpen(true)}
+            aria-label="Open menu"
+            className="rounded-md p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-700 md:hidden dark:hover:bg-slate-800 dark:hover:text-slate-200"
           >
             ☰
           </button>
-          <span className="font-semibold text-slate-800 dark:text-slate-100">{headerTitle}</span>
+          <span className="truncate font-semibold text-slate-800 dark:text-slate-100">{headerTitle}</span>
 
           {view === 'board' && projectId && (
             <button
@@ -113,8 +123,8 @@ export default function App() {
             </button>
           )}
 
-          <div className="ml-auto flex items-center gap-3">
-            <span className="text-sm text-slate-600 dark:text-slate-300" title={me.email ?? undefined}>
+          <div className="ml-auto flex items-center gap-2 sm:gap-3">
+            <span className="hidden max-w-[40vw] truncate text-sm text-slate-600 sm:inline dark:text-slate-300" title={me.email ?? undefined}>
               {me.displayName}
             </span>
             <Button variant="subtle" onClick={logout}>Sign out</Button>

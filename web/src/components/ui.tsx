@@ -77,7 +77,7 @@ export function Modal({ title, onClose, children, wide }: { title: string; onClo
         className={cx(
           // A border + ring lift the dialog off the dimmed backdrop — in dark mode a borderless
           // slate-900 panel blends into the darkened page, so the visible edge matters most there.
-          'mt-10 w-full rounded-xl border border-slate-200 bg-white shadow-2xl ring-1 ring-black/5 dark:border-slate-700 dark:bg-slate-900 dark:ring-white/10',
+          'mt-4 w-full rounded-xl border border-slate-200 bg-white shadow-2xl ring-1 ring-black/5 sm:mt-10 dark:border-slate-700 dark:bg-slate-900 dark:ring-white/10',
           wide ? 'max-w-3xl' : 'max-w-lg',
         )}
         onClick={(e) => e.stopPropagation()}
