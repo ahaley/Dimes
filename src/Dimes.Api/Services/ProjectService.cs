@@ -242,6 +242,32 @@ public class ProjectService(DimesDbContext db, MembershipResolver members)
             .ToListAsync(ct);
     }
 
+    /// <summary>Actor-centric detail: identity + provider binding + the actor's per-project memberships
+    /// (project name + role). Surfaces an agent's role and project assignments in one presentation.</summary>
+    public async Task<ActorDetailDto> GetActorAsync(Guid id, CancellationToken ct = default)
+    {
+        var actor = await db.Actors
+            .Include(a => a.LlmProviderConfig)
+            .FirstOrDefaultAsync(a => a.Id == id, ct)
+            ?? throw new NotFoundException($"Actor '{id}' not found.");
+
+        var memberships = await db.Memberships
+            .Where(m => m.ActorId == id)
+            .OrderBy(m => m.Project.Name)
+            .Select(m => new UserMembershipDto(m.ProjectId, m.Project.Name, m.Role))
+            .ToListAsync(ct);
+
+        var deletable = memberships.Count == 0
+            && !await db.ChangeRequests.AnyAsync(c => c.CreatedByActorId == id || c.AssigneeActorId == id, ct)
+            && !await db.Comments.AnyAsync(c => c.AuthorActorId == id, ct)
+            && !await db.AuditEvents.AnyAsync(e => e.ActorId == id, ct);
+
+        return new ActorDetailDto(
+            actor.Id, actor.DisplayName, actor.Type, actor.Email,
+            actor.LlmProviderConfigId, actor.LlmProviderConfig?.Name, deletable, actor.IsArchived,
+            memberships);
+    }
+
     /// <summary>Archive an actor: keep it (preserving history) but hide it from active lists. Unlike
     /// deletion this is never blocked — archiving is exactly what referenced actors use instead.</summary>
     public async Task ArchiveActorAsync(Guid id, bool archived, CancellationToken ct = default)

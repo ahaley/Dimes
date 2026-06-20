@@ -56,6 +56,12 @@ export interface ActorSummary {
   llmProviderConfigId?: string | null; providerName?: string | null
   projectCount: number; deletable: boolean; isArchived: boolean
 }
+// Actor-centric presentation: identity + provider + per-project roles in one place.
+export interface ActorDetail {
+  id: string; displayName: string; type: ActorType; email?: string | null
+  llmProviderConfigId?: string | null; providerName?: string | null
+  deletable: boolean; isArchived: boolean; memberships: UserMembership[]
+}
 
 // ----- Authentication -----
 export type AuthMode = 'Local' | 'Oidc'

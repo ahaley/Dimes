@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '../api/client'
 import { useActors } from '../api/hooks'
@@ -45,6 +46,7 @@ export function ActorsView() {
 
 function ActorRow({ actor }: { actor: ActorSummary }) {
   const qc = useQueryClient()
+  const navigate = useNavigate()
   const toast = useToast()
   const [editing, setEditing] = useState(false)
   const [displayName, setDisplayName] = useState(actor.displayName)
@@ -104,7 +106,13 @@ function ActorRow({ actor }: { actor: ActorSummary }) {
   return (
     <div className="p-3 text-sm text-slate-700 dark:text-slate-200">
       <div className="flex items-center gap-2">
-        <span className="font-medium text-slate-800 dark:text-slate-100">{actor.displayName}</span>
+        <button
+          className="font-medium text-slate-800 hover:text-indigo-600 hover:underline dark:text-slate-100 dark:hover:text-indigo-400"
+          onClick={() => navigate(`/actors/${actor.id}`)}
+          title="View actor details"
+        >
+          {actor.displayName}
+        </button>
         <Badge tone={actor.type === 'Agent' ? 'violet' : 'slate'}>{actor.type}</Badge>
         <span className="text-slate-400">{actor.providerName ?? '—'}</span>
         <Badge tone={actor.projectCount === 0 ? 'amber' : 'slate'}>{membership}</Badge>

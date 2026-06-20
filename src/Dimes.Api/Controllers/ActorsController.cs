@@ -22,6 +22,12 @@ public class ActorsController(ProjectService projects) : ControllerBase
         [FromQuery] bool agentsOnly = true, [FromQuery] bool includeArchived = false, CancellationToken ct = default)
         => Ok(await projects.ListActorsAsync(agentsOnly, includeArchived, ct));
 
+    /// <summary>Actor detail (identity + provider + per-project roles). Read-only, like List — open to
+    /// any authenticated user so the actor presentation can be viewed.</summary>
+    [HttpGet("{id:guid}")]
+    public async Task<ActionResult<ActorDetailDto>> Get(Guid id, CancellationToken ct)
+        => Ok(await projects.GetActorAsync(id, ct));
+
     [HttpPatch("{id:guid}")]
     [Authorize(DimesClaims.SiteAdminPolicy)]
     public async Task<ActionResult<ActorDto>> Update(Guid id, UpdateActorRequest req, CancellationToken ct)

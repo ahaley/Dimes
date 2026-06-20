@@ -359,6 +359,27 @@ public sealed class CaptureLifecycleServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task GetActor_ReturnsProviderBinding_AndProjectMemberships()
+    {
+        var seed = await SeedAsync();
+        var llm = await _projects.CreateLlmProviderAsync(seed.ProjectId,
+            new CreateLlmProviderRequest(LlmProviderType.Anthropic, "claude", null, "claude-sonnet-4-6", "K"));
+        var agent = await _projects.AddMemberAsync(seed.ProjectId,
+            new AddMemberRequest("Aria", ActorType.Agent, null, MemberRole.Assistant, llm.Id));
+
+        var detail = await _projects.GetActorAsync(agent.ActorId);
+
+        Assert.Equal("Aria", detail.DisplayName);
+        Assert.Equal(ActorType.Agent, detail.Type);
+        Assert.Equal("claude", detail.ProviderName);
+        Assert.False(detail.Deletable); // still a project member
+        var membership = Assert.Single(detail.Memberships);
+        Assert.Equal(seed.ProjectId, membership.ProjectId);
+        Assert.Equal("Demo", membership.ProjectName);
+        Assert.Equal(MemberRole.Assistant, membership.Role);
+    }
+
+    [Fact]
     public async Task DeleteActor_BlockedWhenReferenced()
     {
         var seed = await SeedAsync();
