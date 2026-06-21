@@ -35,6 +35,7 @@ builder.Services.AddScoped<ObservationService>();
 builder.Services.AddScoped<ChangeRequestService>();
 builder.Services.AddScoped<CommentaryService>();
 builder.Services.AddScoped<CaptureAssistService>();
+builder.Services.AddScoped<AssistConversationService>();
 builder.Services.AddScoped<ScmService>();
 builder.Services.AddScoped<SiteAdminService>();
 

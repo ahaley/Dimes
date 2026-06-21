@@ -25,6 +25,8 @@ public class DimesDbContext(DbContextOptions<DimesDbContext> options) : DbContex
     public DbSet<LlmProviderConfig> LlmProviderConfigs => Set<LlmProviderConfig>();
     public DbSet<ScmProviderConfig> ScmProviderConfigs => Set<ScmProviderConfig>();
     public DbSet<LocalCredential> LocalCredentials => Set<LocalCredential>();
+    public DbSet<AssistConversation> AssistConversations => Set<AssistConversation>();
+    public DbSet<AssistMessage> AssistMessages => Set<AssistMessage>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -51,6 +53,8 @@ public class DimesDbContext(DbContextOptions<DimesDbContext> options) : DbContex
             // Clustering / inbox queries.
             b.HasIndex(o => new { o.ProjectId, o.Fingerprint });
             b.HasIndex(o => new { o.ProjectId, o.Status });
+            // Directed-inbox query: an assistant's pending AssistRequests.
+            b.HasIndex(o => new { o.ProjectId, o.TargetActorId, o.Status });
             b.HasOne(o => o.Project).WithMany(p => p.Observations)
                 .HasForeignKey(o => o.ProjectId).OnDelete(DeleteBehavior.Cascade);
             b.HasOne(o => o.Source).WithMany(s => s.Observations)
@@ -58,6 +62,35 @@ public class DimesDbContext(DbContextOptions<DimesDbContext> options) : DbContex
             // Evidence link: detaching a change must not delete the observation.
             b.HasOne(o => o.ChangeRequest).WithMany(c => c.Evidence)
                 .HasForeignKey(o => o.ChangeRequestId).OnDelete(DeleteBehavior.SetNull);
+            // Directed target (Capture Assist): Restrict matches the actor-FK convention.
+            b.HasOne(o => o.TargetActor).WithMany()
+                .HasForeignKey(o => o.TargetActorId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<AssistConversation>(b =>
+        {
+            // Pending-requests query: an assistant's open conversations.
+            b.HasIndex(c => new { c.ProjectId, c.AssistantActorId, c.Status });
+            b.HasOne(c => c.Project).WithMany()
+                .HasForeignKey(c => c.ProjectId).OnDelete(DeleteBehavior.Cascade);
+            // Actor FKs use Restrict (avoid multiple-cascade-path conflicts; keep history valid).
+            b.HasOne(c => c.Requester).WithMany()
+                .HasForeignKey(c => c.RequesterActorId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne(c => c.Assistant).WithMany()
+                .HasForeignKey(c => c.AssistantActorId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne(c => c.Observation).WithMany()
+                .HasForeignKey(c => c.ObservationId).OnDelete(DeleteBehavior.SetNull);
+            b.HasOne(c => c.ChangeRequest).WithMany()
+                .HasForeignKey(c => c.ChangeRequestId).OnDelete(DeleteBehavior.SetNull);
+        });
+
+        modelBuilder.Entity<AssistMessage>(b =>
+        {
+            b.HasIndex(m => m.ConversationId);
+            b.HasOne(m => m.Conversation).WithMany(c => c.Messages)
+                .HasForeignKey(m => m.ConversationId).OnDelete(DeleteBehavior.Cascade);
+            b.HasOne(m => m.Author).WithMany()
+                .HasForeignKey(m => m.AuthorActorId).OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<ChangeRequest>(b =>

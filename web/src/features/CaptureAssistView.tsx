@@ -1,30 +1,51 @@
 import { useMemo, useState } from 'react'
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useParams } from 'react-router-dom'
 import { api } from '../api/client'
-import { useMembers, useProjectInvalidator } from '../api/hooks'
-import type { ChangeKind, ChatTurn, Priority } from '../api/types'
+import { keys, useAssistConversation, useMe, useMembers, useProjectInvalidator } from '../api/hooks'
+import type { ChangeKind, ChatTurn, Member, Priority } from '../api/types'
 import { Badge, Button, ErrorText, Field, Select, TextInput, Textarea } from '../components/ui'
 import { useToast } from '../components/Toast'
+import { ChatBubbles, ChatComposer, type ChatBubble } from './AssistChat'
+
+/** Whether a member can be picked as an assistant: AI agents always; humans need real lifecycle
+ * authority (Contributor+) so they can clear the request from their inbox. */
+function isEligibleAssistant(m: Member): boolean {
+  return m.type === 'Agent' || m.role === 'Contributor' || m.role === 'Maintainer'
+}
 
 /**
  * Capture Assist Mode — a full-page (zen) space to grow a loose idea into a change request with the
- * help of an AI Assistant agent. The conversation is ephemeral (held here in component state and
- * replayed to the stateless chat endpoint each turn). When the user is happy, they confirm a title
- * and description and create the change, which lands in the Captured state via the normal endpoint.
+ * help of an assistant. The assistant can be an AI Agent (ephemeral chat, replayed to the stateless
+ * endpoint each turn) or a human teammate (a persisted, two-way conversation that also surfaces in the
+ * teammate's observation inbox). Either way, when the user is happy they confirm a title and
+ * description and create the change, which lands in the Captured state via the normal endpoint.
  */
 export function CaptureAssistView() {
   const { projectId = '' } = useParams()
   const navigate = useNavigate()
   const toast = useToast()
   const invalidate = useProjectInvalidator(projectId)
+  const qc = useQueryClient()
+  const { data: me } = useMe()
 
   const { data: members } = useMembers(projectId)
-  const agents = useMemo(() => (members ?? []).filter((m) => m.type === 'Agent'), [members])
-  // Default to an agent assigned the Assistant role; otherwise the first available agent.
-  const defaultAgentId = (agents.find((a) => a.role === 'Assistant') ?? agents[0])?.actorId ?? ''
-  const [agentId, setAgentId] = useState('')
-  const activeAgentId = agentId || defaultAgentId
+  // Candidate assistants: everyone but yourself. Agents drive the AI chat; eligible humans (Contributor+)
+  // open a persisted conversation.
+  const candidates = useMemo(
+    () => (members ?? []).filter((m) => m.actorId !== me?.actorId),
+    [members, me?.actorId],
+  )
+  const agents = useMemo(() => candidates.filter((m) => m.type === 'Agent'), [candidates])
+  // Default to an agent with the Assistant role; otherwise the first agent; otherwise the first eligible human.
+  const defaultAssistantId =
+    (agents.find((a) => a.role === 'Assistant') ?? agents[0])?.actorId
+    ?? candidates.find(isEligibleAssistant)?.actorId
+    ?? ''
+  const [assistantId, setAssistantId] = useState('')
+  const activeAssistantId = assistantId || defaultAssistantId
+  const activeAssistant = candidates.find((m) => m.actorId === activeAssistantId)
+  const isHuman = activeAssistant?.type === 'Human'
 
   // The draft being shaped.
   const [rough, setRough] = useState('')
@@ -33,9 +54,11 @@ export function CaptureAssistView() {
   const [kind, setKind] = useState<ChangeKind>('Feature')
   const [priority, setPriority] = useState<Priority>('None')
 
-  // The conversation.
+  // The conversation. AI: ephemeral turns held here. Human: a persisted conversation by id.
   const [messages, setMessages] = useState<ChatTurn[]>([])
   const [input, setInput] = useState('')
+  const [conversationId, setConversationId] = useState<string | null>(null)
+  const { data: conversation } = useAssistConversation(projectId, conversationId ?? undefined)
 
   const composeDraft = () =>
     [
@@ -46,9 +69,10 @@ export function CaptureAssistView() {
       .filter(Boolean)
       .join('\n\n') || null
 
-  const chat = useMutation({
+  // AI assistant: stateless chat replayed each turn.
+  const aiChat = useMutation({
     mutationFn: (next: ChatTurn[]) =>
-      api.captureAssistChat(projectId, { agentActorId: activeAgentId, draft: composeDraft(), messages: next }),
+      api.captureAssistChat(projectId, { agentActorId: activeAssistantId, draft: composeDraft(), messages: next }),
     onSuccess: (res) => setMessages((m) => [...m, { role: 'assistant', content: res.reply }]),
     onError: (e) => {
       // Roll the optimistic user turn back so they can retry/edit.
@@ -57,19 +81,51 @@ export function CaptureAssistView() {
     },
   })
 
+  // Stash the last attempted text so an error handler can restore it for retry.
+  const [lastSent, setLastSent] = useState('')
+
+  // Human assistant: persisted, bubbled into their inbox.
+  const startHuman = useMutation({
+    mutationFn: (message: string) =>
+      api.startAssistConversation(projectId, {
+        assistantActorId: activeAssistantId,
+        draft: composeDraft(),
+        title: title || null,
+        message,
+      }),
+    onSuccess: (c) => { setConversationId(c.id); qc.setQueryData(keys.assistConversation(c.id), c) },
+    onError: (e) => { setInput((i) => i || lastSent); toast.error(e instanceof Error ? e.message : 'Could not send to the assistant') },
+  })
+  const postHuman = useMutation({
+    mutationFn: (message: string) => api.postAssistMessage(projectId, conversationId!, { body: message }),
+    onSuccess: (c) => qc.setQueryData(keys.assistConversation(c.id), c),
+    onError: (e) => { setInput((i) => i || lastSent); toast.error(e instanceof Error ? e.message : 'Could not send your message') },
+  })
+
   const send = () => {
     const content = input.trim()
-    if (!content || !activeAgentId) return
-    const next: ChatTurn[] = [...messages, { role: 'user', content }]
-    setMessages(next)
-    setInput('')
-    chat.mutate(next)
+    if (!content || !activeAssistantId) return
+    setLastSent(content)
+    if (isHuman) {
+      setInput('')
+      if (!conversationId) startHuman.mutate(content)
+      else postHuman.mutate(content)
+    } else {
+      const next: ChatTurn[] = [...messages, { role: 'user', content }]
+      setMessages(next)
+      setInput('')
+      aiChat.mutate(next)
+    }
   }
 
   const create = useMutation({
     mutationFn: () =>
       api.createChange(projectId, { title: title.trim(), description: description || null, kind, priority }),
-    onSuccess: (change) => {
+    onSuccess: async (change) => {
+      // Close + link the conversation to the change it produced (best-effort).
+      if (conversationId) {
+        try { await api.closeAssistConversation(projectId, conversationId, { changeRequestId: change.id }) } catch { /* non-fatal */ }
+      }
       invalidate()
       toast.success('Change request captured')
       navigate(`/projects/${projectId}/changes/${change.id}`)
@@ -77,14 +133,37 @@ export function CaptureAssistView() {
     onError: (e) => toast.error(e instanceof Error ? e.message : 'Could not create the change'),
   })
 
+  // Bubbles + pending state differ by assistant kind.
+  const bubbles: ChatBubble[] = isHuman
+    ? (conversation?.messages ?? []).map((m) => ({ id: m.id, mine: m.sender === 'Requester', text: m.body }))
+    : messages.map((m, i) => ({ id: String(i), mine: m.role === 'user', text: m.content }))
+
+  const sending = aiChat.isPending || startHuman.isPending || postHuman.isPending
+  const closed = isHuman && conversation?.status === 'Closed'
+  const noAssistant = !activeAssistantId
+
+  const footer = (() => {
+    if (!isHuman) return aiChat.isPending ? <p className="text-sm text-slate-400">Assistant is thinking…</p> : null
+    if (sending) return <p className="text-sm text-slate-400">Sending…</p>
+    if (conversation?.status === 'AwaitingAssistant')
+      return <p className="text-sm text-slate-400">Waiting for {activeAssistant?.displayName} to reply…</p>
+    return null
+  })()
+
+  const emptyText = noAssistant
+    ? 'Add an assistant (an AI agent, or a teammate) via Manage project to chat here.'
+    : isHuman
+      ? `Send a message to loop ${activeAssistant?.displayName} in — they'll see it in their inbox and reply here.`
+      : 'Start by describing your idea — the assistant will help you refine it.'
+
   return (
     <div className="mx-auto flex h-full max-w-6xl flex-col gap-4">
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-lg font-semibold text-slate-800 dark:text-slate-100">Capture Assist</h1>
           <p className="mt-1 text-sm text-slate-500">
-            Talk an idea through with an AI assistant, then confirm a title and description to capture it
-            as a change request.
+            Talk an idea through with an AI agent or a teammate, then confirm a title and description to
+            capture it as a change request.
           </p>
         </div>
         <Button variant="subtle" onClick={() => navigate(`/projects/${projectId}`)}>Exit</Button>
@@ -138,71 +217,40 @@ export function CaptureAssistView() {
         <div className="flex min-h-0 flex-col rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
           <div className="flex items-center gap-2 border-b border-slate-200 px-4 py-2.5 dark:border-slate-800">
             <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">Assistant</span>
-            {agents.length > 0 ? (
+            {candidates.length > 0 ? (
               <Select
-                value={activeAgentId}
-                className="ml-auto max-w-48"
-                onChange={(e) => setAgentId(e.target.value)}
+                value={activeAssistantId}
+                className="ml-auto max-w-56"
+                // Once a human conversation is underway, lock the picker to that teammate.
+                disabled={!!conversationId}
+                onChange={(e) => setAssistantId(e.target.value)}
               >
-                {agents.map((a) => (
-                  <option key={a.actorId} value={a.actorId}>
-                    {a.displayName}{a.role === 'Assistant' ? ' · Assistant' : ''}
+                {candidates.map((a) => (
+                  <option key={a.actorId} value={a.actorId} disabled={!isEligibleAssistant(a)}>
+                    {a.displayName}
+                    {a.type === 'Agent' ? ' · AI' : isEligibleAssistant(a) ? ' · teammate' : ' · teammate (needs Contributor)'}
                   </option>
                 ))}
               </Select>
             ) : (
-              <Badge tone="amber">no agent</Badge>
+              <Badge tone="amber">no assistant</Badge>
             )}
           </div>
 
-          <div className="min-h-0 flex-1 space-y-3 overflow-auto p-4">
-            {messages.length === 0 && (
-              <p className="text-sm text-slate-400">
-                {agents.length === 0
-                  ? 'Add an Agent member with an LLM provider (Manage project) to chat here.'
-                  : 'Start by describing your idea — the assistant will help you refine it.'}
-              </p>
-            )}
-            {messages.map((m, i) => (
-              <div key={i} className={m.role === 'user' ? 'text-right' : 'text-left'}>
-                <div
-                  className={
-                    m.role === 'user'
-                      ? 'inline-block max-w-[85%] whitespace-pre-wrap rounded-lg bg-indigo-600 px-3 py-2 text-left text-sm text-white'
-                      : 'inline-block max-w-[85%] whitespace-pre-wrap rounded-lg bg-slate-100 px-3 py-2 text-sm text-slate-800 dark:bg-slate-800 dark:text-slate-100'
-                  }
-                >
-                  {m.content}
-                </div>
-              </div>
-            ))}
-            {chat.isPending && <p className="text-sm text-slate-400">Assistant is thinking…</p>}
-          </div>
+          <ChatBubbles items={bubbles} emptyText={emptyText} footer={footer} />
 
-          <div className="border-t border-slate-200 p-3 dark:border-slate-800">
-            <div className="flex items-end gap-2">
-              <Textarea
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault()
-                    send()
-                  }
-                }}
-                placeholder={agents.length === 0 ? 'No assistant available' : 'Message the assistant…'}
-                className="min-h-10"
-                disabled={agents.length === 0 || chat.isPending}
-              />
-              <Button
-                variant="primary"
-                disabled={!input.trim() || !activeAgentId || chat.isPending}
-                onClick={send}
-              >
-                Send
-              </Button>
-            </div>
-          </div>
+          <ChatComposer
+            value={input}
+            onChange={setInput}
+            onSend={send}
+            disabled={noAssistant || sending || closed}
+            placeholder={
+              noAssistant ? 'No assistant available'
+                : closed ? 'This conversation is closed'
+                  : isHuman ? `Message ${activeAssistant?.displayName}…`
+                    : 'Message the assistant…'
+            }
+          />
         </div>
       </div>
     </div>

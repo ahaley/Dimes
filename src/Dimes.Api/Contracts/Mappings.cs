@@ -18,7 +18,18 @@ public static class Mappings
 
     public static ObservationDto ToDto(this Observation o) => new(
         o.Id, o.ProjectId, o.SourceId, o.Kind, o.Status, o.Payload, o.ContextMetadata,
-        o.Fingerprint, o.OccurrenceCount, o.FirstSeen, o.LastSeen, o.ChangeRequestId);
+        o.Fingerprint, o.OccurrenceCount, o.FirstSeen, o.LastSeen, o.ChangeRequestId, o.TargetActorId);
+
+    public static AssistMessageDto ToDto(this AssistMessage m) =>
+        new(m.Id, m.ConversationId, m.AuthorActorId, m.Sender, m.Body, m.CreatedAt);
+
+    // Requires Requester, Assistant, and Messages to be loaded.
+    public static AssistConversationDto ToDto(this AssistConversation c) => new(
+        c.Id, c.ProjectId,
+        c.RequesterActorId, c.Requester.DisplayName,
+        c.AssistantActorId, c.Assistant.DisplayName,
+        c.Status, c.Title, c.Draft, c.ChangeRequestId, c.CreatedAt, c.UpdatedAt,
+        c.Messages.OrderBy(m => m.CreatedAt).Select(m => m.ToDto()).ToList());
 
     public static ChangeRequestDto ToDto(this ChangeRequest c) => new(
         c.Id, c.ProjectId, c.Title, c.Description, c.Kind, c.Status, c.Priority,

@@ -64,6 +64,28 @@ public record ChatTurn(string Role, string Content);
 public record CaptureAssistChatRequest(Guid AgentActorId, string? Draft, IReadOnlyList<ChatTurn> Messages);
 public record CaptureAssistReplyDto(string Reply);
 
+// ----- Capture Assist with a HUMAN assistant (persisted, two-way) -----
+// Unlike the stateless AI chat above, a human assistant conversation is persisted and bubbled into the
+// assistant's observation inbox. The acting actor (requester / replier) comes from the session.
+public record StartAssistConversationRequest(Guid AssistantActorId, string? Draft, string? Title, string Message);
+public record PostAssistMessageRequest(string Body);
+public record CloseAssistConversationRequest(Guid? ChangeRequestId);
+public record AssistMessageDto(
+    Guid Id, Guid ConversationId, Guid AuthorActorId, AssistMessageSender Sender, string Body, DateTimeOffset CreatedAt);
+public record AssistConversationDto(
+    Guid Id, Guid ProjectId,
+    Guid RequesterActorId, string RequesterName,
+    Guid AssistantActorId, string AssistantName,
+    AssistConversationStatus Status, string? Title, string? Draft,
+    Guid? ChangeRequestId, DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt,
+    IReadOnlyList<AssistMessageDto> Messages);
+public record AssistConversationSummaryDto(
+    Guid Id, Guid ProjectId,
+    Guid RequesterActorId, string RequesterName,
+    Guid AssistantActorId, string AssistantName,
+    AssistConversationStatus Status, string? Title, string? LastMessagePreview,
+    int MessageCount, DateTimeOffset UpdatedAt);
+
 // ----- Observation sources -----
 public record CreateSourceRequest(ObservationSourceType Type, string Name, string? ConfigJson);
 public record ObservationSourceDto(Guid Id, Guid ProjectId, ObservationSourceType Type, string Name, bool Enabled);
@@ -82,7 +104,8 @@ public record ObservationDto(
     int OccurrenceCount,
     DateTimeOffset FirstSeen,
     DateTimeOffset LastSeen,
-    Guid? ChangeRequestId);
+    Guid? ChangeRequestId,
+    Guid? TargetActorId);
 
 // The acting actor is derived from the authenticated session, not the request body.
 public record PromoteObservationRequest(string Title, string? Description);

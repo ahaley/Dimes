@@ -28,4 +28,9 @@ public class Observation : Entity
     /// <summary>Set when promoted: the change this observation is attached to as evidence.</summary>
     public Guid? ChangeRequestId { get; set; }
     public ChangeRequest? ChangeRequest { get; set; }
+
+    /// <summary>For directed signals (e.g. a Capture Assist request to a specific human): the actor this
+    /// observation is addressed to. Null for ambient/latent signals visible to the whole project inbox.</summary>
+    public Guid? TargetActorId { get; set; }
+    public Actor? TargetActor { get; set; }
 }
