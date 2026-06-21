@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '../api/client'
 import { keys, useAuthConfig, useProjects, useSiteUsers, useUserMemberships } from '../api/hooks'
@@ -7,6 +7,17 @@ import { Badge, Button, Card, cx, ErrorText, Field, Modal, Select, TextInput } f
 import { useToast } from '../components/Toast'
 import { initials } from '../lifecycle'
 
+type SortKey = 'name' | 'status'
+type SortState = { key: SortKey; dir: 'asc' | 'desc' }
+
+// Status grouping for sorting: site admins, then active, then pre-provisioned (no password), then archived.
+function statusRank(u: SiteUser): number {
+  if (u.isArchived) return 3
+  if (!u.hasLocalCredential) return 2
+  if (u.isSiteAdmin) return 0
+  return 1
+}
+
 /** Site-admin screen: shows the (deployment-configured) auth mode and, in local mode, manages users. */
 export function SiteSettingsView() {
   const { data: config } = useAuthConfig()
@@ -14,6 +25,31 @@ export function SiteSettingsView() {
   const { data: users } = useSiteUsers(isLocal)
   // The projects modal is lifted out of the row so it isn't rendered inside the users <table>.
   const [managingUser, setManagingUser] = useState<SiteUser | null>(null)
+
+  // Filter + sort happen in memory so the table stays responsive for large user lists.
+  const [query, setQuery] = useState('')
+  const [sort, setSort] = useState<SortState>({ key: 'name', dir: 'asc' })
+
+  const visibleUsers = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    const filtered = q
+      ? (users ?? []).filter(
+          (u) => u.displayName.toLowerCase().includes(q) || (u.email ?? '').toLowerCase().includes(q),
+        )
+      : (users ?? [])
+    const sign = sort.dir === 'asc' ? 1 : -1
+    return [...filtered].sort((a, b) => {
+      const cmp =
+        sort.key === 'name'
+          ? a.displayName.localeCompare(b.displayName)
+          : statusRank(a) - statusRank(b) || a.displayName.localeCompare(b.displayName)
+      return cmp * sign
+    })
+  }, [users, query, sort])
+
+  const toggleSort = (key: SortKey) =>
+    setSort((s) => (s.key === key ? { key, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'asc' }))
+  const sortArrow = (key: SortKey) => (sort.key === key ? (sort.dir === 'asc' ? ' ▲' : ' ▼') : '')
 
   return (
     <div className="mx-auto max-w-2xl space-y-4">
@@ -40,21 +76,42 @@ export function SiteSettingsView() {
 
       {isLocal && (
         <>
-          <Card className="overflow-x-auto">
+          <div className="flex items-center gap-2">
+            <TextInput
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Filter by name or email…"
+              className="max-w-xs"
+            />
+            {query && (
+              <span className="text-xs text-slate-400">
+                {visibleUsers.length} of {users?.length ?? 0}
+              </span>
+            )}
+          </div>
+          <Card className="max-h-[60vh] overflow-auto">
             <table className="min-w-full text-sm">
               <thead>
                 <tr className="border-b border-slate-200 text-left text-xs font-semibold uppercase tracking-wide text-slate-400 dark:border-slate-800">
-                  <th className="px-3 py-2 font-semibold">User</th>
-                  <th className="px-3 py-2 font-semibold">Status</th>
-                  <th className="px-3 py-2 text-right font-semibold">Actions</th>
+                  <th className="sticky top-0 z-10 bg-white px-3 py-2 font-semibold dark:bg-slate-900">
+                    <button type="button" className="font-semibold uppercase tracking-wide hover:text-slate-600 dark:hover:text-slate-200" onClick={() => toggleSort('name')}>
+                      User{sortArrow('name')}
+                    </button>
+                  </th>
+                  <th className="sticky top-0 z-10 bg-white px-3 py-2 font-semibold dark:bg-slate-900">
+                    <button type="button" className="font-semibold uppercase tracking-wide hover:text-slate-600 dark:hover:text-slate-200" onClick={() => toggleSort('status')}>
+                      Status{sortArrow('status')}
+                    </button>
+                  </th>
+                  <th className="sticky top-0 z-10 bg-white px-3 py-2 text-right font-semibold dark:bg-slate-900">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                {(users ?? []).map((u) => (
+                {visibleUsers.map((u) => (
                   <UserRow key={u.id} user={u} onManageProjects={() => setManagingUser(u)} />
                 ))}
-                {users?.length === 0 && (
-                  <tr><td colSpan={3} className="px-3 py-4 text-sm text-slate-400">No users yet.</td></tr>
+                {visibleUsers.length === 0 && (
+                  <tr><td colSpan={3} className="px-3 py-4 text-sm text-slate-400">{users?.length ? 'No users match.' : 'No users yet.'}</td></tr>
                 )}
               </tbody>
             </table>
