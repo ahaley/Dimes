@@ -10,6 +10,7 @@ import { LlmProvidersView } from './features/LlmProvidersView'
 import { ActorsView } from './features/ActorsView'
 import { ActorDetailView } from './features/ActorDetailView'
 import { CaptureAssistView } from './features/CaptureAssistView'
+import { AssistConversationView } from './features/AssistConversationView'
 import { SettingsModal } from './features/SettingsModal'
 import { CreateProjectModal } from './features/CreateProjectModal'
 import { LoginView } from './features/LoginView'
@@ -154,6 +155,7 @@ export default function App() {
               element={<Workspace actingActorId={me.actorId} members={members ?? []} />}
             />
             <Route path="/projects/:projectId/capture" element={<CaptureAssistView />} />
+            <Route path="/projects/:projectId/assist/:conversationId" element={<AssistConversationView />} />
             <Route
               path="/projects/:projectId/focus/:status"
               element={<FocusView actingActorId={me.actorId} members={members ?? []} />}

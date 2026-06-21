@@ -1,5 +1,5 @@
 import type {
-  ActorDetail, ActorSummary, AuthConfig, AuditEvent, ChangeKind, ChangeRequest, ChangeRequestDetail, ChangeStatus, ChatTurn, CaptureAssistReply, Comment,
+  ActorDetail, ActorSummary, AssistConversation, AssistConversationStatus, AssistConversationSummary, AuthConfig, AuditEvent, ChangeKind, ChangeRequest, ChangeRequestDetail, ChangeStatus, ChatTurn, CaptureAssistReply, Comment,
   LlmProviderConfig, Me, Member, Observation, ObservationSource, ObservationStatus, Priority, Project, ScmLink, SiteUser, UserMembership,
 } from './types'
 
@@ -136,6 +136,23 @@ export const api = {
     projectId: string,
     body: { agentActorId: string; draft?: string | null; messages: ChatTurn[] },
   ) => request<CaptureAssistReply>('POST', `/api/projects/${projectId}/capture-assist/chat`, body),
+
+  // Capture Assist with a human assistant (persisted, two-way)
+  startAssistConversation: (
+    projectId: string,
+    body: { assistantActorId: string; draft?: string | null; title?: string | null; message: string },
+  ) => request<AssistConversation>('POST', `/api/projects/${projectId}/assist/conversations`, body),
+  getAssistConversation: (projectId: string, conversationId: string) =>
+    request<AssistConversation>('GET', `/api/projects/${projectId}/assist/conversations/${conversationId}`),
+  listAssistConversations: (projectId: string, role: 'assistant' | 'requester', status?: AssistConversationStatus) =>
+    request<AssistConversationSummary[]>(
+      'GET',
+      `/api/projects/${projectId}/assist/conversations?role=${role}${status ? `&status=${status}` : ''}`,
+    ),
+  postAssistMessage: (projectId: string, conversationId: string, body: { body: string }) =>
+    request<AssistConversation>('POST', `/api/projects/${projectId}/assist/conversations/${conversationId}/messages`, body),
+  closeAssistConversation: (projectId: string, conversationId: string, body: { changeRequestId?: string | null }) =>
+    request<AssistConversation>('POST', `/api/projects/${projectId}/assist/conversations/${conversationId}/close`, body),
   audit: (id: string) => request<AuditEvent[]>('GET', `/api/changes/${id}/audit`),
 
   // Actors (app-level)

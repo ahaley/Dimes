@@ -25,7 +25,10 @@ export function Workspace({
   useBoardLiveUpdates(projectId)
 
   const { data: observations } = useInbox(projectId)
-  const inboxCount = (observations ?? []).filter((o) => o.status === 'New' || o.status === 'Clustered').length
+  // Mirror the drawer: latent signals count for everyone; directed ones only for their target.
+  const inboxCount = (observations ?? []).filter(
+    (o) => (o.status === 'New' || o.status === 'Clustered') && (!o.targetActorId || o.targetActorId === actingActorId),
+  ).length
 
   const { data: changes } = useChanges(projectId)
   const inDevCount = (changes ?? []).filter((c) => c.status === 'InDevelopment').length
@@ -53,7 +56,7 @@ export function Workspace({
             Export
           </Button>
           <Button variant="default" onClick={() => navigate(`/projects/${projectId}/capture`)}>
-            Capture with AI
+            Capture Assist
           </Button>
           <Button variant="primary" onClick={() => setCreating(true)}>+ New change</Button>
         </div>

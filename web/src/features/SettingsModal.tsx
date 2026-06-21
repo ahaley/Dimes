@@ -2,7 +2,7 @@ import { useState, type ReactNode } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '../api/client'
 import { keys, useActors, useLlmProviders, useMembers, useSources } from '../api/hooks'
-import type { LlmProviderConfig, Member, MemberRole, ObservationSourceType } from '../api/types'
+import type { LlmProviderConfig, Member, MemberRole } from '../api/types'
 import { Badge, Button, cx, ErrorText, Field, Modal, Select, TextInput } from '../components/ui'
 import { initials } from '../lifecycle'
 
@@ -267,10 +267,13 @@ function MemberRow({
   )
 }
 
+// The UI only creates external capture sources; the Internal source type is provisioned server-side.
+type CreatableSourceType = 'Sdk' | 'Seq'
+
 function SourcesSection({ projectId }: { projectId: string }) {
   const qc = useQueryClient()
   const { data: sources } = useSources(projectId)
-  const [type, setType] = useState<ObservationSourceType>('Sdk')
+  const [type, setType] = useState<CreatableSourceType>('Sdk')
   const [name, setName] = useState('')
 
   const add = useMutation({
@@ -293,7 +296,7 @@ function SourcesSection({ projectId }: { projectId: string }) {
       </div>
       <div className="flex items-end gap-2 rounded-md border border-slate-200 p-3 dark:border-slate-700">
         <Field label="Type">
-          <Select value={type} onChange={(e) => setType(e.target.value as ObservationSourceType)}>
+          <Select value={type} onChange={(e) => setType(e.target.value as CreatableSourceType)}>
             <option value="Sdk">SDK</option>
             <option value="Seq">Seq</option>
           </Select>

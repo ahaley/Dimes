@@ -20,6 +20,9 @@ export function useBoardLiveUpdates(projectId: string | undefined) {
     const refresh = () => {
       qc.invalidateQueries({ queryKey: ['changes', projectId] })
       qc.invalidateQueries({ queryKey: ['inbox', projectId] })
+      // Capture Assist conversations + the assistant's pending list (coarse but cheap + idempotent).
+      qc.invalidateQueries({ queryKey: ['assist'] })
+      qc.invalidateQueries({ queryKey: ['assist-pending', projectId] })
     }
     connection.on('boardChanged', refresh)
     // Re-join the project group after an automatic reconnect.

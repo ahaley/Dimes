@@ -19,11 +19,13 @@ public enum MemberRole
     Maintainer,
 }
 
-/// <summary>Where an observation originated.</summary>
+/// <summary>Where an observation originated. <see cref="Internal"/> is for signals Dimes raises about
+/// itself (e.g. a Capture Assist request bubbled to a human assistant), not an external capture source.</summary>
 public enum ObservationSourceType
 {
     Sdk,
     Seq,
+    Internal,
 }
 
 /// <summary>The capture-spectrum category of an observation.</summary>
@@ -33,6 +35,24 @@ public enum ObservationKind
     SolicitedFeedback,
     BehavioralFriction,
     TechnicalError,
+    /// <summary>A Capture Assist request directed at a human assistant (see <see cref="Entities.AssistConversation"/>).</summary>
+    AssistRequest,
+}
+
+/// <summary>Lifecycle of a human Capture Assist conversation. It awaits whichever side must act next,
+/// then closes (typically when the requester captures the change).</summary>
+public enum AssistConversationStatus
+{
+    AwaitingAssistant,
+    AwaitingRequester,
+    Closed,
+}
+
+/// <summary>Which side of a Capture Assist conversation authored a message.</summary>
+public enum AssistMessageSender
+{
+    Requester,
+    Assistant,
 }
 
 /// <summary>Observation inbox lifecycle.</summary>

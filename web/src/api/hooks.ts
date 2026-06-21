@@ -16,6 +16,8 @@ export const keys = {
   changes: (projectId: string, status?: ChangeStatus) => ['changes', projectId, status ?? 'all'] as const,
   change: (id: string) => ['change', id] as const,
   audit: (id: string) => ['audit', id] as const,
+  assistConversation: (id: string) => ['assist', id] as const,
+  pendingAssist: (projectId: string) => ['assist-pending', projectId] as const,
 }
 
 /** The auth mode (Local | Oidc) so the login screen renders the right control. Public endpoint. */
@@ -87,6 +89,26 @@ export function useInbox(projectId: string | undefined, status?: ObservationStat
   return useQuery({
     queryKey: keys.inbox(projectId ?? '', status),
     queryFn: () => api.inbox(projectId!, status),
+    enabled: !!projectId,
+  })
+}
+
+/** A human Capture Assist conversation. Polls as a fallback so replies appear even if the realtime
+ * channel is offline; live invalidation (see realtime.ts) makes it feel instant when connected. */
+export function useAssistConversation(projectId: string | undefined, conversationId: string | undefined) {
+  return useQuery({
+    queryKey: keys.assistConversation(conversationId ?? ''),
+    queryFn: () => api.getAssistConversation(projectId!, conversationId!),
+    enabled: !!projectId && !!conversationId,
+    refetchInterval: 5000,
+  })
+}
+
+/** Assist requests awaiting the current user as the assistant (for inbox/badge surfacing). */
+export function usePendingAssistRequests(projectId: string | undefined) {
+  return useQuery({
+    queryKey: keys.pendingAssist(projectId ?? ''),
+    queryFn: () => api.listAssistConversations(projectId!, 'assistant', 'AwaitingAssistant'),
     enabled: !!projectId,
   })
 }

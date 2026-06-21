@@ -3,9 +3,11 @@
 
 export type ActorType = 'Human' | 'Agent'
 export type MemberRole = 'Assistant' | 'Reporter' | 'Contributor' | 'Maintainer'
-export type ObservationSourceType = 'Sdk' | 'Seq'
-export type ObservationKind = 'ExplicitFeedback' | 'SolicitedFeedback' | 'BehavioralFriction' | 'TechnicalError'
+export type ObservationSourceType = 'Sdk' | 'Seq' | 'Internal'
+export type ObservationKind = 'ExplicitFeedback' | 'SolicitedFeedback' | 'BehavioralFriction' | 'TechnicalError' | 'AssistRequest'
 export type ObservationStatus = 'New' | 'Clustered' | 'Promoted' | 'Dismissed'
+export type AssistConversationStatus = 'AwaitingAssistant' | 'AwaitingRequester' | 'Closed'
+export type AssistMessageSender = 'Requester' | 'Assistant'
 export type ChangeKind = 'Problem' | 'Feature' | 'ObservationDriven'
 export type ChangeStatus =
   | 'Captured' | 'Triaged' | 'Approved' | 'InDevelopment' | 'InReview' | 'Done' | 'Rejected' | 'Duplicate'
@@ -27,6 +29,7 @@ export interface Observation {
   id: string; projectId: string; sourceId: string; kind: ObservationKind; status: ObservationStatus
   payload: string; contextMetadata?: string | null; fingerprint?: string | null
   occurrenceCount: number; firstSeen: string; lastSeen: string; changeRequestId?: string | null
+  targetActorId?: string | null
 }
 export interface ChangeRequest {
   id: string; projectId: string; title: string; description?: string | null
@@ -73,9 +76,30 @@ export interface SiteUser {
 }
 export interface UserMembership { projectId: string; projectName: string; role: MemberRole }
 
-// ----- Capture Assist (ephemeral conversational drafting) -----
+// ----- Capture Assist (ephemeral conversational drafting with an AI agent) -----
 export interface ChatTurn { role: 'user' | 'assistant'; content: string }
 export interface CaptureAssistReply { reply: string }
+
+// ----- Capture Assist with a human assistant (persisted, two-way) -----
+export interface AssistMessage {
+  id: string; conversationId: string; authorActorId: string
+  sender: AssistMessageSender; body: string; createdAt: string
+}
+export interface AssistConversation {
+  id: string; projectId: string
+  requesterActorId: string; requesterName: string
+  assistantActorId: string; assistantName: string
+  status: AssistConversationStatus; title?: string | null; draft?: string | null
+  changeRequestId?: string | null; createdAt: string; updatedAt: string
+  messages: AssistMessage[]
+}
+export interface AssistConversationSummary {
+  id: string; projectId: string
+  requesterActorId: string; requesterName: string
+  assistantActorId: string; assistantName: string
+  status: AssistConversationStatus; title?: string | null; lastMessagePreview?: string | null
+  messageCount: number; updatedAt: string
+}
 
 // The ordered "happy path" of the change lifecycle, for board columns.
 export const LIFECYCLE_COLUMNS: ChangeStatus[] = [
