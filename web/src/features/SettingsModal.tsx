@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '../api/client'
 import { keys, useActors, useLlmProviders, useMembers, useSources } from '../api/hooks'
 import type { LlmProviderConfig, Member, MemberRole, ObservationSourceType } from '../api/types'
-import { Badge, Button, ErrorText, Field, Modal, Select, TextInput } from '../components/ui'
+import { Badge, Button, cx, ErrorText, Field, Modal, Select, TextInput } from '../components/ui'
+import { initials } from '../lifecycle'
 
 const ROLES: MemberRole[] = ['Reporter', 'Contributor', 'Maintainer']
 // Agents can additionally take the Assistant role — a conversational capture helper with no
@@ -11,13 +12,43 @@ const ROLES: MemberRole[] = ['Reporter', 'Contributor', 'Maintainer']
 const AGENT_ROLES: MemberRole[] = ['Assistant', 'Reporter', 'Contributor', 'Maintainer']
 
 export function SettingsModal({ projectId, onClose }: { projectId: string; onClose: () => void }) {
+  const [tab, setTab] = useState<'members' | 'sources'>('members')
   return (
     <Modal title="Manage project" onClose={onClose} wide>
-      <div className="grid gap-6 md:grid-cols-2">
-        <MembersSection projectId={projectId} />
-        <SourcesSection projectId={projectId} />
+      <div className="space-y-4">
+        {/* Tabs keep Members and Sources from competing for width, so each gets the full dialog. */}
+        <div className="flex gap-1 border-b border-slate-200 dark:border-slate-800">
+          <TabButton active={tab === 'members'} onClick={() => setTab('members')}>Members</TabButton>
+          <TabButton active={tab === 'sources'} onClick={() => setTab('sources')}>Sources</TabButton>
+        </div>
+        {tab === 'members' ? <MembersSection projectId={projectId} /> : <SourcesSection projectId={projectId} />}
       </div>
     </Modal>
+  )
+}
+
+function TabButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cx(
+        '-mb-px border-b-2 px-3 py-2 text-sm font-medium transition-colors',
+        active
+          ? 'border-indigo-500 text-slate-800 dark:text-slate-100'
+          : 'border-transparent text-slate-400 hover:text-slate-600 dark:hover:text-slate-200',
+      )}
+    >
+      {children}
+    </button>
+  )
+}
+
+function Avatar({ name }: { name: string }) {
+  return (
+    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-100 text-xs font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+      {initials(name)}
+    </div>
   )
 }
 
@@ -27,6 +58,9 @@ function MembersSection({ projectId }: { projectId: string }) {
   const { data: providers } = useLlmProviders(projectId)
   const { data: actors } = useActors(false)
   const invalidate = () => qc.invalidateQueries({ queryKey: keys.members(projectId) })
+
+  // The add forms are hidden behind a disclosure so the member list reads clearly by default.
+  const [adding, setAdding] = useState(false)
 
   // Add person: link an existing site user (no new actor).
   const [userId, setUserId] = useState('')
@@ -55,69 +89,79 @@ function MembersSection({ projectId }: { projectId: string }) {
   })
 
   return (
-    <section className="space-y-3">
-      <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Members</h3>
-      <ul className="space-y-1">
+    <section className="space-y-4">
+      <div className="divide-y divide-slate-100 overflow-hidden rounded-md border border-slate-200 dark:divide-slate-800 dark:border-slate-700">
         {(members ?? []).map((m) => (
           <MemberRow key={m.actorId} projectId={projectId} member={m} providers={providers ?? []} />
         ))}
-        {members?.length === 0 && <li className="text-sm text-slate-400">No members yet.</li>}
-      </ul>
+        {members?.length === 0 && <p className="px-3 py-4 text-sm text-slate-400">No members yet.</p>}
+      </div>
 
-      {/* Add an existing user as a member */}
-      <div className="space-y-2 rounded-md border border-slate-200 dark:border-slate-700 p-3">
-        <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-400">Add person</h4>
-        {candidates.length === 0 ? (
-          <p className="text-sm text-slate-400">No users available — create users in Site settings.</p>
-        ) : (
-          <div className="flex items-end gap-2">
-            <Field label="User">
-              <Select value={userId} onChange={(e) => setUserId(e.target.value)}>
-                <option value="">Select…</option>
-                {candidates.map((a) => (
-                  <option key={a.id} value={a.id}>{a.displayName}{a.email ? ` (${a.email})` : ''}</option>
-                ))}
-              </Select>
+      {!adding ? (
+        <Button variant="default" onClick={() => setAdding(true)}>+ Add member</Button>
+      ) : (
+        <div className="space-y-4 rounded-md border border-slate-200 p-3 dark:border-slate-700">
+          <div className="flex items-center justify-between">
+            <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-400">Add member</h4>
+            <Button variant="subtle" onClick={() => setAdding(false)}>Done</Button>
+          </div>
+
+          {/* Add an existing user as a member */}
+          <div className="space-y-2">
+            <h5 className="text-xs font-medium text-slate-500 dark:text-slate-400">Person</h5>
+            {candidates.length === 0 ? (
+              <p className="text-sm text-slate-400">No users available — create users in Site settings.</p>
+            ) : (
+              <div className="flex items-end gap-2">
+                <Field label="User">
+                  <Select value={userId} onChange={(e) => setUserId(e.target.value)}>
+                    <option value="">Select…</option>
+                    {candidates.map((a) => (
+                      <option key={a.id} value={a.id}>{a.displayName}{a.email ? ` (${a.email})` : ''}</option>
+                    ))}
+                  </Select>
+                </Field>
+                <Field label="Role">
+                  <Select value={personRole} onChange={(e) => setPersonRole(e.target.value as MemberRole)}>
+                    {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
+                  </Select>
+                </Field>
+                <Button variant="primary" disabled={!userId || assignPerson.isPending} onClick={() => assignPerson.mutate()}>
+                  Add
+                </Button>
+              </div>
+            )}
+            <ErrorText error={assignPerson.error} />
+          </div>
+
+          {/* Create an agent member */}
+          <div className="space-y-2 border-t border-slate-200 pt-3 dark:border-slate-700">
+            <h5 className="text-xs font-medium text-slate-500 dark:text-slate-400">Agent</h5>
+            <Field label="Display name">
+              <TextInput value={agentName} onChange={(e) => setAgentName(e.target.value)} placeholder="Aria" />
             </Field>
-            <Field label="Role">
-              <Select value={personRole} onChange={(e) => setPersonRole(e.target.value as MemberRole)}>
-                {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
-              </Select>
-            </Field>
-            <Button variant="primary" disabled={!userId || assignPerson.isPending} onClick={() => assignPerson.mutate()}>
-              Add
+            <div className="grid grid-cols-2 gap-2">
+              <Field label="Role">
+                <Select value={agentRole} onChange={(e) => setAgentRole(e.target.value as MemberRole)}>
+                  {AGENT_ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
+                </Select>
+              </Field>
+              <Field label="LLM provider (for commentary)">
+                <Select value={llmProviderConfigId} onChange={(e) => setLlm(e.target.value)}>
+                  <option value="">none</option>
+                  {(providers ?? []).map((p) => (
+                    <option key={p.id} value={p.id}>{p.name} ({p.model})</option>
+                  ))}
+                </Select>
+              </Field>
+            </div>
+            <ErrorText error={addAgent.error} />
+            <Button variant="primary" disabled={!agentName.trim() || addAgent.isPending} onClick={() => addAgent.mutate()}>
+              Add agent
             </Button>
           </div>
-        )}
-        <ErrorText error={assignPerson.error} />
-      </div>
-
-      {/* Create an agent member */}
-      <div className="space-y-2 rounded-md border border-slate-200 dark:border-slate-700 p-3">
-        <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-400">Add agent</h4>
-        <Field label="Display name">
-          <TextInput value={agentName} onChange={(e) => setAgentName(e.target.value)} placeholder="Aria" />
-        </Field>
-        <div className="grid grid-cols-2 gap-2">
-          <Field label="Role">
-            <Select value={agentRole} onChange={(e) => setAgentRole(e.target.value as MemberRole)}>
-              {AGENT_ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
-            </Select>
-          </Field>
-          <Field label="LLM provider (for commentary)">
-            <Select value={llmProviderConfigId} onChange={(e) => setLlm(e.target.value)}>
-              <option value="">none</option>
-              {(providers ?? []).map((p) => (
-                <option key={p.id} value={p.id}>{p.name} ({p.model})</option>
-              ))}
-            </Select>
-          </Field>
         </div>
-        <ErrorText error={addAgent.error} />
-        <Button variant="primary" disabled={!agentName.trim() || addAgent.isPending} onClick={() => addAgent.mutate()}>
-          Add agent
-        </Button>
-      </div>
+      )}
     </section>
   )
 }
@@ -165,8 +209,13 @@ function MemberRow({
 
   if (member.type === 'Human') {
     return (
-      <li className="flex items-center gap-2 text-sm">
-        <span className="min-w-0 flex-1 truncate text-slate-800 dark:text-slate-100">{member.displayName}</span>
+      <div className="flex items-center gap-3 px-3 py-2 text-sm">
+        <Avatar name={member.displayName} />
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-slate-800 dark:text-slate-100">{member.displayName}</div>
+          {member.email && <div className="truncate text-xs text-slate-400">{member.email}</div>}
+        </div>
+        <Badge tone="slate">Person</Badge>
         <Select
           value={member.role}
           className="max-w-36"
@@ -176,26 +225,25 @@ function MemberRow({
           {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
         </Select>
         {removeButton}
-      </li>
+      </div>
     )
   }
 
   if (!editing) {
     return (
-      <li className="flex items-center gap-2 text-sm">
-        <span className="text-slate-800 dark:text-slate-100">{member.displayName}</span>
+      <div className="flex items-center gap-3 px-3 py-2 text-sm">
+        <Avatar name={member.displayName} />
+        <span className="min-w-0 flex-1 truncate text-slate-800 dark:text-slate-100">{member.displayName}</span>
         <Badge tone="violet">Agent</Badge>
         <Badge tone={member.role === 'Maintainer' ? 'indigo' : 'slate'}>{member.role}</Badge>
-        <span className="ml-auto flex items-center gap-1">
-          <Button variant="subtle" onClick={() => setEditing(true)}>Edit</Button>
-          {removeButton}
-        </span>
-      </li>
+        <Button variant="subtle" onClick={() => setEditing(true)}>Edit</Button>
+        {removeButton}
+      </div>
     )
   }
 
   return (
-    <li className="space-y-2 rounded-md border border-slate-200 dark:border-slate-700 p-2">
+    <div className="space-y-2 px-3 py-3">
       <Field label="Display name">
         <TextInput value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
       </Field>
@@ -215,7 +263,7 @@ function MemberRow({
         <Button variant="subtle" onClick={() => setEditing(false)}>Cancel</Button>
         <Button variant="primary" disabled={!displayName.trim() || save.isPending} onClick={() => save.mutate()}>Save</Button>
       </div>
-    </li>
+    </div>
   )
 }
 
@@ -234,15 +282,16 @@ function SourcesSection({ projectId }: { projectId: string }) {
   })
 
   return (
-    <section className="space-y-2">
-      <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Observation sources</h3>
-      <ul className="space-y-1 text-sm">
+    <section className="space-y-3">
+      <div className="divide-y divide-slate-100 overflow-hidden rounded-md border border-slate-200 dark:divide-slate-800 dark:border-slate-700">
         {(sources ?? []).map((s) => (
-          <li key={s.id} className="text-slate-700 dark:text-slate-200">{s.name} · <span className="text-slate-400">{s.type}</span></li>
+          <div key={s.id} className="px-3 py-2 text-sm text-slate-700 dark:text-slate-200">
+            {s.name} · <span className="text-slate-400">{s.type}</span>
+          </div>
         ))}
-        {sources?.length === 0 && <li className="text-sm text-slate-400">None configured.</li>}
-      </ul>
-      <div className="flex items-end gap-2 rounded-md border border-slate-200 dark:border-slate-700 p-3">
+        {sources?.length === 0 && <p className="px-3 py-4 text-sm text-slate-400">None configured.</p>}
+      </div>
+      <div className="flex items-end gap-2 rounded-md border border-slate-200 p-3 dark:border-slate-700">
         <Field label="Type">
           <Select value={type} onChange={(e) => setType(e.target.value as ObservationSourceType)}>
             <option value="Sdk">SDK</option>
