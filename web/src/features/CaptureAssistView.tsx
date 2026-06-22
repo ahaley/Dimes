@@ -11,9 +11,10 @@ import {
   useProjectInvalidator,
 } from '../api/hooks'
 import type { AssistConversationStatus, ChangeKind, ChatTurn, Member, Priority } from '../api/types'
-import { Badge, Button, ErrorText, Field, Select, TextInput, Textarea } from '../components/ui'
+import { Badge, Button, cx, ErrorText, Field, Select, TextInput, Textarea } from '../components/ui'
 import { useToast } from '../components/Toast'
 import { ChatBubbles, ChatComposer, type ChatBubble } from './AssistChat'
+import { CaptureFreestyle } from './CaptureFreestyle'
 
 /** Whether a member can be picked as an assistant: AI agents always; humans need real lifecycle
  * authority (Contributor+) so they can clear the request from their inbox. */
@@ -65,6 +66,10 @@ export function CaptureAssistView() {
   const activeAssistantId = assistantId || defaultAssistantId
   const activeAssistant = candidates.find((m) => m.actorId === activeAssistantId)
   const isHuman = activeAssistant?.type === 'Human'
+
+  // Guided (chat) vs Freestyle (markdown brief → batch of proposals). Freestyle has no persisted
+  // conversation, so resuming one forces guided.
+  const [mode, setMode] = useState<'guided' | 'freestyle'>('guided')
 
   // The draft being shaped.
   const [rough, setRough] = useState('')
@@ -192,6 +197,8 @@ export function CaptureAssistView() {
   const sending = aiChat.isPending || startHuman.isPending || postHuman.isPending
   const closed = isHuman && conversation?.status === 'Closed'
   const noAssistant = !activeAssistantId
+  // Resuming a persisted conversation forces guided (freestyle has nothing to resume).
+  const effectiveMode = conversationId ? 'guided' : mode
 
   const footer = (() => {
     if (!isHuman) return aiChat.isPending ? <p className="text-sm text-slate-400">Assistant is thinking…</p> : null
@@ -213,14 +220,39 @@ export function CaptureAssistView() {
         <div>
           <h1 className="text-lg font-semibold text-slate-800 dark:text-slate-100">Capture Assist</h1>
           <p className="mt-1 text-sm text-slate-500">
-            Talk an idea through with an AI agent or a teammate, then confirm a title and description to
-            capture it as a change request.
+            {effectiveMode === 'freestyle'
+              ? 'Write a freeform markdown brief and turn it into a batch of change requests you can edit before creating.'
+              : 'Talk an idea through with an AI agent or a teammate, then confirm a title and description to capture it as a change request.'}
           </p>
         </div>
-        <Button variant="subtle" onClick={() => navigate(`/projects/${projectId}`)}>Exit</Button>
+        <div className="flex items-center gap-2">
+          {/* Mode chooser — hidden while resuming a (guided-only) persisted conversation. */}
+          {!conversationId && (
+            <div className="flex rounded-md border border-slate-200 p-0.5 dark:border-slate-700">
+              {(['guided', 'freestyle'] as const).map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => setMode(m)}
+                  className={cx(
+                    'rounded px-3 py-1 text-sm font-medium capitalize transition-colors',
+                    effectiveMode === m
+                      ? 'bg-indigo-600 text-white dark:bg-indigo-500'
+                      : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-200',
+                  )}
+                >
+                  {m}
+                </button>
+              ))}
+            </div>
+          )}
+          <Button variant="subtle" onClick={() => navigate(`/projects/${projectId}`)}>Exit</Button>
+        </div>
       </div>
 
-      {!conversationId && resumable.length > 0 && (
+      {effectiveMode === 'freestyle' && <CaptureFreestyle projectId={projectId} agents={agents} />}
+
+      {effectiveMode === 'guided' && !conversationId && resumable.length > 0 && (
         <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-900/60">
           <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-400">Pick up where you left off</h2>
           <ul className="mt-2 space-y-1.5">
@@ -245,6 +277,7 @@ export function CaptureAssistView() {
         </div>
       )}
 
+      {effectiveMode === 'guided' && (
       <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-2">
         {/* Draft form */}
         <div className="flex min-h-0 flex-col gap-3 overflow-auto rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
@@ -329,6 +362,7 @@ export function CaptureAssistView() {
           />
         </div>
       </div>
+      )}
     </div>
   )
 }

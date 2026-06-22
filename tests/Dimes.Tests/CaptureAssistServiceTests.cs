@@ -95,6 +95,96 @@ public sealed class CaptureAssistServiceTests : IDisposable
             project.Id, new CaptureAssistChatRequest(agent.ActorId, null, [new ChatTurn("assistant", "hi")])));
     }
 
+    // ----- Freestyle Mode: markdown brief -> structured proposals (tolerant parse of the LLM reply) -----
+
+    private async Task<Guid> SeedAgentAsync(StubLlm llm)
+    {
+        var project = await _projects.CreateAsync(new CreateProjectRequest("P", null));
+        var llmConfig = await _projects.CreateLlmProviderAsync(project.Id,
+            new CreateLlmProviderRequest(llm.Type, "claude", null, "claude-sonnet-4-6", "ANTHROPIC_KEY"));
+        var agent = await _projects.AddMemberAsync(project.Id,
+            new AddMemberRequest("Aria", ActorType.Agent, null, MemberRole.Assistant, llmConfig.Id));
+        // Stash both ids on the closure via out-of-band fields isn't needed; return project & agent together.
+        _lastAgentId = agent.ActorId;
+        return project.Id;
+    }
+    private Guid _lastAgentId;
+
+    [Fact]
+    public async Task GenerateProposals_ParsesPlainJsonArray()
+    {
+        var stub = new StubLlm(LlmProviderType.Anthropic,
+            """[{"title":"Add CSV export","description":"Download the board as CSV.","kind":"Feature","priority":"High"}]""");
+        var projectId = await SeedAgentAsync(stub);
+
+        var reply = await Service(stub).GenerateProposalsAsync(projectId,
+            new GenerateProposalsRequest(_lastAgentId, "Add CSV export to the board."));
+
+        var p = Assert.Single(reply.Proposals);
+        Assert.Equal("Add CSV export", p.Title);
+        Assert.Equal("Download the board as CSV.", p.Description);
+        Assert.Equal(ChangeKind.Feature, p.Kind);
+        Assert.Equal(Priority.High, p.Priority);
+    }
+
+    [Fact]
+    public async Task GenerateProposals_ToleratesCodeFencesAndSurroundingProse()
+    {
+        var stub = new StubLlm(LlmProviderType.Anthropic,
+            "Sure! Here are the changes:\n```json\n[{\"title\":\"Fix slow inbox\",\"kind\":\"Problem\",\"priority\":\"Medium\"}]\n```\nLet me know!");
+        var projectId = await SeedAgentAsync(stub);
+
+        var reply = await Service(stub).GenerateProposalsAsync(projectId,
+            new GenerateProposalsRequest(_lastAgentId, "The inbox is slow."));
+
+        var p = Assert.Single(reply.Proposals);
+        Assert.Equal("Fix slow inbox", p.Title);
+        Assert.Equal(ChangeKind.Problem, p.Kind);
+        Assert.Equal(Priority.Medium, p.Priority);
+        Assert.Null(p.Description); // missing/blank description maps to null
+    }
+
+    [Fact]
+    public async Task GenerateProposals_DefaultsBadEnums_AndSkipsTitlelessEntries()
+    {
+        var stub = new StubLlm(LlmProviderType.Anthropic,
+            """[{"title":"Keep me","kind":"Nonsense","priority":"Whatever"},{"title":"","kind":"Feature"}]""");
+        var projectId = await SeedAgentAsync(stub);
+
+        var reply = await Service(stub).GenerateProposalsAsync(projectId,
+            new GenerateProposalsRequest(_lastAgentId, "Some brief."));
+
+        var p = Assert.Single(reply.Proposals); // the blank-title entry is dropped
+        Assert.Equal("Keep me", p.Title);
+        Assert.Equal(ChangeKind.Feature, p.Kind);  // unknown kind -> default
+        Assert.Equal(Priority.None, p.Priority);    // unknown priority -> default
+    }
+
+    [Fact]
+    public async Task GenerateProposals_MalformedJson_ReturnsEmpty()
+    {
+        var stub = new StubLlm(LlmProviderType.Anthropic, "I couldn't find anything actionable, sorry.");
+        var projectId = await SeedAgentAsync(stub);
+
+        var reply = await Service(stub).GenerateProposalsAsync(projectId,
+            new GenerateProposalsRequest(_lastAgentId, "Some brief."));
+
+        Assert.Empty(reply.Proposals);
+    }
+
+    [Fact]
+    public async Task GenerateProposals_BlankMarkdown_ReturnsEmpty_WithoutCallingLlm()
+    {
+        var stub = new StubLlm(LlmProviderType.Anthropic, "[]");
+        var projectId = await SeedAgentAsync(stub);
+
+        var reply = await Service(stub).GenerateProposalsAsync(projectId,
+            new GenerateProposalsRequest(_lastAgentId, "   "));
+
+        Assert.Empty(reply.Proposals);
+        Assert.Null(stub.Seen); // short-circuited before reaching the provider
+    }
+
     public void Dispose()
     {
         _db.Dispose();

@@ -23,6 +23,12 @@ public class ChangeRequestsController(
         return CreatedAtAction(nameof(Get), new { id = change.Id }, change);
     }
 
+    /// <summary>Create a batch of changes in one transaction (Capture Assist Freestyle Mode confirm).</summary>
+    [HttpPost("api/projects/{projectId:guid}/changes/batch")]
+    public async Task<ActionResult<IReadOnlyList<ChangeRequestDto>>> CreateBatch(
+        Guid projectId, CreateChangesRequest req, CancellationToken ct)
+        => Ok(await changes.CreateManyAsync(projectId, currentActor.ActorId, req.Changes, ct));
+
     [HttpGet("api/projects/{projectId:guid}/changes")]
     public async Task<ActionResult<IReadOnlyList<ChangeRequestDto>>> List(
         Guid projectId, [FromQuery] ChangeStatus? status, CancellationToken ct)

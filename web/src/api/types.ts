@@ -80,6 +80,10 @@ export interface UserMembership { projectId: string; projectName: string; role: 
 export interface ChatTurn { role: 'user' | 'assistant'; content: string }
 export interface CaptureAssistReply { reply: string }
 
+// ----- Capture Assist Freestyle Mode (markdown brief -> editable change-order proposals) -----
+export interface CaptureProposal { title: string; description?: string | null; kind: ChangeKind; priority: Priority }
+export interface GenerateProposalsReply { proposals: CaptureProposal[] }
+
 // ----- Capture Assist with a human assistant (persisted, two-way) -----
 export interface AssistMessage {
   id: string; conversationId: string; authorActorId: string
