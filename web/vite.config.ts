@@ -9,6 +9,11 @@ const API = process.env.DIMES_API ?? 'http://localhost:5080'
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
+    // Pin the dev origin. The OIDC redirect_uri is built from this host:port and must match a
+    // registered Keycloak redirect URI, so strictPort fails loudly if 5173 is taken rather than
+    // silently drifting to 5174 (which would break the login redirect).
+    port: 5173,
+    strictPort: true,
     proxy: {
       // changeOrigin:false preserves the original Host (localhost:5173) so the API builds the OIDC
       // redirect_uri on this origin — keeping the whole Keycloak flow (and the BFF session cookie)
