@@ -7,6 +7,10 @@ public class Project : Entity
     public required string Name { get; set; }
     public string? Description { get; set; }
 
+    /// <summary>Whether the source-control feature is surfaced for this project. When off, change
+    /// requests hide their Source control section. Defaults to on so existing projects are unchanged.</summary>
+    public bool SourceControlEnabled { get; set; } = true;
+
     /// <summary>Archived projects are retained (with all their changes/observations/audit) but hidden
     /// from active lists. Soft-delete equivalent — reversible via unarchive.</summary>
     public bool IsArchived { get; set; }

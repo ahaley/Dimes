@@ -5,7 +5,8 @@ namespace Dimes.Api.Contracts;
 /// <summary>Entity → DTO projections. Kept in one place so controllers and services stay thin.</summary>
 public static class Mappings
 {
-    public static ProjectDto ToDto(this Project p) => new(p.Id, p.Name, p.Description, p.CreatedAt, p.IsArchived, p.ArchivedAt);
+    public static ProjectDto ToDto(this Project p) =>
+        new(p.Id, p.Name, p.Description, p.CreatedAt, p.IsArchived, p.ArchivedAt, p.SourceControlEnabled);
 
     public static MemberDto ToMemberDto(this Membership m) =>
         new(m.ActorId, m.ProjectId, m.Actor.DisplayName, m.Actor.Type, m.Actor.Email, m.Role, m.Actor.LlmProviderConfigId);
