@@ -6,7 +6,8 @@ namespace Dimes.Api;
 
 /// <summary>Maps application and domain-lifecycle exceptions to RFC 7807 ProblemDetails responses.
 /// Lifecycle guard failures surface as 409 (illegal transition) and 403 (insufficient role).</summary>
-public sealed class GlobalExceptionHandler(IProblemDetailsService problemDetails) : IExceptionHandler
+public sealed class GlobalExceptionHandler(
+    IProblemDetailsService problemDetails, ILogger<GlobalExceptionHandler> logger) : IExceptionHandler
 {
     public async ValueTask<bool> TryHandleAsync(
         HttpContext httpContext, Exception exception, CancellationToken cancellationToken)
@@ -21,6 +22,14 @@ public sealed class GlobalExceptionHandler(IProblemDetailsService problemDetails
             InvalidTransitionException => (StatusCodes.Status409Conflict, "Invalid lifecycle transition"),
             _ => (StatusCodes.Status500InternalServerError, "Unexpected error"),
         };
+
+        // Domain/lifecycle exceptions are expected control flow (4xx/409). Only unmapped 500s are real
+        // defects — log them at Error so they aren't silently swallowed into a ProblemDetails response.
+        if (status == StatusCodes.Status500InternalServerError)
+        {
+            logger.LogError(exception, "Unhandled exception processing {Method} {Path}",
+                httpContext.Request.Method, httpContext.Request.Path);
+        }
 
         httpContext.Response.StatusCode = status;
         return await problemDetails.TryWriteAsync(new ProblemDetailsContext

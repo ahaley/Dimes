@@ -1,58 +1,81 @@
-# DigitalOcean App Platform spec for Dimes.
+# DigitalOcean App Platform spec for Dimes — template.
 #
-# Single app, one public origin — App Platform's ingress is the reverse proxy, so the BFF session
-# cookie and the OIDC redirect flow stay same-origin without an nginx/Caddy box:
+# This deploys Dimes as a single App Platform app with one public origin. App Platform's ingress
+# acts as the reverse proxy, so the BFF session cookie and the OIDC redirect flow stay same-origin
+# without running your own nginx/Caddy box:
 #   - the API service handles /api, /signin-oidc, /hubs, /health
 #   - the static site serves everything else (the built SPA)
-#   - a managed Postgres database backs the API
 #
-# Before first deploy, replace the <PLACEHOLDER> values:
-#   - github.repo            your GitHub repo (owner/name), connected to App Platform
-#   - Auth__Oidc__Authority  your Keycloak realm issuer URL
-#   - Auth__SiteAdmin__Email the bootstrap admin's email (must match the OIDC email claim)
-#   - DIMES_OIDC_CLIENT_SECRET  set as an encrypted secret in the App Platform UI/CLI
+# It does NOT provision a database or an identity provider — it points at your OWN managed Postgres
+# and (for OIDC mode) your OWN Keycloak/OIDC server. Those details are env vars you fill in below or
+# after creating the app.
 #
-# After the app has a URL, register https://<app-url>/signin-oidc as the Keycloak Valid redirect URI
-# (and https://<app-url> as a Web origin).
+# ─── Quick start ────────────────────────────────────────────────────────────────────────────────
+#   1. Fork this repo, then replace every <...> placeholder in this file:
+#        - github.repo            -> <your-github-owner>/<your-repo>   (the fork you connected to DO)
+#        - Auth__SiteAdmin__Email -> the email of your bootstrap admin
+#   2. Connect that repo to App Platform (DO dashboard -> Apps, or grant the DigitalOcean GitHub app
+#      access to it), then:  doctl apps create --spec .do/app.yaml
+#   3. After the app gets a URL, set the secret/runtime env vars (dashboard env editor or
+#      `doctl apps update`):
+#        - ConnectionStrings__Dimes   your managed Postgres connection string (SECRET)
+#        - Auth__Oidc__Authority      your OIDC realm issuer (e.g. https://kc.example.com/realms/dimes)
+#        - DIMES_OIDC_CLIENT_SECRET   the OIDC client secret (SECRET)
+#      ...and add the app as a trusted source on your managed Postgres, and register
+#      https://<app-url>/signin-oidc as a redirect URI on your OIDC client.
+#
+# ─── Simpler: try it without an OIDC server ─────────────────────────────────────────────────────
+# Dimes also supports Auth__Mode=Local (bootstrap site-admin, no Keycloak). To start there, set
+# Auth__Mode to "Local" below and drop the four Auth__Oidc__* / DIMES_OIDC_CLIENT_SECRET env vars.
+# You still need ConnectionStrings__Dimes and Auth__SiteAdmin__Email.
 
 name: dimes
+# Pick a region near you: nyc, sfo, ams, sgp, lon, fra, tor, blr, syd.
 region: nyc
 
 ingress:
+  # preserve_path_prefix: true is REQUIRED. By default App Platform strips the matched prefix before
+  # forwarding (e.g. /api/projects -> /projects), which breaks the API's absolute routes (/api/*,
+  # /health, /signin-oidc, /hubs). Preserving the prefix passes the full path through unchanged.
   rules:
     - match:
         path:
           prefix: /api
       component:
         name: api
+        preserve_path_prefix: true
     - match:
         path:
           prefix: /signin-oidc
       component:
         name: api
+        preserve_path_prefix: true
     - match:
         path:
           prefix: /hubs
       component:
         name: api
+        preserve_path_prefix: true
     - match:
         path:
           prefix: /health
       component:
         name: api
+        preserve_path_prefix: true
     # Catch-all → the SPA. Listed last so the API prefixes win.
     - match:
         path:
           prefix: /
       component:
         name: web
+        preserve_path_prefix: true
 
 services:
   - name: api
     dockerfile_path: Dockerfile
     source_dir: /
     github:
-      repo: <PLACEHOLDER-owner/repo>
+      repo: <your-github-owner>/<your-repo>
       branch: main
       deploy_on_push: true
     http_port: 8080
@@ -70,14 +93,17 @@ services:
       # Trust App Platform's X-Forwarded-* so the OIDC redirect_uri is built as https.
       - key: Proxy__UseForwardedHeaders
         value: "true"
-      # Managed Postgres connection (postgresql:// URI; the API normalizes it for Npgsql).
+      # Your managed Postgres connection string — SECRET (contains the password). Set after create.
       - key: ConnectionStrings__Dimes
         scope: RUN_TIME
-        value: ${dimes-db.DATABASE_URL}
+        type: SECRET
+        value: ""
+      # "Oidc" (Keycloak/OIDC) or "Local" (bootstrap admin, no IdP). See the header note.
       - key: Auth__Mode
         value: Oidc
+      # Your OIDC realm issuer URL. Set after create. (Unused when Auth__Mode=Local.)
       - key: Auth__Oidc__Authority
-        value: <PLACEHOLDER-https://keycloak.example.com/realms/dimes>
+        value: ""
       - key: Auth__Oidc__ClientId
         value: dimes
       - key: Auth__Oidc__ClientSecretRef
@@ -85,25 +111,19 @@ services:
       - key: DIMES_OIDC_CLIENT_SECRET
         scope: RUN_TIME
         type: SECRET
-        value: <PLACEHOLDER-set-encrypted-secret>
+        value: ""
+      # Bootstrap admin; must match the email claim of the first account that logs in.
       - key: Auth__SiteAdmin__Email
-        value: <PLACEHOLDER-admin@example.com>
+        value: <admin@example.com>
 
 static_sites:
   - name: web
     source_dir: /web
     github:
-      repo: <PLACEHOLDER-owner/repo>
+      repo: <your-github-owner>/<your-repo>
       branch: main
       deploy_on_push: true
     build_command: npm run build
     output_dir: dist
     # SPA client-side routing: unknown paths fall back to the app shell.
     catchall_document: index.html
-
-databases:
-  - name: dimes-db
-    engine: PG
-    version: "16"
-    # Dev database (single node). Switch to a managed cluster (production: true + size) for real use.
-    production: false

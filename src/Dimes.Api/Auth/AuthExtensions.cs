@@ -54,6 +54,21 @@ public static class AuthExtensions
 
         if (options.Mode == AuthMode.Oidc)
         {
+            // Fail fast at startup with a clear message. The OpenID Connect handler validates its own
+            // options lazily on the FIRST request — so a missing Authority would otherwise surface as a
+            // 500 on every endpoint (including /health) rather than a boot error.
+            var missing = new List<string>();
+            if (string.IsNullOrWhiteSpace(options.Oidc.Authority)) missing.Add($"{AuthOptions.SectionName}:Oidc:Authority");
+            if (string.IsNullOrWhiteSpace(options.Oidc.ClientId)) missing.Add($"{AuthOptions.SectionName}:Oidc:ClientId");
+            if (string.IsNullOrWhiteSpace(options.Oidc.ClientSecretRef)) missing.Add($"{AuthOptions.SectionName}:Oidc:ClientSecretRef");
+            if (missing.Count > 0)
+            {
+                throw new InvalidOperationException(
+                    $"{AuthOptions.SectionName}:Mode is 'Oidc' but required OIDC settings are missing: " +
+                    $"{string.Join(", ", missing)}. Set them (Authority is the realm issuer URL, e.g. " +
+                    $"https://keycloak.example.com/realms/dimes), or set {AuthOptions.SectionName}:Mode to 'Local'.");
+            }
+
             auth.AddOpenIdConnect(AuthSchemes.Oidc, o =>
             {
                 o.Authority = options.Oidc.Authority;
