@@ -23,8 +23,18 @@ export function CreateChangeModal({
     },
   })
 
+  // Guard against losing typed work: confirm before closing if the title or description has text. The
+  // backdrop and ✕ both call the Modal's onClose, so routing them through here covers every close path
+  // except a successful create (which calls onClose directly, with no prompt).
+  const attemptClose = () => {
+    if ((title.trim() || description.trim()) && !window.confirm('Discard this change request? Your unsaved text will be lost.')) {
+      return
+    }
+    onClose()
+  }
+
   return (
-    <Modal title="New change request" onClose={onClose}>
+    <Modal title="New change request" onClose={attemptClose}>
       <div className="space-y-3">
         <Field label="Title">
           <TextInput value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Add CSV export" autoFocus />
@@ -48,7 +58,7 @@ export function CreateChangeModal({
         </div>
         <ErrorText error={create.error} />
         <div className="flex justify-end gap-2 pt-1">
-          <Button variant="subtle" onClick={onClose}>Cancel</Button>
+          <Button variant="subtle" onClick={attemptClose}>Cancel</Button>
           <Button variant="primary" disabled={!title.trim() || create.isPending} onClick={() => create.mutate()}>
             Create
           </Button>
