@@ -90,6 +90,33 @@ public sealed class AssistConversationServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task RequesterReply_AfterAssistantAnswered_RaisesFreshBubbleUp()
+    {
+        var seed = await SeedAsync();
+        var convo = await _assist.StartAsync(seed.ProjectId, seed.RequesterId,
+            new StartAssistConversationRequest(seed.AssistantId, null, null, "Need help"));
+
+        // Assistant answers: status flips to AwaitingRequester and the original bubble-up is dismissed.
+        await _assist.PostMessageAsync(seed.ProjectId, convo.Id, seed.AssistantId,
+            new PostAssistMessageRequest("Sure — what's the goal?"));
+
+        // Requester follows up. The prior observation is no longer New, so a fresh bubble-up must be
+        // raised. Regression: the new observation wasn't added to the context, so saving the
+        // conversation's ObservationId update tripped a FOREIGN KEY constraint.
+        var updated = await _assist.PostMessageAsync(seed.ProjectId, convo.Id, seed.RequesterId,
+            new PostAssistMessageRequest("The goal is a CSV export button."));
+
+        Assert.Equal(AssistConversationStatus.AwaitingAssistant, updated.Status);
+        Assert.Equal(3, updated.Messages.Count);
+
+        // Two observations exist now: the dismissed original and a fresh New one re-surfaced to the assistant.
+        var observations = _db.Observations.Where(o => o.ProjectId == seed.ProjectId).ToList();
+        Assert.Equal(2, observations.Count);
+        var fresh = Assert.Single(observations, o => o.Status == ObservationStatus.New);
+        Assert.Equal(seed.AssistantId, fresh.TargetActorId);
+    }
+
+    [Fact]
     public async Task PostMessage_ByNonParticipant_IsForbidden()
     {
         var seed = await SeedAsync();
