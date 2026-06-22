@@ -93,7 +93,7 @@ export function FocusView({ actingActorId, members }: { actingActorId: string; m
         <div className="flex min-h-0 flex-1 gap-3">
           {/* Queue rail */}
           {railOpen && (
-            <Card className="w-64 shrink-0 overflow-auto p-1.5">
+            <Card className="w-80 shrink-0 overflow-auto p-1.5">
               <ul className="space-y-1">
                 {queue.map((c, i) => {
                   const assignee = members.find((m) => m.actorId === c.assigneeActorId)
@@ -110,7 +110,7 @@ export function FocusView({ actingActorId, members }: { actingActorId: string; m
                       >
                         <div className="flex items-start gap-1.5">
                           <span className="mt-0.5 w-4 shrink-0 text-[11px] text-slate-400">{i + 1}</span>
-                          <span className="min-w-0 flex-1 truncate text-sm text-slate-800 dark:text-slate-100">{c.title}</span>
+                          <span className="min-w-0 flex-1 line-clamp-2 text-sm text-slate-800 dark:text-slate-100">{c.title}</span>
                         </div>
                         <div className="mt-1 flex items-center gap-1.5 pl-5 text-[11px] text-slate-400">
                           {c.priority !== 'None' && <Badge tone="amber">{c.priority}</Badge>}
