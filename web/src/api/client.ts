@@ -66,6 +66,8 @@ export const api = {
     request<Project[]>('GET', `/api/projects${includeArchived ? '?includeArchived=true' : ''}`),
   createProject: (body: { name: string; description?: string | null }) =>
     request<Project>('POST', '/api/projects', body),
+  updateProject: (id: string, body: { name: string; description?: string | null }) =>
+    request<Project>('PATCH', `/api/projects/${id}`, body),
   archiveProject: (id: string) => request<void>('POST', `/api/projects/${id}/archive`),
   unarchiveProject: (id: string) => request<void>('POST', `/api/projects/${id}/unarchive`),
   listMembers: (projectId: string) => request<Member[]>('GET', `/api/projects/${projectId}/members`),

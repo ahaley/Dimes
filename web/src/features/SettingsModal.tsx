@@ -3,7 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '../api/client'
 import { keys, useActors, useLlmProviders, useMembers, useProjects, useSources } from '../api/hooks'
 import type { LlmProviderConfig, Member, MemberRole } from '../api/types'
-import { Badge, Button, cx, ErrorText, Field, Modal, Select, TextInput } from '../components/ui'
+import { Badge, Button, cx, ErrorText, Field, Modal, Select, TextInput, Textarea } from '../components/ui'
 import { initials } from '../lifecycle'
 
 const ROLES: MemberRole[] = ['Reporter', 'Contributor', 'Maintainer']
@@ -12,21 +12,69 @@ const ROLES: MemberRole[] = ['Reporter', 'Contributor', 'Maintainer']
 const AGENT_ROLES: MemberRole[] = ['Assistant', 'Reporter', 'Contributor', 'Maintainer']
 
 export function SettingsModal({ projectId, onClose }: { projectId: string; onClose: () => void }) {
-  const [tab, setTab] = useState<'members' | 'sources' | 'danger'>('members')
+  const [tab, setTab] = useState<'general' | 'members' | 'sources' | 'danger'>('general')
   return (
     <Modal title="Manage project" onClose={onClose} wide>
       <div className="space-y-4">
         {/* Tabs keep the sections from competing for width, so each gets the full dialog. */}
         <div className="flex gap-1 border-b border-slate-200 dark:border-slate-800">
+          <TabButton active={tab === 'general'} onClick={() => setTab('general')}>General</TabButton>
           <TabButton active={tab === 'members'} onClick={() => setTab('members')}>Members</TabButton>
           <TabButton active={tab === 'sources'} onClick={() => setTab('sources')}>Sources</TabButton>
           <TabButton active={tab === 'danger'} onClick={() => setTab('danger')}>Danger</TabButton>
         </div>
-        {tab === 'members' ? <MembersSection projectId={projectId} />
-          : tab === 'sources' ? <SourcesSection projectId={projectId} />
-            : <DangerSection projectId={projectId} />}
+        {tab === 'general' ? <GeneralSection projectId={projectId} />
+          : tab === 'members' ? <MembersSection projectId={projectId} />
+            : tab === 'sources' ? <SourcesSection projectId={projectId} />
+              : <DangerSection projectId={projectId} />}
       </div>
     </Modal>
+  )
+}
+
+/// Project identity: rename and edit the description. The backend gates this on Maintainer (or site
+/// admin); a 403 surfaces inline for anyone below that.
+function GeneralSection({ projectId }: { projectId: string }) {
+  const qc = useQueryClient()
+  const { data: projects } = useProjects(true, true)
+  const project = projects?.find((p) => p.id === projectId)
+
+  const [name, setName] = useState('')
+  const [description, setDescription] = useState('')
+  // Seed the form once the project loads, then leave it to the user.
+  const [seededId, setSeededId] = useState<string | null>(null)
+  if (project && project.id !== seededId) {
+    setName(project.name)
+    setDescription(project.description ?? '')
+    setSeededId(project.id)
+  }
+
+  const save = useMutation({
+    mutationFn: () => api.updateProject(projectId, { name: name.trim(), description: description.trim() || null }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.projects }),
+  })
+
+  const dirty = !!project && (name.trim() !== project.name || (description.trim() || '') !== (project.description ?? ''))
+
+  return (
+    <section className="space-y-3">
+      <Field label="Name">
+        <TextInput value={name} onChange={(e) => setName(e.target.value)} placeholder="Project name" />
+      </Field>
+      <Field label="Description">
+        <Textarea
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          placeholder="What this project is about…"
+        />
+      </Field>
+      <ErrorText error={save.error} />
+      <div className="flex justify-end">
+        <Button variant="primary" disabled={!name.trim() || !dirty || save.isPending} onClick={() => save.mutate()}>
+          {save.isPending ? 'Saving…' : 'Save changes'}
+        </Button>
+      </div>
+    </section>
   )
 }
 
