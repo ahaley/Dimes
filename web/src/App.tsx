@@ -105,6 +105,7 @@ export default function App() {
         onSelect={(id) => navigate(`/projects/${id}`)}
         collapsed={collapsed}
         onToggleCollapse={toggleCollapsed}
+        canCreateProject={me.isSiteAdmin}
         onNewProject={() => setShowCreateProject(true)}
         activeView={view}
         onShowProviders={() => navigate('/providers')}
@@ -154,7 +155,7 @@ export default function App() {
 
         <main className="min-h-0 flex-1 overflow-auto p-6">
           <Routes>
-            <Route path="/" element={<IndexRedirect projects={activeProjects} onNewProject={() => setShowCreateProject(true)} />} />
+            <Route path="/" element={<IndexRedirect projects={activeProjects} canCreate={me.isSiteAdmin} onNewProject={() => setShowCreateProject(true)} />} />
             <Route
               path="/projects/:projectId"
               element={<Workspace actingActorId={me.actorId} members={members ?? []} />}
@@ -197,17 +198,23 @@ export default function App() {
 }
 
 function IndexRedirect({
-  projects, onNewProject,
-}: { projects: ReturnType<typeof useProjects>['data']; onNewProject: () => void }) {
+  projects, canCreate, onNewProject,
+}: { projects: ReturnType<typeof useProjects>['data']; canCreate: boolean; onNewProject: () => void }) {
   if (projects === undefined) {
     return <p className="text-sm text-slate-400">Loading…</p>
   }
   if (projects.length === 0) {
     return (
       <Card className="p-10 text-center text-slate-500 dark:text-slate-400">
-        No projects yet —{' '}
-        <button className="text-indigo-600 hover:underline" onClick={onNewProject}>create one</button>{' '}
-        to get started.
+        {canCreate ? (
+          <>
+            No projects yet —{' '}
+            <button className="text-indigo-600 hover:underline" onClick={onNewProject}>create one</button>{' '}
+            to get started.
+          </>
+        ) : (
+          <>No projects yet — ask a site administrator to create one and add you to it.</>
+        )}
       </Card>
     )
   }
