@@ -29,11 +29,21 @@ dotnet run --project src/Dimes.Api --urls http://localhost:5080 # run the API (p
 Migrations run automatically on API startup (`db.Database.Migrate()` in `Program.cs`), so a fresh
 checkout needs no manual DB step. The SQLite file defaults to `src/Dimes.Api/data/dimes.db`.
 
-EF Core migrations (the `dotnet-ef` tool is pinned in `dotnet-tools.json`):
+EF Core migrations (the `dotnet-ef` tool is pinned in `dotnet-tools.json`). **There are two
+migration sets and a model change must be added to BOTH**, or `Database.Migrate()` aborts at startup
+on the un-updated provider with `PendingModelChangesWarning` (a context has one model snapshot per
+assembly):
 ```bash
 dotnet tool restore
+# SQLite (the tested default) — migrations live in Dimes.Infrastructure
 dotnet ef migrations add <Name> --project src/Dimes.Infrastructure --startup-project src/Dimes.Api
+# Postgres — separate set in Dimes.Infrastructure.Postgres (its own design-time factory)
+dotnet ef migrations add <Name> --project src/Dimes.Infrastructure.Postgres --startup-project src/Dimes.Infrastructure.Postgres
 ```
+EF backfills a new non-nullable column with the type default (e.g. `false` for a `bool`); if existing
+rows should keep a different value, edit `defaultValue:` in **both** generated migrations to match the
+property initializer. Verify a clean state with
+`dotnet ef migrations has-pending-model-changes` against each set.
 
 **Web (from `web/`):**
 ```bash
