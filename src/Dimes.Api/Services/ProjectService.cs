@@ -97,6 +97,26 @@ public class ProjectService(DimesDbContext db, MembershipResolver members)
         return await query.OrderBy(p => p.Name).Select(p => p.ToDto()).ToListAsync(ct);
     }
 
+    /// <summary>Edit a project's free-form details (name, description). Authority matches other project
+    /// management — a Maintainer of the project or a site admin (via <see cref="EnsureProjectAdminAsync"/>).</summary>
+    public async Task<ProjectDto> UpdateAsync(
+        Guid projectId, UpdateProjectRequest req, Guid callerActorId, bool callerIsSiteAdmin, CancellationToken ct = default)
+    {
+        var project = await db.Projects.FindAsync([projectId], ct)
+            ?? throw new NotFoundException($"Project '{projectId}' not found.");
+        await EnsureProjectAdminAsync(projectId, callerActorId, callerIsSiteAdmin, ct);
+
+        if (string.IsNullOrWhiteSpace(req.Name))
+        {
+            throw new BadRequestException("Project name is required.");
+        }
+
+        project.Name = req.Name.Trim();
+        project.Description = req.Description;
+        await db.SaveChangesAsync(ct);
+        return project.ToDto();
+    }
+
     /// <summary>Archive (or unarchive) a project: keep all its data but hide it from active lists.
     /// Soft-delete equivalent. Authority matches other project management — a Maintainer of the
     /// project or a site admin (via <see cref="EnsureProjectAdminAsync"/>).</summary>

@@ -27,6 +27,15 @@ public class ProjectsController(
     public async Task<ActionResult<IReadOnlyList<ProjectDto>>> List([FromQuery] bool includeArchived, CancellationToken ct)
         => Ok(await projects.ListAsync(currentActor.ActorId, currentActor.IsSiteAdmin, includeArchived, ct));
 
+    /// <summary>Edit a project's name and description. Authority: a project Maintainer or a site admin.</summary>
+    [HttpPatch("{projectId:guid}")]
+    public async Task<ActionResult<ProjectDto>> Update(Guid projectId, UpdateProjectRequest req, CancellationToken ct)
+    {
+        var project = await projects.UpdateAsync(projectId, req, currentActor.ActorId, currentActor.IsSiteAdmin, ct);
+        await notifier.ProjectsChangedAsync(ct); // refresh every client's sidebar list
+        return Ok(project);
+    }
+
     /// <summary>Archive a project (soft-delete). Authority: a project Maintainer or a site admin.</summary>
     [HttpPost("{projectId:guid}/archive")]
     public async Task<IActionResult> Archive(Guid projectId, CancellationToken ct)
