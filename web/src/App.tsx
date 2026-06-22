@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Navigate, Route, Routes, useLocation, useMatch, useNavigate } from 'react-router-dom'
 import { api } from './api/client'
 import { useMe, useMembers, useProjects } from './api/hooks'
+import { useProjectsLiveUpdates } from './api/realtime'
 import { Button, Card } from './components/ui'
 import { Sidebar } from './features/Sidebar'
 import { Workspace } from './features/Workspace'
@@ -59,6 +60,9 @@ export default function App() {
 
   const { data: members } = useMembers(projectId)
   const currentProject = (projects ?? []).find((p) => p.id === projectId)
+
+  // Keep the sidebar project list live (create / archive / unarchive from any client).
+  useProjectsLiveUpdates(!!me)
 
   // Auth gate: wait for the session, then either show the login screen or the app.
   if (meLoading) {
