@@ -1,12 +1,14 @@
+import { useState } from 'react'
 import type { Project } from '../api/types'
 import { cx } from '../components/ui'
 import { initials } from '../lifecycle'
 
 export function Sidebar({
-  projects, projectId, onSelect, collapsed, onToggleCollapse, onNewProject,
+  projects, archivedProjects = [], projectId, onSelect, collapsed, onToggleCollapse, onNewProject,
   activeView, onShowProviders, onShowActors, onShowSettings, showSettings, mobileOpen,
 }: {
   projects: Project[]
+  archivedProjects?: Project[]
   projectId: string | undefined
   onSelect: (id: string) => void
   collapsed: boolean
@@ -21,6 +23,7 @@ export function Sidebar({
 }) {
   // "collapsed" is a desktop-only rail concept; the mobile drawer always shows full labels.
   const compact = collapsed && !mobileOpen
+  const [showArchived, setShowArchived] = useState(false)
   return (
     <aside
       className={cx(
@@ -98,6 +101,38 @@ export function Sidebar({
           <span className="text-base leading-none">+</span>
           {!compact && <span>New project</span>}
         </button>
+
+        {/* Archived projects: hidden from the active list, reachable here to view or unarchive. */}
+        {!compact && archivedProjects.length > 0 && (
+          <div className="pt-2">
+            <button
+              onClick={() => setShowArchived((v) => !v)}
+              className="flex w-full items-center gap-1 rounded-md px-2 py-1.5 text-left text-xs font-semibold uppercase tracking-wide text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+            >
+              <span className="text-[0.65rem]">{showArchived ? '▾' : '▸'}</span>
+              <span>Archived ({archivedProjects.length})</span>
+            </button>
+            {showArchived && archivedProjects.map((p) => {
+              const active = p.id === projectId && activeView === 'board'
+              return (
+                <button
+                  key={p.id}
+                  onClick={() => onSelect(p.id)}
+                  title={p.name}
+                  className={cx(
+                    'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm',
+                    active
+                      ? 'bg-slate-100 font-medium text-slate-700 dark:bg-slate-800 dark:text-slate-200'
+                      : 'text-slate-400 hover:bg-slate-50 dark:text-slate-500 dark:hover:bg-slate-800',
+                  )}
+                >
+                  <span className={cx('h-4 w-0.5 rounded', active ? 'bg-slate-400' : 'bg-transparent')} />
+                  <span className="truncate italic">{p.name}</span>
+                </button>
+              )
+            })}
+          </div>
+        )}
 
         {/* App-level settings */}
         <div className="pt-3">

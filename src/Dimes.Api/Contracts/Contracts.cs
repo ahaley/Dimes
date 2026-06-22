@@ -8,7 +8,7 @@ namespace Dimes.Api.Contracts;
 
 // ----- Projects & members -----
 public record CreateProjectRequest(string Name, string? Description);
-public record ProjectDto(Guid Id, string Name, string? Description, DateTimeOffset CreatedAt);
+public record ProjectDto(Guid Id, string Name, string? Description, DateTimeOffset CreatedAt, bool IsArchived, DateTimeOffset? ArchivedAt);
 
 public record AddMemberRequest(string DisplayName, ActorType Type, string? Email, MemberRole Role, Guid? LlmProviderConfigId = null);
 public record UpdateMemberRequest(string DisplayName, string? Email, MemberRole Role, Guid? LlmProviderConfigId);

@@ -17,7 +17,7 @@ export type LlmProviderType = 'Anthropic' | 'OpenAICompatible'
 export type ScmProviderType = 'GitHub'
 export type AuditEntityType = 'ChangeRequest' | 'Observation'
 
-export interface Project { id: string; name: string; description?: string | null; createdAt: string }
+export interface Project { id: string; name: string; description?: string | null; createdAt: string; isArchived: boolean; archivedAt?: string | null }
 export interface Member {
   actorId: string; projectId: string; displayName: string; type: ActorType
   email?: string | null; role: MemberRole; llmProviderConfigId?: string | null

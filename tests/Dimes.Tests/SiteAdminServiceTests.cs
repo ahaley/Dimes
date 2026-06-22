@@ -176,6 +176,40 @@ public sealed class SiteAdminServiceTests : IDisposable
         Assert.Equal(2, (await _projects.ListAsync(boss.Id, isSiteAdmin: true)).Count);
     }
 
+    [Fact]
+    public async Task ArchiveProject_HidesFromDefaultList_AndUnarchiveRestores()
+    {
+        var boss = await CreateUser("Boss", "boss@x.com", admin: true);
+        var p = await _projects.CreateAsync(new CreateProjectRequest("P", null));
+
+        await _projects.ArchiveProjectAsync(p.Id, archived: true, boss.Id, callerIsSiteAdmin: true);
+        Assert.True((await _db.Projects.FindAsync(p.Id))!.IsArchived);
+        Assert.Empty(await _projects.ListAsync(boss.Id, isSiteAdmin: true)); // hidden by default
+        Assert.Single(await _projects.ListAsync(boss.Id, isSiteAdmin: true, includeArchived: true)); // opt-in shows it
+
+        await _projects.ArchiveProjectAsync(p.Id, archived: false, boss.Id, callerIsSiteAdmin: true);
+        Assert.False((await _db.Projects.FindAsync(p.Id))!.IsArchived);
+        Assert.Single(await _projects.ListAsync(boss.Id, isSiteAdmin: true));
+    }
+
+    [Fact]
+    public async Task ArchiveProject_RequiresMaintainerOrSiteAdmin()
+    {
+        var p = await _projects.CreateAsync(new CreateProjectRequest("P", null));
+        var contributor = await CreateUser("Con", "con@x.com");
+        var maintainer = await CreateUser("Main", "main@x.com");
+        await _projects.AssignMemberAsync(p.Id, contributor.Id, MemberRole.Contributor);
+        await _projects.AssignMemberAsync(p.Id, maintainer.Id, MemberRole.Maintainer);
+
+        // A Contributor (below Maintainer) cannot archive the project.
+        await Assert.ThrowsAsync<ForbiddenException>(() =>
+            _projects.ArchiveProjectAsync(p.Id, archived: true, contributor.Id, callerIsSiteAdmin: false));
+
+        // A project Maintainer can.
+        await _projects.ArchiveProjectAsync(p.Id, archived: true, maintainer.Id, callerIsSiteAdmin: false);
+        Assert.True((await _db.Projects.FindAsync(p.Id))!.IsArchived);
+    }
+
     public void Dispose()
     {
         _db.Dispose();

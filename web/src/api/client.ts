@@ -62,9 +62,12 @@ async function download(path: string, fallbackName: string): Promise<void> {
 
 export const api = {
   // Projects & members
-  listProjects: () => request<Project[]>('GET', '/api/projects'),
+  listProjects: (includeArchived = false) =>
+    request<Project[]>('GET', `/api/projects${includeArchived ? '?includeArchived=true' : ''}`),
   createProject: (body: { name: string; description?: string | null }) =>
     request<Project>('POST', '/api/projects', body),
+  archiveProject: (id: string) => request<void>('POST', `/api/projects/${id}/archive`),
+  unarchiveProject: (id: string) => request<void>('POST', `/api/projects/${id}/unarchive`),
   listMembers: (projectId: string) => request<Member[]>('GET', `/api/projects/${projectId}/members`),
   addMember: (
     projectId: string,

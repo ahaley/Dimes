@@ -80,15 +80,36 @@ public class ProjectService(DimesDbContext db, MembershipResolver members)
     }
 
     /// <summary>Projects visible to an actor: site admins see all; everyone else sees only the
-    /// projects they're a member of.</summary>
-    public async Task<IReadOnlyList<ProjectDto>> ListAsync(Guid actorId, bool isSiteAdmin, CancellationToken ct = default)
+    /// projects they're a member of. Archived projects are excluded unless <paramref name="includeArchived"/>
+    /// is set (the sidebar opts in so it can surface them in a separate "Archived" group).</summary>
+    public async Task<IReadOnlyList<ProjectDto>> ListAsync(
+        Guid actorId, bool isSiteAdmin, bool includeArchived = false, CancellationToken ct = default)
     {
         var query = db.Projects.AsQueryable();
         if (!isSiteAdmin)
         {
             query = query.Where(p => p.Memberships.Any(m => m.ActorId == actorId));
         }
+        if (!includeArchived)
+        {
+            query = query.Where(p => !p.IsArchived);
+        }
         return await query.OrderBy(p => p.Name).Select(p => p.ToDto()).ToListAsync(ct);
+    }
+
+    /// <summary>Archive (or unarchive) a project: keep all its data but hide it from active lists.
+    /// Soft-delete equivalent. Authority matches other project management — a Maintainer of the
+    /// project or a site admin (via <see cref="EnsureProjectAdminAsync"/>).</summary>
+    public async Task ArchiveProjectAsync(
+        Guid projectId, bool archived, Guid callerActorId, bool callerIsSiteAdmin, CancellationToken ct = default)
+    {
+        var project = await db.Projects.FindAsync([projectId], ct)
+            ?? throw new NotFoundException($"Project '{projectId}' not found.");
+        await EnsureProjectAdminAsync(projectId, callerActorId, callerIsSiteAdmin, ct);
+
+        project.IsArchived = archived;
+        project.ArchivedAt = archived ? DateTimeOffset.UtcNow : null;
+        await db.SaveChangesAsync(ct);
     }
 
     /// <summary>Create an actor and bind them to the project with a role (pass-1 stand-in for an

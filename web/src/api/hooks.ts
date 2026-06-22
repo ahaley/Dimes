@@ -43,8 +43,13 @@ export function useUserMemberships(userId: string | undefined) {
   })
 }
 
-export function useProjects(enabled = true) {
-  return useQuery({ queryKey: keys.projects, queryFn: api.listProjects, enabled })
+export function useProjects(enabled = true, includeArchived = false) {
+  return useQuery({
+    // Archived projects share the same cache prefix, so invalidating keys.projects refreshes both.
+    queryKey: [...keys.projects, includeArchived],
+    queryFn: () => api.listProjects(includeArchived),
+    enabled,
+  })
 }
 
 export function useMembers(projectId: string | undefined) {

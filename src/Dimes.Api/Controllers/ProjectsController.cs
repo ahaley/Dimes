@@ -17,8 +17,23 @@ public class ProjectsController(ProjectService projects, ObservationService obse
     }
 
     [HttpGet]
-    public async Task<ActionResult<IReadOnlyList<ProjectDto>>> List(CancellationToken ct)
-        => Ok(await projects.ListAsync(currentActor.ActorId, currentActor.IsSiteAdmin, ct));
+    public async Task<ActionResult<IReadOnlyList<ProjectDto>>> List([FromQuery] bool includeArchived, CancellationToken ct)
+        => Ok(await projects.ListAsync(currentActor.ActorId, currentActor.IsSiteAdmin, includeArchived, ct));
+
+    /// <summary>Archive a project (soft-delete). Authority: a project Maintainer or a site admin.</summary>
+    [HttpPost("{projectId:guid}/archive")]
+    public async Task<IActionResult> Archive(Guid projectId, CancellationToken ct)
+    {
+        await projects.ArchiveProjectAsync(projectId, archived: true, currentActor.ActorId, currentActor.IsSiteAdmin, ct);
+        return NoContent();
+    }
+
+    [HttpPost("{projectId:guid}/unarchive")]
+    public async Task<IActionResult> Unarchive(Guid projectId, CancellationToken ct)
+    {
+        await projects.ArchiveProjectAsync(projectId, archived: false, currentActor.ActorId, currentActor.IsSiteAdmin, ct);
+        return NoContent();
+    }
 
     [HttpGet("{projectId:guid}/members")]
     public async Task<ActionResult<IReadOnlyList<MemberDto>>> ListMembers(Guid projectId, CancellationToken ct)
