@@ -122,8 +122,13 @@ public class AssistConversationService(
             }
             else
             {
-                conversation.Observation = await BuildBubbleUpAsync(
+                // The prior bubble-up was answered/dismissed, so raise a fresh one. Unlike StartAsync —
+                // where adding the conversation graph cascades the insert — this conversation is already
+                // tracked, so the new observation must be added explicitly or its FK update dangles.
+                var bubble = await BuildBubbleUpAsync(
                     projectId, conversation.Id, conversation.AssistantActorId, conversation.Requester.DisplayName, req.Body, ct);
+                db.Observations.Add(bubble);
+                conversation.Observation = bubble;
             }
         }
 

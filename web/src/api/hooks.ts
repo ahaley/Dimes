@@ -18,6 +18,7 @@ export const keys = {
   audit: (id: string) => ['audit', id] as const,
   assistConversation: (id: string) => ['assist', id] as const,
   pendingAssist: (projectId: string) => ['assist-pending', projectId] as const,
+  myAssistConversations: (projectId: string) => ['assist-mine', projectId] as const,
 }
 
 /** The auth mode (Local | Oidc) so the login screen renders the right control. Public endpoint. */
@@ -109,6 +110,15 @@ export function usePendingAssistRequests(projectId: string | undefined) {
   return useQuery({
     queryKey: keys.pendingAssist(projectId ?? ''),
     queryFn: () => api.listAssistConversations(projectId!, 'assistant', 'AwaitingAssistant'),
+    enabled: !!projectId,
+  })
+}
+
+/** Capture Assist conversations the current user started (as requester), for the resume surface. */
+export function useMyAssistConversations(projectId: string | undefined) {
+  return useQuery({
+    queryKey: keys.myAssistConversations(projectId ?? ''),
+    queryFn: () => api.listAssistConversations(projectId!, 'requester'),
     enabled: !!projectId,
   })
 }

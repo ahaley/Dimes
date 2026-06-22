@@ -1,9 +1,16 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useParams } from 'react-router-dom'
 import { api } from '../api/client'
-import { keys, useAssistConversation, useMe, useMembers, useProjectInvalidator } from '../api/hooks'
-import type { ChangeKind, ChatTurn, Member, Priority } from '../api/types'
+import {
+  keys,
+  useAssistConversation,
+  useMe,
+  useMembers,
+  useMyAssistConversations,
+  useProjectInvalidator,
+} from '../api/hooks'
+import type { AssistConversationStatus, ChangeKind, ChatTurn, Member, Priority } from '../api/types'
 import { Badge, Button, ErrorText, Field, Select, TextInput, Textarea } from '../components/ui'
 import { useToast } from '../components/Toast'
 import { ChatBubbles, ChatComposer, type ChatBubble } from './AssistChat'
@@ -14,6 +21,18 @@ function isEligibleAssistant(m: Member): boolean {
   return m.type === 'Agent' || m.role === 'Contributor' || m.role === 'Maintainer'
 }
 
+// Resume-list status copy, from the requester's vantage point.
+const RESUME_LABEL: Record<AssistConversationStatus, string> = {
+  AwaitingAssistant: 'Awaiting reply',
+  AwaitingRequester: 'Your turn',
+  Closed: 'Closed',
+}
+const RESUME_TONE: Record<AssistConversationStatus, string> = {
+  AwaitingAssistant: 'amber',
+  AwaitingRequester: 'indigo',
+  Closed: 'slate',
+}
+
 /**
  * Capture Assist Mode — a full-page (zen) space to grow a loose idea into a change request with the
  * help of an assistant. The assistant can be an AI Agent (ephemeral chat, replayed to the stateless
@@ -22,7 +41,7 @@ function isEligibleAssistant(m: Member): boolean {
  * description and create the change, which lands in the Captured state via the normal endpoint.
  */
 export function CaptureAssistView() {
-  const { projectId = '' } = useParams()
+  const { projectId = '', conversationId: routeConversationId } = useParams()
   const navigate = useNavigate()
   const toast = useToast()
   const invalidate = useProjectInvalidator(projectId)
@@ -57,8 +76,33 @@ export function CaptureAssistView() {
   // The conversation. AI: ephemeral turns held here. Human: a persisted conversation by id.
   const [messages, setMessages] = useState<ChatTurn[]>([])
   const [input, setInput] = useState('')
-  const [conversationId, setConversationId] = useState<string | null>(null)
+  // Seed from the route (resume) so a reload/bookmark of /capture/:id reopens that conversation.
+  const [conversationId, setConversationId] = useState<string | null>(routeConversationId ?? null)
   const { data: conversation } = useAssistConversation(projectId, conversationId ?? undefined)
+
+  // Conversations this user started, surfaced as a "pick up where you left off" list when idle.
+  const { data: myConversations } = useMyAssistConversations(projectId)
+  const resumable = useMemo(
+    () => (myConversations ?? []).filter((c) => c.status !== 'Closed' && c.id !== conversationId),
+    [myConversations, conversationId],
+  )
+
+  // Follow the route param: a resume link (or browser back/forward) swaps the active conversation
+  // without remounting, so keep local state in lockstep.
+  useEffect(() => {
+    setConversationId(routeConversationId ?? null)
+  }, [routeConversationId])
+
+  // Resume hydration: when a persisted conversation loads, lock the picker to its assistant and seed
+  // the title/draft once, without clobbering anything the user has since typed.
+  const [hydratedId, setHydratedId] = useState<string | null>(null)
+  useEffect(() => {
+    if (!conversation || conversation.id === hydratedId) return
+    setAssistantId(conversation.assistantActorId)
+    setTitle((t) => t || conversation.title || '')
+    setRough((r) => r || conversation.draft || '')
+    setHydratedId(conversation.id)
+  }, [conversation, hydratedId])
 
   const composeDraft = () =>
     [
@@ -93,7 +137,14 @@ export function CaptureAssistView() {
         title: title || null,
         message,
       }),
-    onSuccess: (c) => { setConversationId(c.id); qc.setQueryData(keys.assistConversation(c.id), c) },
+    onSuccess: (c) => {
+      setConversationId(c.id)
+      qc.setQueryData(keys.assistConversation(c.id), c)
+      // Make the now-persisted conversation reload-safe and shareable, and mark it hydrated so the
+      // resume effect doesn't overwrite the draft the user is actively shaping.
+      setHydratedId(c.id)
+      navigate(`/projects/${projectId}/capture/${c.id}`, { replace: true })
+    },
     onError: (e) => { setInput((i) => i || lastSent); toast.error(e instanceof Error ? e.message : 'Could not send to the assistant') },
   })
   const postHuman = useMutation({
@@ -168,6 +219,31 @@ export function CaptureAssistView() {
         </div>
         <Button variant="subtle" onClick={() => navigate(`/projects/${projectId}`)}>Exit</Button>
       </div>
+
+      {!conversationId && resumable.length > 0 && (
+        <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-900/60">
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-400">Pick up where you left off</h2>
+          <ul className="mt-2 space-y-1.5">
+            {resumable.map((c) => (
+              <li key={c.id}>
+                <button
+                  onClick={() => navigate(`/projects/${projectId}/capture/${c.id}`)}
+                  className="flex w-full items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-left text-sm hover:border-indigo-300 hover:bg-indigo-50/40 dark:border-slate-700 dark:bg-slate-900 dark:hover:border-indigo-800 dark:hover:bg-indigo-950/20"
+                >
+                  <span className="min-w-0 flex-1 truncate">
+                    <span className="font-medium text-slate-700 dark:text-slate-200">{c.title || 'Untitled idea'}</span>
+                    <span className="text-slate-400"> · with {c.assistantName}</span>
+                    {c.lastMessagePreview && (
+                      <span className="ml-2 text-xs text-slate-400">— {c.lastMessagePreview}</span>
+                    )}
+                  </span>
+                  <Badge tone={RESUME_TONE[c.status]}>{RESUME_LABEL[c.status]}</Badge>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-2">
         {/* Draft form */}

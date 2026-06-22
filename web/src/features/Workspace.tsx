@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { useNavigate, useParams } from 'react-router-dom'
 import type { Member } from '../api/types'
-import { useChanges, useInbox } from '../api/hooks'
+import { useChanges, useInbox, useMyAssistConversations } from '../api/hooks'
 import { useBoardLiveUpdates } from '../api/realtime'
 import { api } from '../api/client'
 import { Badge, Button } from '../components/ui'
@@ -33,6 +33,10 @@ export function Workspace({
   const { data: changes } = useChanges(projectId)
   const inDevCount = (changes ?? []).filter((c) => c.status === 'InDevelopment').length
 
+  // Capture Assist conversations I started where the teammate has replied and it's my turn to read/respond.
+  const { data: myConversations } = useMyAssistConversations(projectId)
+  const myTurnCount = (myConversations ?? []).filter((c) => c.status === 'AwaitingRequester').length
+
   const exportInDev = useMutation({
     mutationFn: () => api.exportInDevelopment(projectId),
     onSuccess: () => toast.success(`Exported ${inDevCount} in-development change${inDevCount === 1 ? '' : 's'}`),
@@ -55,8 +59,12 @@ export function Workspace({
           >
             Export
           </Button>
-          <Button variant="default" onClick={() => navigate(`/projects/${projectId}/capture`)}>
-            Capture Assist
+          <Button
+            variant="default"
+            onClick={() => navigate(`/projects/${projectId}/capture`)}
+            title={myTurnCount > 0 ? `${myTurnCount} conversation${myTurnCount === 1 ? '' : 's'} awaiting your reply` : undefined}
+          >
+            Capture Assist{myTurnCount > 0 && <span className="ml-1.5"><Badge tone="indigo">{myTurnCount}</Badge></span>}
           </Button>
           <Button variant="primary" onClick={() => setCreating(true)}>+ New change</Button>
         </div>

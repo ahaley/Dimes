@@ -155,6 +155,7 @@ export default function App() {
               element={<Workspace actingActorId={me.actorId} members={members ?? []} />}
             />
             <Route path="/projects/:projectId/capture" element={<CaptureAssistView />} />
+            <Route path="/projects/:projectId/capture/:conversationId" element={<CaptureAssistView />} />
             <Route path="/projects/:projectId/assist/:conversationId" element={<AssistConversationView />} />
             <Route
               path="/projects/:projectId/focus/:status"
