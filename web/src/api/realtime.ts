@@ -45,3 +45,30 @@ export function useBoardLiveUpdates(projectId: string | undefined) {
     }
   }, [projectId, qc])
 }
+
+/** Subscribe to project-list changes (create / archive / unarchive) for the always-visible sidebar.
+ * The server broadcasts to all clients, so no project group is joined — each client just refetches
+ * its own membership-filtered list. Kept separate from the per-project board connection so the
+ * sidebar stays live regardless of which view is open. */
+export function useProjectsLiveUpdates(enabled: boolean) {
+  const qc = useQueryClient()
+
+  useEffect(() => {
+    if (!enabled) return
+
+    const connection = new HubConnectionBuilder()
+      .withUrl('/hubs/board')
+      .withAutomaticReconnect()
+      .configureLogging(LogLevel.Warning)
+      .build()
+
+    const refresh = () => qc.invalidateQueries({ queryKey: ['projects'] })
+    connection.on('projectsChanged', refresh)
+    connection.start().catch(() => { /* offline — list still refetches on focus/navigation */ })
+
+    return () => {
+      connection.off('projectsChanged', refresh)
+      void connection.stop()
+    }
+  }, [enabled, qc])
+}

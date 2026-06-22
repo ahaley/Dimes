@@ -1,5 +1,6 @@
 using Dimes.Api.Auth;
 using Dimes.Api.Contracts;
+using Dimes.Api.Realtime;
 using Dimes.Api.Services;
 using Microsoft.AspNetCore.Mvc;
 
@@ -7,12 +8,14 @@ namespace Dimes.Api.Controllers;
 
 [ApiController]
 [Route("api/projects")]
-public class ProjectsController(ProjectService projects, ObservationService observations, ICurrentActor currentActor) : ControllerBase
+public class ProjectsController(
+    ProjectService projects, ObservationService observations, ICurrentActor currentActor, IBoardNotifier notifier) : ControllerBase
 {
     [HttpPost]
     public async Task<ActionResult<ProjectDto>> Create(CreateProjectRequest req, CancellationToken ct)
     {
         var project = await projects.CreateAsync(req, ct);
+        await notifier.ProjectsChangedAsync(ct); // refresh every client's sidebar list
         return CreatedAtAction(nameof(List), new { }, project);
     }
 
@@ -25,6 +28,7 @@ public class ProjectsController(ProjectService projects, ObservationService obse
     public async Task<IActionResult> Archive(Guid projectId, CancellationToken ct)
     {
         await projects.ArchiveProjectAsync(projectId, archived: true, currentActor.ActorId, currentActor.IsSiteAdmin, ct);
+        await notifier.ProjectsChangedAsync(ct);
         return NoContent();
     }
 
@@ -32,6 +36,7 @@ public class ProjectsController(ProjectService projects, ObservationService obse
     public async Task<IActionResult> Unarchive(Guid projectId, CancellationToken ct)
     {
         await projects.ArchiveProjectAsync(projectId, archived: false, currentActor.ActorId, currentActor.IsSiteAdmin, ct);
+        await notifier.ProjectsChangedAsync(ct);
         return NoContent();
     }
 
