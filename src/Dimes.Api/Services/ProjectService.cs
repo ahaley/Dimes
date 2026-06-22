@@ -113,6 +113,7 @@ public class ProjectService(DimesDbContext db, MembershipResolver members)
 
         project.Name = req.Name.Trim();
         project.Description = req.Description;
+        project.SourceControlEnabled = req.SourceControlEnabled;
         await db.SaveChangesAsync(ct);
         return project.ToDto();
     }

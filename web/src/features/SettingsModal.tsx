@@ -41,20 +41,27 @@ function GeneralSection({ projectId }: { projectId: string }) {
 
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
+  const [sourceControlEnabled, setSourceControlEnabled] = useState(true)
   // Seed the form once the project loads, then leave it to the user.
   const [seededId, setSeededId] = useState<string | null>(null)
   if (project && project.id !== seededId) {
     setName(project.name)
     setDescription(project.description ?? '')
+    setSourceControlEnabled(project.sourceControlEnabled)
     setSeededId(project.id)
   }
 
   const save = useMutation({
-    mutationFn: () => api.updateProject(projectId, { name: name.trim(), description: description.trim() || null }),
+    mutationFn: () =>
+      api.updateProject(projectId, { name: name.trim(), description: description.trim() || null, sourceControlEnabled }),
     onSuccess: () => qc.invalidateQueries({ queryKey: keys.projects }),
   })
 
-  const dirty = !!project && (name.trim() !== project.name || (description.trim() || '') !== (project.description ?? ''))
+  const dirty = !!project && (
+    name.trim() !== project.name
+    || (description.trim() || '') !== (project.description ?? '')
+    || sourceControlEnabled !== project.sourceControlEnabled
+  )
 
   return (
     <section className="space-y-3">
@@ -68,6 +75,23 @@ function GeneralSection({ projectId }: { projectId: string }) {
           placeholder="What this project is about…"
         />
       </Field>
+      <div className="rounded-md border border-slate-200 p-3 dark:border-slate-700">
+        <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-400">Source control</h4>
+        <label className="mt-2 flex items-start gap-2 text-sm text-slate-700 dark:text-slate-200">
+          <input
+            type="checkbox"
+            className="mt-0.5"
+            checked={sourceControlEnabled}
+            onChange={(e) => setSourceControlEnabled(e.target.checked)}
+          />
+          <span>
+            Enable source control
+            <span className="block text-xs text-slate-400">
+              When off, change requests hide their Source control section.
+            </span>
+          </span>
+        </label>
+      </div>
       <ErrorText error={save.error} />
       <div className="flex justify-end">
         <Button variant="primary" disabled={!name.trim() || !dirty || save.isPending} onClick={() => save.mutate()}>

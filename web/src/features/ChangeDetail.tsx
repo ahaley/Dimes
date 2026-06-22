@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { api } from '../api/client'
-import { useAudit, useChangeDetail, useProjectInvalidator, useTransition } from '../api/hooks'
+import { useAudit, useChangeDetail, useProjectInvalidator, useProjects, useTransition } from '../api/hooks'
 import type { ChangeStatus, Member, Priority } from '../api/types'
 import { ALLOWED_TRANSITIONS, STATUS_TONE } from '../lifecycle'
 import { Badge, Button, ErrorText, Field, Modal, Select, TextInput, Textarea } from '../components/ui'
@@ -28,6 +28,9 @@ export function ChangeDetailBody({
 }: { changeId: string; projectId: string; actingActorId: string; members: Member[] }) {
   const { data: detail, isLoading } = useChangeDetail(changeId)
   const { data: audit } = useAudit(changeId)
+  const { data: projects } = useProjects(true, true)
+  // Source control is a per-project toggle; default to shown if the project hasn't loaded yet.
+  const scmEnabled = projects?.find((p) => p.id === projectId)?.sourceControlEnabled ?? true
   const invalidate = useProjectInvalidator(projectId)
   const transition = useTransition(projectId)
 
@@ -186,7 +189,8 @@ export function ChangeDetailBody({
             </div>
           </Section>
 
-          {/* SCM links */}
+          {/* SCM links — hidden when the project has source control disabled */}
+          {scmEnabled && (
           <Section title="Source control">
             <ul className="space-y-1">
               {detail.scmLinks.map((l) => (
@@ -203,6 +207,7 @@ export function ChangeDetailBody({
             </div>
             <ErrorText error={addScm.error} />
           </Section>
+          )}
 
           {/* Audit trail */}
           <Section title="Audit trail">
