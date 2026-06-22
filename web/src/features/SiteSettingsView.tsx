@@ -10,10 +10,11 @@ import { initials } from '../lifecycle'
 type SortKey = 'name' | 'status'
 type SortState = { key: SortKey; dir: 'asc' | 'desc' }
 
-// Status grouping for sorting: site admins, then active, then pre-provisioned (no password), then archived.
-function statusRank(u: SiteUser): number {
+// Status grouping for sorting: site admins, then active, then (local only) pre-provisioned
+// (no password), then archived. "No password" is meaningless in OIDC, so it doesn't group there.
+function statusRank(u: SiteUser, isLocal: boolean): number {
   if (u.isArchived) return 3
-  if (!u.hasLocalCredential) return 2
+  if (isLocal && !u.hasLocalCredential) return 2
   if (u.isSiteAdmin) return 0
   return 1
 }
@@ -22,7 +23,9 @@ function statusRank(u: SiteUser): number {
 export function SiteSettingsView() {
   const { data: config } = useAuthConfig()
   const isLocal = config?.mode === 'Local'
-  const { data: users } = useSiteUsers(isLocal)
+  // Load users in both modes. Local adds password management; in OIDC users are JIT-provisioned, but
+  // a site admin still manages roles, archival, project access, and pre-provisioning here.
+  const { data: users } = useSiteUsers(true)
   // The projects modal is lifted out of the row so it isn't rendered inside the users <table>.
   const [managingUser, setManagingUser] = useState<SiteUser | null>(null)
 
@@ -42,10 +45,10 @@ export function SiteSettingsView() {
       const cmp =
         sort.key === 'name'
           ? a.displayName.localeCompare(b.displayName)
-          : statusRank(a) - statusRank(b) || a.displayName.localeCompare(b.displayName)
+          : statusRank(a, isLocal) - statusRank(b, isLocal) || a.displayName.localeCompare(b.displayName)
       return cmp * sign
     })
-  }, [users, query, sort])
+  }, [users, query, sort, isLocal])
 
   const toggleSort = (key: SortKey) =>
     setSort((s) => (s.key === key ? { key, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'asc' }))
@@ -69,56 +72,52 @@ export function SiteSettingsView() {
         <p className="text-xs text-slate-500">
           {isLocal
             ? 'Local email + password sessions. Manage users below.'
-            : 'OpenID Connect (Keycloak). Users are provisioned on first sign-in; grant project access via a project’s Manage screen.'}
+            : 'OpenID Connect (Keycloak). Users are provisioned on first sign-in; manage their roles, access, and pre-provisioning below.'}
           {' '}Changing the mode is a deployment-config change and requires an API restart.
         </p>
       </Card>
 
-      {isLocal && (
-        <>
-          <div className="flex items-center gap-2">
-            <TextInput
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Filter by name or email…"
-              className="max-w-xs"
-            />
-            {query && (
-              <span className="text-xs text-slate-400">
-                {visibleUsers.length} of {users?.length ?? 0}
-              </span>
+      <div className="flex items-center gap-2">
+        <TextInput
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Filter by name or email…"
+          className="max-w-xs"
+        />
+        {query && (
+          <span className="text-xs text-slate-400">
+            {visibleUsers.length} of {users?.length ?? 0}
+          </span>
+        )}
+      </div>
+      <Card className="max-h-[60vh] overflow-auto">
+        <table className="min-w-full text-sm">
+          <thead>
+            <tr className="border-b border-slate-200 text-left text-xs font-semibold uppercase tracking-wide text-slate-400 dark:border-slate-800">
+              <th className="sticky top-0 z-10 bg-white px-3 py-2 font-semibold dark:bg-slate-900">
+                <button type="button" className="font-semibold uppercase tracking-wide hover:text-slate-600 dark:hover:text-slate-200" onClick={() => toggleSort('name')}>
+                  User{sortArrow('name')}
+                </button>
+              </th>
+              <th className="sticky top-0 z-10 bg-white px-3 py-2 font-semibold dark:bg-slate-900">
+                <button type="button" className="font-semibold uppercase tracking-wide hover:text-slate-600 dark:hover:text-slate-200" onClick={() => toggleSort('status')}>
+                  Status{sortArrow('status')}
+                </button>
+              </th>
+              <th className="sticky top-0 z-10 bg-white px-3 py-2 text-right font-semibold dark:bg-slate-900">Actions</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+            {visibleUsers.map((u) => (
+              <UserRow key={u.id} user={u} isLocal={isLocal} onManageProjects={() => setManagingUser(u)} />
+            ))}
+            {visibleUsers.length === 0 && (
+              <tr><td colSpan={3} className="px-3 py-4 text-sm text-slate-400">{users?.length ? 'No users match.' : 'No users yet.'}</td></tr>
             )}
-          </div>
-          <Card className="max-h-[60vh] overflow-auto">
-            <table className="min-w-full text-sm">
-              <thead>
-                <tr className="border-b border-slate-200 text-left text-xs font-semibold uppercase tracking-wide text-slate-400 dark:border-slate-800">
-                  <th className="sticky top-0 z-10 bg-white px-3 py-2 font-semibold dark:bg-slate-900">
-                    <button type="button" className="font-semibold uppercase tracking-wide hover:text-slate-600 dark:hover:text-slate-200" onClick={() => toggleSort('name')}>
-                      User{sortArrow('name')}
-                    </button>
-                  </th>
-                  <th className="sticky top-0 z-10 bg-white px-3 py-2 font-semibold dark:bg-slate-900">
-                    <button type="button" className="font-semibold uppercase tracking-wide hover:text-slate-600 dark:hover:text-slate-200" onClick={() => toggleSort('status')}>
-                      Status{sortArrow('status')}
-                    </button>
-                  </th>
-                  <th className="sticky top-0 z-10 bg-white px-3 py-2 text-right font-semibold dark:bg-slate-900">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                {visibleUsers.map((u) => (
-                  <UserRow key={u.id} user={u} onManageProjects={() => setManagingUser(u)} />
-                ))}
-                {visibleUsers.length === 0 && (
-                  <tr><td colSpan={3} className="px-3 py-4 text-sm text-slate-400">{users?.length ? 'No users match.' : 'No users yet.'}</td></tr>
-                )}
-              </tbody>
-            </table>
-          </Card>
-          <CreateUserForm />
-        </>
-      )}
+          </tbody>
+        </table>
+      </Card>
+      <CreateUserForm isLocal={isLocal} />
 
       {managingUser && (
         <ManageProjectsModal user={managingUser} onClose={() => setManagingUser(null)} />
@@ -127,7 +126,7 @@ export function SiteSettingsView() {
   )
 }
 
-function UserRow({ user, onManageProjects }: { user: SiteUser; onManageProjects: () => void }) {
+function UserRow({ user, isLocal, onManageProjects }: { user: SiteUser; isLocal: boolean; onManageProjects: () => void }) {
   const qc = useQueryClient()
   const toast = useToast()
   const invalidate = () => qc.invalidateQueries({ queryKey: keys.users })
@@ -209,8 +208,8 @@ function UserRow({ user, onManageProjects }: { user: SiteUser; onManageProjects:
         <div className="flex flex-wrap items-center gap-1">
           {user.isSiteAdmin && <Badge tone="violet">site admin</Badge>}
           {user.isArchived && <Badge tone="amber">archived</Badge>}
-          {!user.hasLocalCredential && <Badge tone="slate">no password</Badge>}
-          {!user.isSiteAdmin && !user.isArchived && user.hasLocalCredential && (
+          {isLocal && !user.hasLocalCredential && <Badge tone="slate">no password</Badge>}
+          {!user.isSiteAdmin && !user.isArchived && (!isLocal || user.hasLocalCredential) && (
             <span className="text-xs text-slate-400">active</span>
           )}
         </div>
@@ -221,16 +220,18 @@ function UserRow({ user, onManageProjects }: { user: SiteUser; onManageProjects:
         <div className="flex flex-wrap justify-end gap-1">
           <Button variant="subtle" onClick={() => setEditing(true)}>Edit</Button>
           <Button variant="subtle" onClick={onManageProjects}>Projects</Button>
-          <Button
-            variant="subtle"
-            disabled={resetPassword.isPending}
-            onClick={() => {
-              const pw = window.prompt(`New password for ${user.displayName}:`)
-              if (pw) resetPassword.mutate(pw)
-            }}
-          >
-            Reset password
-          </Button>
+          {isLocal && (
+            <Button
+              variant="subtle"
+              disabled={resetPassword.isPending}
+              onClick={() => {
+                const pw = window.prompt(`New password for ${user.displayName}:`)
+                if (pw) resetPassword.mutate(pw)
+              }}
+            >
+              Reset password
+            </Button>
+          )}
           <Button variant="subtle" disabled={toggleAdmin.isPending} onClick={() => toggleAdmin.mutate()}>
             {user.isSiteAdmin ? 'Revoke admin' : 'Make admin'}
           </Button>
@@ -256,7 +257,7 @@ function UserRow({ user, onManageProjects }: { user: SiteUser; onManageProjects:
   )
 }
 
-function CreateUserForm() {
+function CreateUserForm({ isLocal }: { isLocal: boolean }) {
   const qc = useQueryClient()
   const toast = useToast()
   const [displayName, setDisplayName] = useState('')
@@ -280,8 +281,14 @@ function CreateUserForm() {
         <Field label="Display name"><TextInput value={displayName} onChange={(e) => setDisplayName(e.target.value)} /></Field>
         <Field label="Email"><TextInput type="email" value={email} onChange={(e) => setEmail(e.target.value)} /></Field>
       </div>
-      <Field label="Password (optional)"><TextInput type="password" value={password} onChange={(e) => setPassword(e.target.value)} /></Field>
-      <p className="text-xs text-slate-400">Leave blank to pre-provision — they can sign in once a password is set (Reset password) or via your identity provider.</p>
+      {isLocal && (
+        <Field label="Password (optional)"><TextInput type="password" value={password} onChange={(e) => setPassword(e.target.value)} /></Field>
+      )}
+      <p className="text-xs text-slate-400">
+        {isLocal
+          ? 'Leave blank to pre-provision — they can sign in once a password is set (Reset password) or via your identity provider.'
+          : 'Pre-provisions the user by email so you can grant project access before their first sign-in. They sign in via your identity provider.'}
+      </p>
       <label className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300">
         <input type="checkbox" checked={isSiteAdmin} onChange={(e) => setIsSiteAdmin(e.target.checked)} />
         Site administrator
