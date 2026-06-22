@@ -1,5 +1,5 @@
 import type {
-  ActorDetail, ActorSummary, AssistConversation, AssistConversationStatus, AssistConversationSummary, AuthConfig, AuditEvent, ChangeKind, ChangeRequest, ChangeRequestDetail, ChangeStatus, ChatTurn, CaptureAssistReply, Comment,
+  ActorDetail, ActorSummary, AssistConversation, AssistConversationStatus, AssistConversationSummary, AuthConfig, AuditEvent, CaptureProposal, ChangeKind, ChangeRequest, ChangeRequestDetail, ChangeStatus, ChatTurn, CaptureAssistReply, Comment, GenerateProposalsReply,
   LlmProviderConfig, Me, Member, Observation, ObservationSource, ObservationStatus, Priority, Project, ScmLink, SiteUser, UserMembership,
 } from './types'
 
@@ -122,6 +122,8 @@ export const api = {
     projectId: string,
     body: { title: string; description?: string | null; kind: ChangeKind; priority?: Priority },
   ) => request<ChangeRequest>('POST', `/api/projects/${projectId}/changes`, body),
+  createChangesBatch: (projectId: string, body: { changes: CaptureProposal[] }) =>
+    request<ChangeRequest[]>('POST', `/api/projects/${projectId}/changes/batch`, body),
   listChanges: (projectId: string, status?: ChangeStatus) =>
     request<ChangeRequest[]>('GET', `/api/projects/${projectId}/changes${status ? `?status=${status}` : ''}`),
   getChange: (id: string) => request<ChangeRequestDetail>('GET', `/api/changes/${id}`),
@@ -141,6 +143,8 @@ export const api = {
     projectId: string,
     body: { agentActorId: string; draft?: string | null; messages: ChatTurn[] },
   ) => request<CaptureAssistReply>('POST', `/api/projects/${projectId}/capture-assist/chat`, body),
+  generateProposals: (projectId: string, body: { agentActorId: string; markdown: string }) =>
+    request<GenerateProposalsReply>('POST', `/api/projects/${projectId}/capture-assist/proposals`, body),
 
   // Capture Assist with a human assistant (persisted, two-way)
   startAssistConversation: (

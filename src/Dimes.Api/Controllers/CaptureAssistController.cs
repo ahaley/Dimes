@@ -22,4 +22,14 @@ public class CaptureAssistController(
         await projects.EnsureProjectReadAsync(projectId, currentActor.ActorId, currentActor.IsSiteAdmin, ct);
         return Ok(await assist.ChatAsync(projectId, req, ct));
     }
+
+    /// <summary>Freestyle Mode: turn a freeform markdown brief into a list of editable change-order
+    /// proposals. Recommend-only — nothing is created until the user confirms a batch create.</summary>
+    [HttpPost("api/projects/{projectId:guid}/capture-assist/proposals")]
+    public async Task<ActionResult<GenerateProposalsReplyDto>> Proposals(
+        Guid projectId, GenerateProposalsRequest req, CancellationToken ct)
+    {
+        await projects.EnsureProjectReadAsync(projectId, currentActor.ActorId, currentActor.IsSiteAdmin, ct);
+        return Ok(await assist.GenerateProposalsAsync(projectId, req, ct));
+    }
 }

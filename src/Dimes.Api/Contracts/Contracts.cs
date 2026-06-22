@@ -65,6 +65,14 @@ public record ChatTurn(string Role, string Content);
 public record CaptureAssistChatRequest(Guid AgentActorId, string? Draft, IReadOnlyList<ChatTurn> Messages);
 public record CaptureAssistReplyDto(string Reply);
 
+// ----- Capture Assist Freestyle Mode (markdown brief -> structured change-order proposals) -----
+// Also stateless and recommend-only: the agent's LLM decomposes a freeform markdown brief into a list
+// of proposed changes the user can edit before confirming. Proposal shape mirrors CreateChangeRequest
+// so the confirm step maps 1:1 to a batch create.
+public record CaptureProposalDto(string Title, string? Description, ChangeKind Kind, Priority Priority);
+public record GenerateProposalsRequest(Guid AgentActorId, string Markdown);
+public record GenerateProposalsReplyDto(IReadOnlyList<CaptureProposalDto> Proposals);
+
 // ----- Capture Assist with a HUMAN assistant (persisted, two-way) -----
 // Unlike the stateless AI chat above, a human assistant conversation is persisted and bubbled into the
 // assistant's observation inbox. The acting actor (requester / replier) comes from the session.
@@ -114,6 +122,8 @@ public record DismissObservationRequest(string? Reason);
 
 // ----- Change requests -----
 public record CreateChangeRequest(string Title, string? Description, ChangeKind Kind, Priority Priority = Priority.None);
+// Confirm a batch of Freestyle-Mode proposals: each element is a normal create, all land in Captured.
+public record CreateChangesRequest(IReadOnlyList<CreateChangeRequest> Changes);
 public record ChangeRequestDto(
     Guid Id,
     Guid ProjectId,

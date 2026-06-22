@@ -47,6 +47,56 @@ public class ChangeRequestService(
         return change.ToDto();
     }
 
+    /// <summary>Create many changes atomically (Freestyle Mode's confirm step). Validates the whole batch
+    /// up front, then commits all in one transaction so a partial failure can't leave orphaned changes.
+    /// Each enters the lifecycle at Captured, exactly like <see cref="CreateAsync"/>.</summary>
+    public async Task<IReadOnlyList<ChangeRequestDto>> CreateManyAsync(
+        Guid projectId, Guid actorId, IReadOnlyList<CreateChangeRequest> reqs, CancellationToken ct = default)
+    {
+        if (reqs.Count == 0)
+        {
+            throw new BadRequestException("At least one change is required.");
+        }
+        if (reqs.Any(r => string.IsNullOrWhiteSpace(r.Title)))
+        {
+            throw new BadRequestException("Every change must have a title.");
+        }
+
+        var (actor, _) = await members.ResolveAsync(projectId, actorId, ct);
+
+        var changes = new List<ChangeRequest>(reqs.Count);
+        foreach (var req in reqs)
+        {
+            var change = new ChangeRequest
+            {
+                ProjectId = projectId,
+                Title = req.Title.Trim(),
+                Description = req.Description,
+                Kind = req.Kind,
+                Priority = req.Priority,
+                Status = ChangeStatus.Captured,
+                CreatedByActorId = actor.Id,
+            };
+            db.ChangeRequests.Add(change);
+            db.AuditEvents.Add(new AuditEvent
+            {
+                EntityType = AuditEntityType.ChangeRequest,
+                EntityId = change.Id,
+                ActorId = actor.Id,
+                ToStatus = ChangeStatus.Captured.ToString(),
+                Action = "Created",
+            });
+            changes.Add(change);
+        }
+
+        await db.SaveChangesAsync(ct);
+        foreach (var change in changes)
+        {
+            await notifier.ChangedAsync(change.ProjectId, change.Id, "created", ct);
+        }
+        return changes.Select(c => c.ToDto()).ToList();
+    }
+
     /// <summary>Edit a change's title/description/priority after creation. Permitted to the original
     /// author or a Maintainer; recorded as a DetailsEdited audit event.</summary>
     public async Task<ChangeRequestDto> UpdateDetailsAsync(
