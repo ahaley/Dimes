@@ -11,18 +11,24 @@ using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Resolve the database connection. An explicit ConnectionStrings:Dimes (env or config) wins —
-// e.g. an absolute path, or Postgres later. Otherwise default to an absolute, cwd-independent SQLite
-// file under <contentRoot>/data so projects persist across runs no matter where the app is launched.
+// Resolve the database connection and provider. An explicit ConnectionStrings:Dimes (env or config)
+// wins — a Postgres URL/keyword string selects Postgres (managed PG hands out a postgresql:// URI,
+// which we normalize to Npgsql's keyword form). Otherwise default to an absolute, cwd-independent
+// SQLite file under <contentRoot>/data so projects persist across runs wherever the app is launched.
 var connectionString = builder.Configuration.GetConnectionString("Dimes");
-if (string.IsNullOrWhiteSpace(connectionString))
+var dbProvider = DatabaseConnection.Detect(connectionString);
+if (dbProvider == DatabaseProvider.Postgres)
+{
+    connectionString = DatabaseConnection.NormalizePostgres(connectionString!);
+}
+else if (string.IsNullOrWhiteSpace(connectionString))
 {
     var dataDir = Path.Combine(builder.Environment.ContentRootPath, "data");
     Directory.CreateDirectory(dataDir);
     connectionString = $"Data Source={Path.Combine(dataDir, "dimes.db")}";
 }
 
-builder.Services.AddDimesPersistence(connectionString);
+builder.Services.AddDimesPersistence(connectionString, dbProvider);
 builder.Services.AddDimesProviders();
 
 // Authentication: cookie session backed by local login or Keycloak OIDC, chosen via Auth:Mode.
@@ -42,7 +48,7 @@ if (useForwardedHeaders)
         o.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto | ForwardedHeaders.XForwardedHost;
         // The proxy's address is rarely known ahead of time in self-host setups; trust it because the
         // API is only routed to via the proxy. Populate these if the API is also directly reachable.
-        o.KnownNetworks.Clear();
+        o.KnownIPNetworks.Clear();
         o.KnownProxies.Clear();
     });
 }
@@ -109,7 +115,13 @@ using (var scope = app.Services.CreateScope())
     await scope.ServiceProvider.GetRequiredService<AuthBootstrapper>().SeedAsync();
 }
 
-app.UseHttpsRedirection();
+// Behind a TLS-terminating proxy/edge (DO App Platform, nginx, etc.) HTTPS is enforced upstream and
+// the container only speaks HTTP — an in-app redirect would loop or fail health checks. Self-host
+// direct mode (no forwarded headers trusted) still does its own redirect.
+if (!useForwardedHeaders)
+{
+    app.UseHttpsRedirection();
+}
 
 // Serve the built SPA same-origin (so the BFF cookie + OIDC redirects work). Static assets are
 // served before auth; the SPA fallback is anonymous so the shell loads and drives the login flow.

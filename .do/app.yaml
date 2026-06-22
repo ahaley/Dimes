@@ -1,0 +1,109 @@
+# DigitalOcean App Platform spec for Dimes.
+#
+# Single app, one public origin — App Platform's ingress is the reverse proxy, so the BFF session
+# cookie and the OIDC redirect flow stay same-origin without an nginx/Caddy box:
+#   - the API service handles /api, /signin-oidc, /hubs, /health
+#   - the static site serves everything else (the built SPA)
+#   - a managed Postgres database backs the API
+#
+# Before first deploy, replace the <PLACEHOLDER> values:
+#   - github.repo            your GitHub repo (owner/name), connected to App Platform
+#   - Auth__Oidc__Authority  your Keycloak realm issuer URL
+#   - Auth__SiteAdmin__Email the bootstrap admin's email (must match the OIDC email claim)
+#   - DIMES_OIDC_CLIENT_SECRET  set as an encrypted secret in the App Platform UI/CLI
+#
+# After the app has a URL, register https://<app-url>/signin-oidc as the Keycloak Valid redirect URI
+# (and https://<app-url> as a Web origin).
+
+name: dimes
+region: nyc
+
+ingress:
+  rules:
+    - match:
+        path:
+          prefix: /api
+      component:
+        name: api
+    - match:
+        path:
+          prefix: /signin-oidc
+      component:
+        name: api
+    - match:
+        path:
+          prefix: /hubs
+      component:
+        name: api
+    - match:
+        path:
+          prefix: /health
+      component:
+        name: api
+    # Catch-all → the SPA. Listed last so the API prefixes win.
+    - match:
+        path:
+          prefix: /
+      component:
+        name: web
+
+services:
+  - name: api
+    dockerfile_path: Dockerfile
+    source_dir: /
+    github:
+      repo: <PLACEHOLDER-owner/repo>
+      branch: main
+      deploy_on_push: true
+    http_port: 8080
+    instance_count: 1
+    instance_size_slug: basic-xxs
+    health_check:
+      http_path: /health
+      initial_delay_seconds: 20
+      period_seconds: 10
+    envs:
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Production
+      - key: ASPNETCORE_URLS
+        value: http://0.0.0.0:8080
+      # Trust App Platform's X-Forwarded-* so the OIDC redirect_uri is built as https.
+      - key: Proxy__UseForwardedHeaders
+        value: "true"
+      # Managed Postgres connection (postgresql:// URI; the API normalizes it for Npgsql).
+      - key: ConnectionStrings__Dimes
+        scope: RUN_TIME
+        value: ${dimes-db.DATABASE_URL}
+      - key: Auth__Mode
+        value: Oidc
+      - key: Auth__Oidc__Authority
+        value: <PLACEHOLDER-https://keycloak.example.com/realms/dimes>
+      - key: Auth__Oidc__ClientId
+        value: dimes
+      - key: Auth__Oidc__ClientSecretRef
+        value: DIMES_OIDC_CLIENT_SECRET
+      - key: DIMES_OIDC_CLIENT_SECRET
+        scope: RUN_TIME
+        type: SECRET
+        value: <PLACEHOLDER-set-encrypted-secret>
+      - key: Auth__SiteAdmin__Email
+        value: <PLACEHOLDER-admin@example.com>
+
+static_sites:
+  - name: web
+    source_dir: /web
+    github:
+      repo: <PLACEHOLDER-owner/repo>
+      branch: main
+      deploy_on_push: true
+    build_command: npm run build
+    output_dir: dist
+    # SPA client-side routing: unknown paths fall back to the app shell.
+    catchall_document: index.html
+
+databases:
+  - name: dimes-db
+    engine: PG
+    version: "16"
+    # Dev database (single node). Switch to a managed cluster (production: true + size) for real use.
+    production: false

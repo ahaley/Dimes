@@ -1,0 +1,27 @@
+# Build output / local state — never copy into the image build context.
+**/bin/
+**/obj/
+**/data/
+*.db
+*.db-shm
+*.db-wal
+
+# Frontend (the SPA builds separately as an App Platform static site).
+web/node_modules/
+web/dist/
+sdk/node_modules/
+sdk/dist/
+
+# VCS / tooling
+.git/
+.github/
+.vs/
+.vscode/
+**/.idea/
+
+# Docs / deploy configs not needed at build time
+deploy/
+scripts/
+specs/
+changes/
+*.md

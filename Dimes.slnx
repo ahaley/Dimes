@@ -3,6 +3,7 @@
     <Project Path="src/Dimes.Api/Dimes.Api.csproj" />
     <Project Path="src/Dimes.Domain/Dimes.Domain.csproj" />
     <Project Path="src/Dimes.Infrastructure/Dimes.Infrastructure.csproj" />
+    <Project Path="src/Dimes.Infrastructure.Postgres/Dimes.Infrastructure.Postgres.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Dimes.Tests/Dimes.Tests.csproj" />
