@@ -6,6 +6,7 @@ using Dimes.Api.Realtime;
 using Dimes.Api.Services;
 using Dimes.Infrastructure;
 using Dimes.Infrastructure.Providers;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -27,6 +28,24 @@ builder.Services.AddDimesProviders();
 // Authentication: cookie session backed by local login or Keycloak OIDC, chosen via Auth:Mode.
 builder.Services.AddDimesAuthentication(builder.Configuration, builder.Environment);
 builder.Services.AddAuthorization(o => o.AddDimesAuthorizationPolicies());
+
+// When deployed behind a TLS-terminating reverse proxy, honor X-Forwarded-Proto/Host so the OIDC
+// redirect_uri and the Secure-cookie decision use the real external scheme/host (the proxy forwards
+// plain HTTP to the API). Off by default — enable ONLY when the API is reachable *exclusively*
+// through a trusted proxy, since trusting these headers from a directly-reachable API lets a client
+// spoof its apparent scheme/host.
+var useForwardedHeaders = builder.Configuration.GetValue<bool>("Proxy:UseForwardedHeaders");
+if (useForwardedHeaders)
+{
+    builder.Services.Configure<ForwardedHeadersOptions>(o =>
+    {
+        o.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto | ForwardedHeaders.XForwardedHost;
+        // The proxy's address is rarely known ahead of time in self-host setups; trust it because the
+        // API is only routed to via the proxy. Populate these if the API is also directly reachable.
+        o.KnownNetworks.Clear();
+        o.KnownProxies.Clear();
+    });
+}
 
 // Application services (capture → inbox → promote → lifecycle, commentary, SCM context).
 builder.Services.AddScoped<MembershipResolver>();
@@ -72,6 +91,12 @@ builder.Services
 builder.Services.AddOpenApi();
 
 var app = builder.Build();
+
+// Must run before anything that reads the request scheme/host (HTTPS redirect, OIDC, cookies).
+if (useForwardedHeaders)
+{
+    app.UseForwardedHeaders();
+}
 
 app.UseExceptionHandler();
 

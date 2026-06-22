@@ -1,0 +1,29 @@
+# Dimes reverse proxy (Caddy).
+#
+# Same single-origin model as the nginx config: the built SPA is served statically and the
+# API-owned paths are proxied, all under one origin so the BFF cookie + OIDC flow stay same-origin.
+# Caddy provisions TLS automatically (Let's Encrypt) and sets X-Forwarded-Proto/Host and the
+# WebSocket upgrade headers for reverse_proxy out of the box.
+#
+# Requires Proxy__UseForwardedHeaders=true on the API (so it builds https redirect_uris). The API
+# must NOT be reachable directly.
+#
+# Deploy:
+#   - Build the SPA (cd web && npm run build) and copy web/dist to the `root` path below.
+#   - Run the API on 127.0.0.1:5080.
+#   - Register https://dimes.example.com/signin-oidc as the Keycloak Valid redirect URI.
+
+dimes.example.com {
+    encode zstd gzip
+
+    # Backend routes → .NET API. Keep this matcher in sync with the Program.cs route table.
+    @backend path /api/* /signin-oidc /health /hubs/*
+    reverse_proxy @backend 127.0.0.1:5080
+
+    # Built SPA + client-side routing fallback (try the file, else hand index.html to the router).
+    handle {
+        root * /var/www/dimes
+        try_files {path} /index.html
+        file_server
+    }
+}

@@ -1,0 +1,31 @@
+{
+  "clientId": "dimes",
+  "name": "Dimes",
+  "description": "Dimes software change tracker — server-side OIDC (BFF) client.",
+  "protocol": "openid-connect",
+  "enabled": true,
+  "publicClient": false,
+  "standardFlowEnabled": true,
+  "implicitFlowEnabled": false,
+  "directAccessGrantsEnabled": false,
+  "serviceAccountsEnabled": false,
+  "frontchannelLogout": false,
+  "redirectUris": [
+    "https://dimes.example.com/signin-oidc"
+  ],
+  "webOrigins": [
+    "https://dimes.example.com"
+  ],
+  "attributes": {
+    "post.logout.redirect.uris": "https://dimes.example.com/"
+  },
+  "defaultClientScopes": [
+    "email",
+    "profile",
+    "roles",
+    "web-origins"
+  ],
+  "optionalClientScopes": [
+    "offline_access"
+  ]
+}
