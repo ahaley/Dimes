@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '../api/client'
-import { keys, useActors, useLlmProviders, useMembers, useSources } from '../api/hooks'
+import { keys, useActors, useLlmProviders, useMembers, useProjects, useSources } from '../api/hooks'
 import type { LlmProviderConfig, Member, MemberRole } from '../api/types'
 import { Badge, Button, cx, ErrorText, Field, Modal, Select, TextInput } from '../components/ui'
 import { initials } from '../lifecycle'
@@ -12,18 +12,65 @@ const ROLES: MemberRole[] = ['Reporter', 'Contributor', 'Maintainer']
 const AGENT_ROLES: MemberRole[] = ['Assistant', 'Reporter', 'Contributor', 'Maintainer']
 
 export function SettingsModal({ projectId, onClose }: { projectId: string; onClose: () => void }) {
-  const [tab, setTab] = useState<'members' | 'sources'>('members')
+  const [tab, setTab] = useState<'members' | 'sources' | 'danger'>('members')
   return (
     <Modal title="Manage project" onClose={onClose} wide>
       <div className="space-y-4">
-        {/* Tabs keep Members and Sources from competing for width, so each gets the full dialog. */}
+        {/* Tabs keep the sections from competing for width, so each gets the full dialog. */}
         <div className="flex gap-1 border-b border-slate-200 dark:border-slate-800">
           <TabButton active={tab === 'members'} onClick={() => setTab('members')}>Members</TabButton>
           <TabButton active={tab === 'sources'} onClick={() => setTab('sources')}>Sources</TabButton>
+          <TabButton active={tab === 'danger'} onClick={() => setTab('danger')}>Danger</TabButton>
         </div>
-        {tab === 'members' ? <MembersSection projectId={projectId} /> : <SourcesSection projectId={projectId} />}
+        {tab === 'members' ? <MembersSection projectId={projectId} />
+          : tab === 'sources' ? <SourcesSection projectId={projectId} />
+            : <DangerSection projectId={projectId} />}
       </div>
     </Modal>
+  )
+}
+
+/// Project-level danger zone: archive (soft-delete) or unarchive. The backend enforces that only a
+/// project Maintainer or site admin can do this; a 403 surfaces inline if the caller lacks authority.
+function DangerSection({ projectId }: { projectId: string }) {
+  const qc = useQueryClient()
+  const { data: projects } = useProjects(true, true)
+  const project = projects?.find((p) => p.id === projectId)
+  const archived = project?.isArchived ?? false
+
+  const toggle = useMutation({
+    mutationFn: () => (archived ? api.unarchiveProject(projectId) : api.archiveProject(projectId)),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.projects }),
+  })
+
+  return (
+    <section className="space-y-3">
+      <div className="rounded-md border border-red-200 bg-red-50/60 p-4 dark:border-red-900/50 dark:bg-red-950/20">
+        <h4 className="text-sm font-semibold text-red-700 dark:text-red-300">
+          {archived ? 'Unarchive project' : 'Archive project'}
+        </h4>
+        <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
+          {archived
+            ? 'This project is archived and hidden from the active list. Unarchiving restores it.'
+            : 'Archiving hides this project from the active list. Its changes, observations, and history are kept, and it can be unarchived later.'}
+        </p>
+        <ErrorText error={toggle.error} />
+        <div className="mt-3">
+          <Button
+            variant={archived ? 'primary' : 'danger'}
+            disabled={toggle.isPending}
+            onClick={() => {
+              if (archived) { toggle.mutate(); return }
+              if (window.confirm(`Archive ${project?.name ?? 'this project'}? It will be hidden from the active list. You can unarchive it later.`)) {
+                toggle.mutate()
+              }
+            }}
+          >
+            {archived ? 'Unarchive project' : 'Archive project'}
+          </Button>
+        </div>
+      </div>
+    </section>
   )
 }
 

@@ -23,7 +23,11 @@ type View = 'board' | 'providers' | 'actors' | 'settings'
 
 export default function App() {
   const { data: me, isLoading: meLoading, isError: loggedOut } = useMe()
-  const { data: projects } = useProjects(!!me)
+  // Include archived so the sidebar can surface them in a separate group; split for the active list.
+  // Keep activeProjects undefined while loading so IndexRedirect can distinguish "loading" from "none".
+  const { data: projects } = useProjects(!!me, true)
+  const activeProjects = projects?.filter((p) => !p.isArchived)
+  const archivedProjects = projects?.filter((p) => p.isArchived) ?? []
   const navigate = useNavigate()
   const location = useLocation()
 
@@ -91,7 +95,8 @@ export default function App() {
         />
       )}
       <Sidebar
-        projects={projects ?? []}
+        projects={activeProjects ?? []}
+        archivedProjects={archivedProjects}
         projectId={projectId}
         onSelect={(id) => navigate(`/projects/${id}`)}
         collapsed={collapsed}
@@ -145,7 +150,7 @@ export default function App() {
 
         <main className="min-h-0 flex-1 overflow-auto p-6">
           <Routes>
-            <Route path="/" element={<IndexRedirect projects={projects} onNewProject={() => setShowCreateProject(true)} />} />
+            <Route path="/" element={<IndexRedirect projects={activeProjects} onNewProject={() => setShowCreateProject(true)} />} />
             <Route
               path="/projects/:projectId"
               element={<Workspace actingActorId={me.actorId} members={members ?? []} />}
