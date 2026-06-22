@@ -4,7 +4,8 @@ import { cx } from '../components/ui'
 import { initials } from '../lifecycle'
 
 export function Sidebar({
-  projects, archivedProjects = [], projectId, onSelect, collapsed, onToggleCollapse, onNewProject,
+  projects, archivedProjects = [], projectId, onSelect, collapsed, onToggleCollapse,
+  canCreateProject, onNewProject,
   activeView, onShowProviders, onShowActors, onShowSettings, showSettings, mobileOpen,
 }: {
   projects: Project[]
@@ -13,6 +14,7 @@ export function Sidebar({
   onSelect: (id: string) => void
   collapsed: boolean
   onToggleCollapse: () => void
+  canCreateProject: boolean
   onNewProject: () => void
   activeView: 'board' | 'providers' | 'actors' | 'settings'
   onShowProviders: () => void
@@ -90,17 +92,20 @@ export function Sidebar({
           )
         })}
 
-        <button
-          onClick={onNewProject}
-          title="New project"
-          className={cx(
-            'flex w-full items-center rounded-md text-sm text-slate-500 hover:bg-slate-50 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200',
-            compact ? 'h-9 w-9 justify-center' : 'gap-2 px-2 py-1.5',
-          )}
-        >
-          <span className="text-base leading-none">+</span>
-          {!compact && <span>New project</span>}
-        </button>
+        {/* Only site admins can create projects (the API enforces this; hide the affordance too). */}
+        {canCreateProject && (
+          <button
+            onClick={onNewProject}
+            title="New project"
+            className={cx(
+              'flex w-full items-center rounded-md text-sm text-slate-500 hover:bg-slate-50 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200',
+              compact ? 'h-9 w-9 justify-center' : 'gap-2 px-2 py-1.5',
+            )}
+          >
+            <span className="text-base leading-none">+</span>
+            {!compact && <span>New project</span>}
+          </button>
+        )}
 
         {/* Archived projects: hidden from the active list, reachable here to view or unarchive. */}
         {!compact && archivedProjects.length > 0 && (

@@ -2,6 +2,7 @@ using Dimes.Api.Auth;
 using Dimes.Api.Contracts;
 using Dimes.Api.Realtime;
 using Dimes.Api.Services;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Dimes.Api.Controllers;
@@ -11,7 +12,10 @@ namespace Dimes.Api.Controllers;
 public class ProjectsController(
     ProjectService projects, ObservationService observations, ICurrentActor currentActor, IBoardNotifier notifier) : ControllerBase
 {
+    /// <summary>Create a project. Restricted to site administrators — creation is an instance-level
+    /// action (there's no project yet to scope a per-project role to).</summary>
     [HttpPost]
+    [Authorize(DimesClaims.SiteAdminPolicy)]
     public async Task<ActionResult<ProjectDto>> Create(CreateProjectRequest req, CancellationToken ct)
     {
         var project = await projects.CreateAsync(req, ct);
