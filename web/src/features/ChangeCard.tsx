@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { useDraggable } from '@dnd-kit/core'
+import { useSortable } from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 import type { ChangeRequest, ChangeStatus, Member } from '../api/types'
 import { ALLOWED_TRANSITIONS, STATUS_TONE, initials, relativeTime } from '../lifecycle'
 import { Badge, cx } from '../components/ui'
@@ -22,10 +23,11 @@ export function ChangeCard({
   onSelect: () => void
   onTransition: (target: ChangeStatus) => void
 }) {
-  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: change.id,
     data: { status: change.status },
   })
+  const style = { transform: CSS.Transform.toString(transform), transition }
   const [menuOpen, setMenuOpen] = useState(false)
 
   const assignee = members.find((m) => m.actorId === change.assigneeActorId)
@@ -35,6 +37,7 @@ export function ChangeCard({
   return (
     <div
       ref={setNodeRef}
+      style={style}
       {...attributes}
       {...listeners}
       onClick={onSelect}

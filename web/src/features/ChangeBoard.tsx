@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { DndContext, PointerSensor, useDroppable, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core'
-import { useActors, useChanges, useTransition } from '../api/hooks'
+import { DndContext, PointerSensor, closestCenter, useDroppable, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core'
+import { SortableContext, arrayMove, verticalListSortingStrategy } from '@dnd-kit/sortable'
+import { useActors, useChanges, useReorderChanges, useTransition } from '../api/hooks'
 import { LIFECYCLE_COLUMNS, type ChangeRequest, type ChangeStatus, type Member } from '../api/types'
 import { STATUS_TONE } from '../lifecycle'
 import { Badge, cx } from '../components/ui'
@@ -13,6 +14,7 @@ export function ChangeBoard({
 }: { projectId: string; members: Member[]; onSelect: (id: string) => void }) {
   const { data: changes } = useChanges(projectId)
   const transition = useTransition(projectId)
+  const reorder = useReorderChanges(projectId)
   const toast = useToast()
   const navigate = useNavigate()
   const [closedOpen, setClosedOpen] = useState(false)
@@ -44,15 +46,44 @@ export function ChangeBoard({
     )
   }
 
+  const isStatusId = (id: string): id is ChangeStatus =>
+    (LIFECYCLE_COLUMNS as string[]).includes(id)
+
   const onDragEnd = (e: DragEndEvent) => {
-    const target = e.over?.id as ChangeStatus | undefined
-    if (!target) return
+    const overId = e.over?.id as string | undefined
+    if (!overId) return
     const change = (changes ?? []).find((c) => c.id === e.active.id)
-    if (change) requestTransition(change, target)
+    if (!change) return
+
+    // Dropped on a column (its empty area) → cross-column move to that status.
+    if (isStatusId(overId)) {
+      requestTransition(change, overId)
+      return
+    }
+
+    // Dropped on another card.
+    const overChange = (changes ?? []).find((c) => c.id === overId)
+    if (!overChange || overChange.id === change.id) return
+
+    if (overChange.status !== change.status) {
+      // Card landed in a different column → transition into that column.
+      requestTransition(change, overChange.status)
+      return
+    }
+
+    // Same column → persist the new manual order.
+    const columnIds = byStatus(change.status).map((c) => c.id)
+    const from = columnIds.indexOf(change.id)
+    const to = columnIds.indexOf(overChange.id)
+    if (from === -1 || to === -1 || from === to) return
+    reorder.mutate(
+      { status: change.status, orderedIds: arrayMove(columnIds, from, to) },
+      { onError: (err) => toast.error(err instanceof Error ? err.message : 'Reorder failed') },
+    )
   }
 
   return (
-    <DndContext sensors={sensors} onDragEnd={onDragEnd}>
+    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
       <div className="flex gap-3 overflow-x-auto pb-3">
         {LIFECYCLE_COLUMNS.map((status) => (
           <div key={status} className="flex">
@@ -133,16 +164,18 @@ function Column({
         )}
       </div>
       <div className="space-y-2">
-        {changes.map((c) => (
-          <ChangeCard
-            key={c.id}
-            change={c}
-            members={members}
-            author={authorOf(c)}
-            onSelect={() => onSelect(c.id)}
-            onTransition={(target) => onTransition(c, target)}
-          />
-        ))}
+        <SortableContext items={changes.map((c) => c.id)} strategy={verticalListSortingStrategy}>
+          {changes.map((c) => (
+            <ChangeCard
+              key={c.id}
+              change={c}
+              members={members}
+              author={authorOf(c)}
+              onSelect={() => onSelect(c.id)}
+              onTransition={(target) => onTransition(c, target)}
+            />
+          ))}
+        </SortableContext>
         {changes.length === 0 && (
           <p className="rounded-md border border-dashed border-slate-200 px-2 py-6 text-center text-xs text-slate-300 dark:border-slate-700 dark:text-slate-600">
             Drop here

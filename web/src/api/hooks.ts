@@ -195,3 +195,33 @@ export function useTransition(projectId: string | undefined) {
     onSettled: (_data, _err, vars) => invalidate(vars.id),
   })
 }
+
+type ReorderVars = { status: ChangeStatus; orderedIds: string[] }
+
+/** Persists a manual within-column board order. Optimistically applies the new SortOrder to the
+ * board's change list so the drag feels instant, rolling back on error, then reconciles. */
+export function useReorderChanges(projectId: string | undefined) {
+  const qc = useQueryClient()
+  const invalidate = useProjectInvalidator(projectId)
+  const listKey = keys.changes(projectId ?? '', undefined)
+
+  return useMutation({
+    mutationFn: (vars: ReorderVars) => api.reorderChanges(projectId!, vars),
+    onMutate: async (vars) => {
+      await qc.cancelQueries({ queryKey: listKey })
+      const previous = qc.getQueryData<ChangeRequest[]>(listKey)
+      if (previous) {
+        const rank = new Map(vars.orderedIds.map((id, i) => [id, i + 1]))
+        qc.setQueryData<ChangeRequest[]>(
+          listKey,
+          previous.map((c) => (rank.has(c.id) ? { ...c, sortOrder: rank.get(c.id)! } : c)),
+        )
+      }
+      return { previous }
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.previous) qc.setQueryData(listKey, context.previous)
+    },
+    onSettled: () => invalidate(),
+  })
+}
