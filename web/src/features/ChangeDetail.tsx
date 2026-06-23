@@ -133,10 +133,21 @@ export function ChangeDetailBody({
                 </Select>
               </Field>
               <Field label="Recipient">
-                <Select value={eRecipient} onChange={(e) => setERecipient(e.target.value)}>
-                  <option value="">Unassigned</option>
-                  {members.map((m) => <option key={m.actorId} value={m.actorId}>{m.displayName}</option>)}
-                </Select>
+                <div className="flex items-center gap-2">
+                  <Select value={eRecipient} onChange={(e) => setERecipient(e.target.value)} className="flex-1">
+                    <option value="">Unassigned</option>
+                    {members.map((m) => <option key={m.actorId} value={m.actorId}>{m.displayName}</option>)}
+                  </Select>
+                  {members.some((m) => m.actorId === actingActorId) && (
+                    <Button
+                      variant="subtle"
+                      disabled={eRecipient === actingActorId}
+                      onClick={() => setERecipient(actingActorId)}
+                    >
+                      Assign to me
+                    </Button>
+                  )}
+                </div>
               </Field>
               <ErrorText error={saveDetails.error} />
               <div className="flex justify-end gap-2">
