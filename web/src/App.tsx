@@ -183,9 +183,10 @@ export default function App() {
               path="/projects/:projectId/focus/:status"
               element={<FocusView actingActorId={me.actorId} members={members ?? []} />}
             />
-            <Route path="/providers" element={<LlmProvidersView projectId={projectId ?? lastProjectId} />} />
-            <Route path="/actors" element={<ActorsView />} />
-            <Route path="/actors/:actorId" element={<ActorDetailView />} />
+            {/* LLM providers + Actors are site-admin-only; guard the routes so a bookmark can't reach them. */}
+            <Route path="/providers" element={me.isSiteAdmin ? <LlmProvidersView projectId={projectId ?? lastProjectId} /> : <Navigate to="/" replace />} />
+            <Route path="/actors" element={me.isSiteAdmin ? <ActorsView /> : <Navigate to="/" replace />} />
+            <Route path="/actors/:actorId" element={me.isSiteAdmin ? <ActorDetailView /> : <Navigate to="/" replace />} />
             <Route path="/settings" element={<SiteSettingsView />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
