@@ -171,9 +171,9 @@ function Column({
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: status })
   const [showOlder, setShowOlder] = useState(false)
-  // Focus mode is a "work through one by one" queue — meaningful for the active spine columns, not
-  // the terminal Done state.
-  const canFocus = status !== 'Done'
+  // Focus mode works through a column one by one. Done is focusable too (for late review of accepted
+  // Change Requests), where it gains a date-range filter — see FocusView.
+  const canFocus = true
   return (
     <div
       ref={setNodeRef}
