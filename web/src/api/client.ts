@@ -68,6 +68,8 @@ export const api = {
     request<Project>('POST', '/api/projects', body),
   updateProject: (id: string, body: { name: string; description?: string | null; sourceControlEnabled: boolean; humanOnly: boolean }) =>
     request<Project>('PATCH', `/api/projects/${id}`, body),
+  reorderProjects: (body: { orderedIds: string[] }) =>
+    request<void>('POST', '/api/projects/reorder', body),
   archiveProject: (id: string) => request<void>('POST', `/api/projects/${id}/archive`),
   unarchiveProject: (id: string) => request<void>('POST', `/api/projects/${id}/unarchive`),
   listMembers: (projectId: string) => request<Member[]>('GET', `/api/projects/${projectId}/members`),

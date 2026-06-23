@@ -27,4 +27,9 @@ public class Actor : Entity
     public DateTimeOffset? ArchivedAt { get; set; }
 
     public ICollection<Membership> Memberships { get; set; } = new List<Membership>();
+
+    /// <summary>This actor's personal ordering of their project list (a JSON array of project-id GUIDs).
+    /// Drives the sidebar order and the default project (the top one). Per-user preference, independent of
+    /// role; unknown/stale ids are ignored and unranked projects fall back to alphabetical.</summary>
+    public string? ProjectOrderJson { get; set; }
 }

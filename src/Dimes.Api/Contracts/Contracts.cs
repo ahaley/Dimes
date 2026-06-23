@@ -10,6 +10,8 @@ namespace Dimes.Api.Contracts;
 // Key is optional over the wire: the web form always supplies one, but when absent the server derives a
 // unique key from the name (so legacy/automation callers still get a valid display-id prefix).
 public record CreateProjectRequest(string Name, string? Description, string? Key = null);
+// A user's personal top-to-bottom ordering of their visible projects (drives the sidebar + default project).
+public record ReorderProjectsRequest(IReadOnlyList<Guid> OrderedIds);
 public record UpdateProjectRequest(string Name, string? Description, bool SourceControlEnabled, bool HumanOnly);
 public record ProjectDto(Guid Id, string Name, string? Description, DateTimeOffset CreatedAt, bool IsArchived, DateTimeOffset? ArchivedAt, bool SourceControlEnabled, bool HumanOnly, string? Key);
 
