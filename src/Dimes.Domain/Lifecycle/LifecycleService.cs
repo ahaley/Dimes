@@ -22,7 +22,7 @@ public class LifecycleService
             [ChangeStatus.Captured] = [ChangeStatus.Triaged, ChangeStatus.Approved, ChangeStatus.Rejected, ChangeStatus.Duplicate],
             [ChangeStatus.Triaged] = [ChangeStatus.Approved, ChangeStatus.Rejected, ChangeStatus.Duplicate],
             [ChangeStatus.Approved] = [ChangeStatus.InDevelopment, ChangeStatus.Rejected, ChangeStatus.Duplicate],
-            [ChangeStatus.InDevelopment] = [ChangeStatus.InReview, ChangeStatus.Rejected, ChangeStatus.Duplicate],
+            [ChangeStatus.InDevelopment] = [ChangeStatus.InReview, ChangeStatus.Approved, ChangeStatus.Rejected, ChangeStatus.Duplicate],
             [ChangeStatus.InReview] = [ChangeStatus.Done, ChangeStatus.InDevelopment, ChangeStatus.Rejected, ChangeStatus.Duplicate],
             [ChangeStatus.Done] = [ChangeStatus.InDevelopment],
             [ChangeStatus.Rejected] = [],

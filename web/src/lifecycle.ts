@@ -6,7 +6,7 @@ export const ALLOWED_TRANSITIONS: Record<ChangeStatus, ChangeStatus[]> = {
   Captured: ['Triaged', 'Approved', 'Rejected', 'Duplicate'],
   Triaged: ['Approved', 'Rejected', 'Duplicate'],
   Approved: ['InDevelopment', 'Rejected', 'Duplicate'],
-  InDevelopment: ['InReview', 'Rejected', 'Duplicate'],
+  InDevelopment: ['InReview', 'Approved', 'Rejected', 'Duplicate'],
   InReview: ['Done', 'InDevelopment', 'Rejected', 'Duplicate'],
   Done: ['InDevelopment'],
   Rejected: [],
