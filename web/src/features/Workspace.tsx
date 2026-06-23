@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { useNavigate, useParams } from 'react-router-dom'
 import type { Member } from '../api/types'
-import { useChanges, useInbox, useMyAssistConversations } from '../api/hooks'
+import { useChanges, useInbox, useMyAssistConversations, useProjects } from '../api/hooks'
 import { useBoardLiveUpdates } from '../api/realtime'
 import { api } from '../api/client'
 import { Badge, Button } from '../components/ui'
@@ -23,6 +23,10 @@ export function Workspace({
 
   // Live board updates from other users (create / edit / move / promote).
   useBoardLiveUpdates(projectId)
+
+  // Human-only projects hide all AI-agent affordances (Capture Assist entry, etc.).
+  const { data: projects } = useProjects(true, true)
+  const humanOnly = projects?.find((p) => p.id === projectId)?.humanOnly ?? false
 
   const { data: observations } = useInbox(projectId)
   // Mirror the drawer: latent signals count for everyone; directed ones only for their target.
@@ -59,13 +63,15 @@ export function Workspace({
           >
             Export
           </Button>
-          <Button
-            variant="default"
-            onClick={() => navigate(`/projects/${projectId}/capture`)}
-            title={myTurnCount > 0 ? `${myTurnCount} conversation${myTurnCount === 1 ? '' : 's'} awaiting your reply` : undefined}
-          >
-            Capture Assist{myTurnCount > 0 && <span className="ml-1.5"><Badge tone="indigo">{myTurnCount}</Badge></span>}
-          </Button>
+          {!humanOnly && (
+            <Button
+              variant="default"
+              onClick={() => navigate(`/projects/${projectId}/capture`)}
+              title={myTurnCount > 0 ? `${myTurnCount} conversation${myTurnCount === 1 ? '' : 's'} awaiting your reply` : undefined}
+            >
+              Capture Assist{myTurnCount > 0 && <span className="ml-1.5"><Badge tone="indigo">{myTurnCount}</Badge></span>}
+            </Button>
+          )}
           <Button variant="primary" onClick={() => setCreating(true)}>+ New change</Button>
         </div>
       </div>

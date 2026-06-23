@@ -6,7 +6,7 @@ namespace Dimes.Api.Contracts;
 public static class Mappings
 {
     public static ProjectDto ToDto(this Project p) =>
-        new(p.Id, p.Name, p.Description, p.CreatedAt, p.IsArchived, p.ArchivedAt, p.SourceControlEnabled);
+        new(p.Id, p.Name, p.Description, p.CreatedAt, p.IsArchived, p.ArchivedAt, p.SourceControlEnabled, p.HumanOnly);
 
     public static MemberDto ToMemberDto(this Membership m) =>
         new(m.ActorId, m.ProjectId, m.Actor.DisplayName, m.Actor.Type, m.Actor.Email, m.Role, m.Actor.LlmProviderConfigId);

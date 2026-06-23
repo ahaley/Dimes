@@ -29,8 +29,11 @@ export function ChangeDetailBody({
   const { data: detail, isLoading } = useChangeDetail(changeId)
   const { data: audit } = useAudit(changeId)
   const { data: projects } = useProjects(true, true)
+  const project = projects?.find((p) => p.id === projectId)
   // Source control is a per-project toggle; default to shown if the project hasn't loaded yet.
-  const scmEnabled = projects?.find((p) => p.id === projectId)?.sourceControlEnabled ?? true
+  const scmEnabled = project?.sourceControlEnabled ?? true
+  // Human-only projects hide AI-agent affordances (the "Ask agent" commentary control).
+  const humanOnly = project?.humanOnly ?? false
   const invalidate = useProjectInvalidator(projectId)
   const transition = useTransition(projectId)
 
@@ -189,8 +192,9 @@ export function ChangeDetailBody({
                 <Button variant="default" disabled={!commentBody.trim() || addComment.isPending} onClick={() => addComment.mutate()}>
                   Comment
                 </Button>
-                <span className="mx-1 h-5 w-px bg-slate-200 dark:bg-slate-700" />
-                {agents.length > 0 ? (
+                {/* AI-agent commentary — hidden for Human-Only projects. */}
+                {!humanOnly && <span className="mx-1 h-5 w-px bg-slate-200 dark:bg-slate-700" />}
+                {!humanOnly && (agents.length > 0 ? (
                   <>
                     <Select value={agentId || agents[0].actorId} onChange={(e) => setAgentId(e.target.value)} className="max-w-40">
                       {agents.map((a) => <option key={a.actorId} value={a.actorId}>{a.displayName}</option>)}
@@ -201,7 +205,7 @@ export function ChangeDetailBody({
                   </>
                 ) : (
                   <span className="text-xs text-slate-400">Add an Agent member to enable AI commentary.</span>
-                )}
+                ))}
               </div>
               <ErrorText error={addComment.error} />
               <ErrorText error={askAgent.error} />
