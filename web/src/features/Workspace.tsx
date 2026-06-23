@@ -5,7 +5,7 @@ import type { Member } from '../api/types'
 import { useChanges, useInbox, useMyAssistConversations, useProjects } from '../api/hooks'
 import { useBoardLiveUpdates } from '../api/realtime'
 import { api } from '../api/client'
-import { Badge, Button, TextInput } from '../components/ui'
+import { Badge, Button, TextInput, cx } from '../components/ui'
 import { useToast } from '../components/Toast'
 import { ChangeBoard } from './ChangeBoard'
 import { ChangeDetail } from './ChangeDetail'
@@ -20,6 +20,7 @@ export function Workspace({
   const [inboxOpen, setInboxOpen] = useState(false)
   const [creating, setCreating] = useState(false)
   const [query, setQuery] = useState('')
+  const [mineOnly, setMineOnly] = useState(false)
   const toast = useToast()
 
   // Live board updates from other users (create / edit / move / promote).
@@ -53,14 +54,32 @@ export function Workspace({
       <div className="flex items-center justify-between">
         <h1 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Change board</h1>
         <div className="flex items-center gap-2">
-          <div className="w-40 sm:w-56">
+          <div className="relative w-44 sm:w-60">
             <TextInput
               type="search"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search changes…"
               aria-label="Search changes"
+              className="pr-8"
             />
+            <button
+              type="button"
+              onClick={() => setMineOnly((v) => !v)}
+              aria-pressed={mineOnly}
+              aria-label="Filter to requests assigned to me"
+              title={mineOnly ? 'Showing requests assigned to you' : 'Show only requests assigned to you'}
+              className={cx(
+                'absolute right-1 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded transition-colors',
+                mineOnly
+                  ? 'bg-indigo-600 text-white'
+                  : 'text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-200',
+              )}
+            >
+              <svg viewBox="0 0 16 16" className="h-3.5 w-3.5" fill="currentColor" aria-hidden="true">
+                <path d="M8 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6Zm0 1.4c-2.76 0-5 1.46-5 3.26V14h10v-1.34c0-1.8-2.24-3.26-5-3.26Z" />
+              </svg>
+            </button>
           </div>
           <Button variant="default" onClick={() => setInboxOpen(true)}>
             Inbox{inboxCount > 0 && <span className="ml-1.5"><Badge tone="amber">{inboxCount}</Badge></span>}
@@ -90,6 +109,8 @@ export function Workspace({
         projectId={projectId}
         members={members}
         query={query}
+        mineOnly={mineOnly}
+        actingActorId={actingActorId}
         onSelect={(id) => navigate(`/projects/${projectId}/changes/${id}`)}
       />
 

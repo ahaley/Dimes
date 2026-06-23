@@ -36,8 +36,8 @@ const boardCollisionDetection: CollisionDetection = (args) => {
 }
 
 export function ChangeBoard({
-  projectId, members, query, onSelect,
-}: { projectId: string; members: Member[]; query: string; onSelect: (id: string) => void }) {
+  projectId, members, query, mineOnly, actingActorId, onSelect,
+}: { projectId: string; members: Member[]; query: string; mineOnly: boolean; actingActorId: string; onSelect: (id: string) => void }) {
   const { data: changes } = useChanges(projectId)
   const transition = useTransition(projectId)
   const reorder = useReorderChanges(projectId)
@@ -58,9 +58,11 @@ export function ChangeBoard({
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }))
 
-  // Apply the board search before splitting into columns so every column (and the Closed section)
-  // reflects the current query.
-  const visible = (changes ?? []).filter((c) => matchesQuery(c, query))
+  // Apply the board filters before splitting into columns so every column (and the Closed section)
+  // reflects them: the text query AND, when the "assigned to me" toggle is on, the current actor.
+  const visible = (changes ?? []).filter(
+    (c) => matchesQuery(c, query) && (!mineOnly || c.assigneeActorId === actingActorId),
+  )
 
   // Mirror the server order (OrderBy SortOrder, then UpdatedAt desc) so an optimistic SortOrder change
   // from a drag reorders the column immediately — otherwise the card snaps back until the refetch lands.
