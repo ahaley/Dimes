@@ -42,18 +42,20 @@ function GeneralSection({ projectId }: { projectId: string }) {
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [sourceControlEnabled, setSourceControlEnabled] = useState(true)
+  const [humanOnly, setHumanOnly] = useState(false)
   // Seed the form once the project loads, then leave it to the user.
   const [seededId, setSeededId] = useState<string | null>(null)
   if (project && project.id !== seededId) {
     setName(project.name)
     setDescription(project.description ?? '')
     setSourceControlEnabled(project.sourceControlEnabled)
+    setHumanOnly(project.humanOnly)
     setSeededId(project.id)
   }
 
   const save = useMutation({
     mutationFn: () =>
-      api.updateProject(projectId, { name: name.trim(), description: description.trim() || null, sourceControlEnabled }),
+      api.updateProject(projectId, { name: name.trim(), description: description.trim() || null, sourceControlEnabled, humanOnly }),
     onSuccess: () => qc.invalidateQueries({ queryKey: keys.projects }),
   })
 
@@ -61,6 +63,7 @@ function GeneralSection({ projectId }: { projectId: string }) {
     name.trim() !== project.name
     || (description.trim() || '') !== (project.description ?? '')
     || sourceControlEnabled !== project.sourceControlEnabled
+    || humanOnly !== project.humanOnly
   )
 
   return (
@@ -88,6 +91,24 @@ function GeneralSection({ projectId }: { projectId: string }) {
             Enable source control
             <span className="block text-xs text-slate-400">
               When off, change requests hide their Source control section.
+            </span>
+          </span>
+        </label>
+      </div>
+      <div className="rounded-md border border-slate-200 p-3 dark:border-slate-700">
+        <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-400">Collaboration</h4>
+        <label className="mt-2 flex items-start gap-2 text-sm text-slate-700 dark:text-slate-200">
+          <input
+            type="checkbox"
+            className="mt-0.5"
+            checked={humanOnly}
+            onChange={(e) => setHumanOnly(e.target.checked)}
+          />
+          <span>
+            Human only
+            <span className="block text-xs text-slate-400">
+              Hide AI-agent features for this project — Capture Assist, agent commentary, adding agents,
+              and agent members.
             </span>
           </span>
         </label>
@@ -176,6 +197,9 @@ function MembersSection({ projectId }: { projectId: string }) {
   const { data: members } = useMembers(projectId)
   const { data: providers } = useLlmProviders(projectId)
   const { data: actors } = useActors(false)
+  const { data: projects } = useProjects(true, true)
+  // Human-only projects hide agents: agent members aren't listed and the add-agent form is gone.
+  const humanOnly = projects?.find((p) => p.id === projectId)?.humanOnly ?? false
   const invalidate = () => qc.invalidateQueries({ queryKey: keys.members(projectId) })
 
   // The add forms are hidden behind a disclosure so the member list reads clearly by default.
@@ -210,7 +234,7 @@ function MembersSection({ projectId }: { projectId: string }) {
   return (
     <section className="space-y-4">
       <div className="divide-y divide-slate-100 overflow-hidden rounded-md border border-slate-200 dark:divide-slate-800 dark:border-slate-700">
-        {(members ?? []).map((m) => (
+        {(members ?? []).filter((m) => !humanOnly || m.type !== 'Agent').map((m) => (
           <MemberRow key={m.actorId} projectId={projectId} member={m} providers={providers ?? []} />
         ))}
         {members?.length === 0 && <p className="px-3 py-4 text-sm text-slate-400">No members yet.</p>}
@@ -253,32 +277,34 @@ function MembersSection({ projectId }: { projectId: string }) {
             <ErrorText error={assignPerson.error} />
           </div>
 
-          {/* Create an agent member */}
-          <div className="space-y-2 border-t border-slate-200 pt-3 dark:border-slate-700">
-            <h5 className="text-xs font-medium text-slate-500 dark:text-slate-400">Agent</h5>
-            <Field label="Display name">
-              <TextInput value={agentName} onChange={(e) => setAgentName(e.target.value)} placeholder="Aria" />
-            </Field>
-            <div className="grid grid-cols-2 gap-2">
-              <Field label="Role">
-                <Select value={agentRole} onChange={(e) => setAgentRole(e.target.value as MemberRole)}>
-                  {AGENT_ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
-                </Select>
+          {/* Create an agent member — hidden for Human-Only projects. */}
+          {!humanOnly && (
+            <div className="space-y-2 border-t border-slate-200 pt-3 dark:border-slate-700">
+              <h5 className="text-xs font-medium text-slate-500 dark:text-slate-400">Agent</h5>
+              <Field label="Display name">
+                <TextInput value={agentName} onChange={(e) => setAgentName(e.target.value)} placeholder="Aria" />
               </Field>
-              <Field label="LLM provider (for commentary)">
-                <Select value={llmProviderConfigId} onChange={(e) => setLlm(e.target.value)}>
-                  <option value="">none</option>
-                  {(providers ?? []).map((p) => (
-                    <option key={p.id} value={p.id}>{p.name} ({p.model})</option>
-                  ))}
-                </Select>
-              </Field>
+              <div className="grid grid-cols-2 gap-2">
+                <Field label="Role">
+                  <Select value={agentRole} onChange={(e) => setAgentRole(e.target.value as MemberRole)}>
+                    {AGENT_ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
+                  </Select>
+                </Field>
+                <Field label="LLM provider (for commentary)">
+                  <Select value={llmProviderConfigId} onChange={(e) => setLlm(e.target.value)}>
+                    <option value="">none</option>
+                    {(providers ?? []).map((p) => (
+                      <option key={p.id} value={p.id}>{p.name} ({p.model})</option>
+                    ))}
+                  </Select>
+                </Field>
+              </div>
+              <ErrorText error={addAgent.error} />
+              <Button variant="primary" disabled={!agentName.trim() || addAgent.isPending} onClick={() => addAgent.mutate()}>
+                Add agent
+              </Button>
             </div>
-            <ErrorText error={addAgent.error} />
-            <Button variant="primary" disabled={!agentName.trim() || addAgent.isPending} onClick={() => addAgent.mutate()}>
-              Add agent
-            </Button>
-          </div>
+          )}
         </div>
       )}
     </section>

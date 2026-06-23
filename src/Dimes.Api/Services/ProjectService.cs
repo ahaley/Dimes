@@ -114,6 +114,7 @@ public class ProjectService(DimesDbContext db, MembershipResolver members)
         project.Name = req.Name.Trim();
         project.Description = req.Description;
         project.SourceControlEnabled = req.SourceControlEnabled;
+        project.HumanOnly = req.HumanOnly;
         await db.SaveChangesAsync(ct);
         return project.ToDto();
     }

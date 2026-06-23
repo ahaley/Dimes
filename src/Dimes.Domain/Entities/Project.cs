@@ -11,6 +11,11 @@ public class Project : Entity
     /// requests hide their Source control section. Defaults to on so existing projects are unchanged.</summary>
     public bool SourceControlEnabled { get; set; } = true;
 
+    /// <summary>When on, the project presents as human-only: AI-agent affordances and agentic verbiage
+    /// (Capture Assist, agent commentary, the add-agent form, agent members) are hidden in the UI.
+    /// Defaults to off so existing projects are unchanged.</summary>
+    public bool HumanOnly { get; set; }
+
     /// <summary>Archived projects are retained (with all their changes/observations/audit) but hidden
     /// from active lists. Soft-delete equivalent — reversible via unarchive.</summary>
     public bool IsArchived { get; set; }

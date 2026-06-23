@@ -8,8 +8,8 @@ namespace Dimes.Api.Contracts;
 
 // ----- Projects & members -----
 public record CreateProjectRequest(string Name, string? Description);
-public record UpdateProjectRequest(string Name, string? Description, bool SourceControlEnabled);
-public record ProjectDto(Guid Id, string Name, string? Description, DateTimeOffset CreatedAt, bool IsArchived, DateTimeOffset? ArchivedAt, bool SourceControlEnabled);
+public record UpdateProjectRequest(string Name, string? Description, bool SourceControlEnabled, bool HumanOnly);
+public record ProjectDto(Guid Id, string Name, string? Description, DateTimeOffset CreatedAt, bool IsArchived, DateTimeOffset? ArchivedAt, bool SourceControlEnabled, bool HumanOnly);
 
 public record AddMemberRequest(string DisplayName, ActorType Type, string? Email, MemberRole Role, Guid? LlmProviderConfigId = null);
 public record UpdateMemberRequest(string DisplayName, string? Email, MemberRole Role, Guid? LlmProviderConfigId);

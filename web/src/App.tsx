@@ -164,8 +164,15 @@ export default function App() {
               path="/projects/:projectId/changes/:changeId"
               element={<Workspace actingActorId={me.actorId} members={members ?? []} />}
             />
-            <Route path="/projects/:projectId/capture" element={<CaptureAssistView />} />
-            <Route path="/projects/:projectId/capture/:conversationId" element={<CaptureAssistView />} />
+            {/* Capture Assist is an AI-agent feature — blocked for Human-Only projects (guards bookmarks). */}
+            <Route
+              path="/projects/:projectId/capture"
+              element={currentProject?.humanOnly ? <Navigate to={`/projects/${projectId}`} replace /> : <CaptureAssistView />}
+            />
+            <Route
+              path="/projects/:projectId/capture/:conversationId"
+              element={currentProject?.humanOnly ? <Navigate to={`/projects/${projectId}`} replace /> : <CaptureAssistView />}
+            />
             <Route path="/projects/:projectId/assist/:conversationId" element={<AssistConversationView />} />
             <Route
               path="/projects/:projectId/focus/:status"
