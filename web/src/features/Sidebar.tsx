@@ -85,6 +85,7 @@ export function Sidebar({
               ) : (
                 <>
                   <span className={cx('h-4 w-0.5 rounded', active ? 'bg-indigo-600' : 'bg-transparent')} />
+                  {p.key && <span className="shrink-0 font-mono text-[11px] text-slate-400">{p.key}</span>}
                   <span className="truncate">{p.name}</span>
                 </>
               )}

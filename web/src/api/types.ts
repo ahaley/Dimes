@@ -17,7 +17,7 @@ export type LlmProviderType = 'Anthropic' | 'OpenAICompatible'
 export type ScmProviderType = 'GitHub'
 export type AuditEntityType = 'ChangeRequest' | 'Observation'
 
-export interface Project { id: string; name: string; description?: string | null; createdAt: string; isArchived: boolean; archivedAt?: string | null; sourceControlEnabled: boolean; humanOnly: boolean }
+export interface Project { id: string; name: string; description?: string | null; createdAt: string; isArchived: boolean; archivedAt?: string | null; sourceControlEnabled: boolean; humanOnly: boolean; key?: string | null }
 export interface Member {
   actorId: string; projectId: string; displayName: string; type: ActorType
   email?: string | null; role: MemberRole; llmProviderConfigId?: string | null
@@ -35,7 +35,7 @@ export interface ChangeRequest {
   id: string; projectId: string; title: string; description?: string | null
   kind: ChangeKind; status: ChangeStatus; priority: Priority
   createdByActorId: string; assigneeActorId?: string | null; duplicateOfId?: string | null
-  createdAt: string; updatedAt: string; sortOrder: number
+  createdAt: string; updatedAt: string; sortOrder: number; number?: number | null; displayKey?: string | null
 }
 export interface Comment {
   id: string; changeRequestId: string; authorActorId: string; body: string; kind: CommentKind; createdAt: string

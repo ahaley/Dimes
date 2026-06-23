@@ -113,6 +113,7 @@ export function FocusView({ actingActorId, members }: { actingActorId: string; m
                           <span className="min-w-0 flex-1 line-clamp-2 text-sm text-slate-800 dark:text-slate-100">{c.title}</span>
                         </div>
                         <div className="mt-1 flex items-center gap-1.5 pl-5 text-[11px] text-slate-400">
+                          {c.displayKey && <span className="font-mono">{c.displayKey}</span>}
                           {c.priority !== 'None' && <Badge tone="amber">{c.priority}</Badge>}
                           <span className="ml-auto">{relativeTime(c.updatedAt)}</span>
                           {assignee && (

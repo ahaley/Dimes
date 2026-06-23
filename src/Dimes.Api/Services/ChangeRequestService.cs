@@ -32,6 +32,7 @@ public class ChangeRequestService(
             Priority = req.Priority,
             Status = ChangeStatus.Captured,
             CreatedByActorId = actor.Id,
+            Number = await NextNumberAsync(projectId, ct),
         };
         db.ChangeRequests.Add(change);
         db.AuditEvents.Add(new AuditEvent
@@ -44,8 +45,16 @@ public class ChangeRequestService(
         });
         await db.SaveChangesAsync(ct);
         await notifier.ChangedAsync(change.ProjectId, change.Id, "created", ct);
-        return change.ToDto();
+        return change.ToDto(await ProjectKeyAsync(projectId, ct));
     }
+
+    /// <summary>The next per-project change number = current max + 1 (1 for the first). The
+    /// (ProjectId, Number) unique index guarantees integrity if two creates ever race.</summary>
+    private async Task<int> NextNumberAsync(Guid projectId, CancellationToken ct) =>
+        (await db.ChangeRequests.Where(c => c.ProjectId == projectId).MaxAsync(c => (int?)c.Number, ct) ?? 0) + 1;
+
+    private async Task<string?> ProjectKeyAsync(Guid projectId, CancellationToken ct) =>
+        await db.Projects.Where(p => p.Id == projectId).Select(p => p.Key).FirstOrDefaultAsync(ct);
 
     /// <summary>Create many changes atomically (Freestyle Mode's confirm step). Validates the whole batch
     /// up front, then commits all in one transaction so a partial failure can't leave orphaned changes.
@@ -64,6 +73,7 @@ public class ChangeRequestService(
 
         var (actor, _) = await members.ResolveAsync(projectId, actorId, ct);
 
+        var nextNumber = await NextNumberAsync(projectId, ct);
         var changes = new List<ChangeRequest>(reqs.Count);
         foreach (var req in reqs)
         {
@@ -76,6 +86,7 @@ public class ChangeRequestService(
                 Priority = req.Priority,
                 Status = ChangeStatus.Captured,
                 CreatedByActorId = actor.Id,
+                Number = nextNumber++,
             };
             db.ChangeRequests.Add(change);
             db.AuditEvents.Add(new AuditEvent
@@ -94,7 +105,8 @@ public class ChangeRequestService(
         {
             await notifier.ChangedAsync(change.ProjectId, change.Id, "created", ct);
         }
-        return changes.Select(c => c.ToDto()).ToList();
+        var projectKey = await ProjectKeyAsync(projectId, ct);
+        return changes.Select(c => c.ToDto(projectKey)).ToList();
     }
 
     /// <summary>Edit a change's title/description/priority after creation. Permitted to the original
@@ -138,7 +150,7 @@ public class ChangeRequestService(
         });
         await db.SaveChangesAsync(ct);
         await notifier.ChangedAsync(change.ProjectId, change.Id, "updated", ct);
-        return change.ToDto();
+        return change.ToDto(await ProjectKeyAsync(change.ProjectId, ct));
     }
 
     /// <summary>Generate a single Claude Code "work order" markdown for a project's In-Development
@@ -201,7 +213,8 @@ public class ChangeRequestService(
             {
                 var priority = c.Priority == Priority.None ? string.Empty : $" (priority: {c.Priority})";
                 var id8 = c.Id.ToString()[..8];
-                sb.AppendLine($"### {n}. {c.Title}{priority}");
+                var displayKey = project.Key != null && c.Number is int num ? $"{project.Key}-{num} " : string.Empty;
+                sb.AppendLine($"### {n}. {displayKey}{c.Title}{priority}");
                 sb.AppendLine();
                 sb.AppendLine(string.IsNullOrWhiteSpace(c.Description) ? "_No description provided._" : c.Description);
                 sb.AppendLine();
@@ -248,18 +261,19 @@ public class ChangeRequestService(
     public async Task<IReadOnlyList<ChangeRequestDto>> ListAsync(
         Guid projectId, ChangeStatus? status, CancellationToken ct = default)
     {
+        var projectKey = await ProjectKeyAsync(projectId, ct);
         var query = db.ChangeRequests.Where(c => c.ProjectId == projectId);
         if (status is not null)
         {
             query = query.Where(c => c.Status == status);
         }
 
-        return await query
+        var ordered = await query
             // Manual board order first (0 = unordered → newest-updated-first within those).
             .OrderBy(c => c.SortOrder)
             .ThenByDescending(c => c.UpdatedAt)
-            .Select(c => c.ToDto())
             .ToListAsync(ct);
+        return ordered.Select(c => c.ToDto(projectKey)).ToList();
     }
 
     /// <summary>Persist a manual within-column order from board drag-and-drop. Assigns SortOrder 1..n to
@@ -302,7 +316,7 @@ public class ChangeRequestService(
             ?? throw new NotFoundException($"Change request '{id}' not found.");
 
         return new ChangeRequestDetailDto(
-            change.ToDto(),
+            change.ToDto(await ProjectKeyAsync(change.ProjectId, ct)),
             change.Comments.OrderBy(c => c.CreatedAt).Select(c => c.ToDto()).ToList(),
             change.Evidence.OrderByDescending(o => o.LastSeen).Select(o => o.ToDto()).ToList(),
             change.ScmLinks.OrderBy(l => l.CreatedAt).Select(l => l.ToDto()).ToList());
@@ -336,7 +350,7 @@ public class ChangeRequestService(
         db.AuditEvents.Add(audit);
         await db.SaveChangesAsync(ct);
         await notifier.ChangedAsync(change.ProjectId, change.Id, "transitioned", ct);
-        return change.ToDto();
+        return change.ToDto(await ProjectKeyAsync(change.ProjectId, ct));
     }
 
     public async Task<CommentDto> AddCommentAsync(Guid id, Guid actorId, AddCommentRequest req, CancellationToken ct = default)

@@ -31,6 +31,11 @@ public class ChangeRequest : Entity
     /// explicit 1..n. Scoped per (project, status).</summary>
     public int SortOrder { get; set; }
 
+    /// <summary>Per-project sequential number (1, 2, 3 …) forming the display id "KEY-NUMBER" with the
+    /// project's key. Assigned on create; nullable in the DB so existing rows can be backfilled on
+    /// startup. Unique per project, never reused.</summary>
+    public int? Number { get; set; }
+
     public ICollection<Comment> Comments { get; set; } = new List<Comment>();
     public ICollection<ScmLink> ScmLinks { get; set; } = new List<ScmLink>();
 

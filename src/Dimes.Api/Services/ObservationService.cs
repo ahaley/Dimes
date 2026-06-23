@@ -145,6 +145,10 @@ public class ObservationService(
 
         var (actor, role) = await members.ResolveAsync(observation.ProjectId, actorId, ct);
 
+        var nextNumber = (await db.ChangeRequests
+            .Where(c => c.ProjectId == observation.ProjectId)
+            .MaxAsync(c => (int?)c.Number, ct) ?? 0) + 1;
+
         var change = new ChangeRequest
         {
             ProjectId = observation.ProjectId,
@@ -153,6 +157,7 @@ public class ObservationService(
             Kind = ChangeKind.ObservationDriven,
             Status = ChangeStatus.Captured,
             CreatedByActorId = actor.Id,
+            Number = nextNumber,
         };
 
         // Guarded transition of the observation; also link it as evidence on the new change.
@@ -174,6 +179,7 @@ public class ObservationService(
 
         await db.SaveChangesAsync(ct);
         await notifier.ChangedAsync(change.ProjectId, change.Id, "created", ct);
-        return change.ToDto();
+        var projectKey = await db.Projects.Where(p => p.Id == change.ProjectId).Select(p => p.Key).FirstOrDefaultAsync(ct);
+        return change.ToDto(projectKey);
     }
 }

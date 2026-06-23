@@ -73,7 +73,24 @@ public class ProjectService(DimesDbContext db, MembershipResolver members)
             throw new BadRequestException("Project name is required.");
         }
 
-        var project = new Project { Name = req.Name.Trim(), Description = req.Description };
+        string key;
+        if (!string.IsNullOrWhiteSpace(req.Key))
+        {
+            key = ProjectKeys.Normalize(req.Key);
+            if (await db.Projects.AnyAsync(p => p.Key == key, ct))
+            {
+                throw new BadRequestException($"The project key '{key}' is already taken.");
+            }
+        }
+        else
+        {
+            // No key supplied — derive a unique one from the name.
+            var taken = (await db.Projects.Where(p => p.Key != null).Select(p => p.Key!).ToListAsync(ct))
+                .ToHashSet(StringComparer.Ordinal);
+            key = ProjectKeys.DeriveUnique(req.Name, taken);
+        }
+
+        var project = new Project { Name = req.Name.Trim(), Description = req.Description, Key = key };
         db.Projects.Add(project);
         await db.SaveChangesAsync(ct);
         return project.ToDto();
