@@ -8,13 +8,14 @@ import { Badge, cx } from '../components/ui'
 import { initials, projectColor } from '../lifecycle'
 
 export function Sidebar({
-  projects, archivedProjects = [], assignmentCounts, projectId, onSelect, collapsed, onToggleCollapse,
+  projects, archivedProjects = [], assignmentCounts, siteTitle, projectId, onSelect, collapsed, onToggleCollapse,
   canCreateProject, onNewProject,
   activeView, onShowProviders, onShowActors, onShowSettings, showSettings, mobileOpen,
 }: {
   projects: Project[]
   archivedProjects?: Project[]
   assignmentCounts: Map<string, number>
+  siteTitle: string
   projectId: string | undefined
   onSelect: (id: string) => void
   collapsed: boolean
@@ -56,7 +57,7 @@ export function Sidebar({
     >
       {/* Brand + collapse toggle */}
       <div className={cx('flex items-center px-3 py-3', compact ? 'justify-center' : 'justify-between')}>
-        {!compact && <span className="text-lg font-semibold tracking-tight text-indigo-700">Dimes</span>}
+        {!compact && <span className="truncate text-lg font-semibold tracking-tight text-indigo-700">{siteTitle}</span>}
         <button
           onClick={onToggleCollapse}
           title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
@@ -66,7 +67,7 @@ export function Sidebar({
             compact && 'flex h-8 w-8 items-center justify-center font-semibold text-indigo-700',
           )}
         >
-          {compact ? 'D' : '«'}
+          {compact ? siteTitle.charAt(0).toUpperCase() : '«'}
         </button>
       </div>
 

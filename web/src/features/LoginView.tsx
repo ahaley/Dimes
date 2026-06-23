@@ -1,13 +1,14 @@
 import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '../api/client'
-import { keys, useAuthConfig } from '../api/hooks'
+import { keys, useAuthConfig, useSiteBranding } from '../api/hooks'
 import { Button, Card, ErrorText, Field, TextInput } from '../components/ui'
 
 /** The unauthenticated gate. Local mode shows an email/password form; OIDC mode shows a button that
  * navigates to the API challenge endpoint (a real navigation so the browser follows the redirect). */
 export function LoginView() {
   const { data: config } = useAuthConfig()
+  const { data: branding } = useSiteBranding()
   const qc = useQueryClient()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -21,7 +22,7 @@ export function LoginView() {
     <div className="flex min-h-screen items-center justify-center bg-slate-50 p-4 dark:bg-slate-950">
       <Card className="w-full max-w-sm space-y-5 p-6">
         <div className="text-center">
-          <div className="text-2xl font-semibold tracking-tight text-indigo-700">Dimes</div>
+          <div className="text-2xl font-semibold tracking-tight text-indigo-700">{branding?.title ?? 'Dimes'}</div>
           <p className="mt-1 text-sm text-slate-500">Sign in to continue</p>
         </div>
 

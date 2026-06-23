@@ -28,6 +28,7 @@ public class DimesDbContext(DbContextOptions<DimesDbContext> options) : DbContex
     public DbSet<LocalCredential> LocalCredentials => Set<LocalCredential>();
     public DbSet<AssistConversation> AssistConversations => Set<AssistConversation>();
     public DbSet<AssistMessage> AssistMessages => Set<AssistMessage>();
+    public DbSet<SiteSettings> SiteSettings => Set<SiteSettings>();
     // Backing store for the ASP.NET Core Data Protection key ring (encrypts the BFF session cookie),
     // so cookies stay valid across restarts/deploys. Managed by the framework — not a domain entity.
     public DbSet<DataProtectionKey> DataProtectionKeys => Set<DataProtectionKey>();
@@ -150,6 +151,12 @@ public class DimesDbContext(DbContextOptions<DimesDbContext> options) : DbContex
         {
             b.HasOne(c => c.Project).WithMany()
                 .HasForeignKey(c => c.ProjectId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<SiteSettings>(b =>
+        {
+            // Single-row site config; cap the title so it can't break the brand layout.
+            b.Property(s => s.Title).HasMaxLength(60);
         });
 
         modelBuilder.Entity<LocalCredential>(b =>

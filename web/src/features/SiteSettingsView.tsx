@@ -1,7 +1,7 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '../api/client'
-import { keys, useAuthConfig, useProjects, useSiteUsers, useUserMemberships } from '../api/hooks'
+import { keys, useAuthConfig, useProjects, useSiteBranding, useSiteUsers, useUpdateSiteBranding, useUserMemberships } from '../api/hooks'
 import type { MemberRole, SiteUser } from '../api/types'
 import { Badge, Button, Card, cx, ErrorText, Field, Modal, Select, TextInput } from '../components/ui'
 import { useToast } from '../components/Toast'
@@ -77,6 +77,8 @@ export function SiteSettingsView() {
         </p>
       </Card>
 
+      <BrandingCard />
+
       <div className="flex items-center gap-2">
         <TextInput
           value={query}
@@ -123,6 +125,37 @@ export function SiteSettingsView() {
         <ManageProjectsModal user={managingUser} onClose={() => setManagingUser(null)} />
       )}
     </div>
+  )
+}
+
+/** Site-admin form to set the custom site title (brand). */
+function BrandingCard() {
+  const { data: branding } = useSiteBranding()
+  const update = useUpdateSiteBranding()
+  const toast = useToast()
+  const [title, setTitle] = useState('')
+  // Prefill from the loaded branding (and re-sync after a successful save).
+  useEffect(() => { if (branding) setTitle(branding.title) }, [branding])
+
+  const trimmed = title.trim()
+  const dirty = !!branding && trimmed.length > 0 && trimmed !== branding.title
+
+  return (
+    <Card className="space-y-2 p-4">
+      <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Branding</h2>
+      <Field label="Site title">
+        <TextInput value={title} maxLength={60} onChange={(e) => setTitle(e.target.value)} placeholder="Dimes" className="max-w-xs" />
+      </Field>
+      <p className="text-xs text-slate-400">Shown in the sidebar, on the login screen, and in the browser tab. Up to 60 characters.</p>
+      <ErrorText error={update.error} />
+      <Button
+        variant="primary"
+        disabled={!dirty || update.isPending}
+        onClick={() => update.mutate({ title: trimmed }, { onSuccess: () => toast.success('Site title updated') })}
+      >
+        Save
+      </Button>
+    </Card>
   )
 }
 

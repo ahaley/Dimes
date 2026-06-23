@@ -71,6 +71,9 @@ export interface ActorDetail {
   deletable: boolean; isArchived: boolean; memberships: UserMembership[]
 }
 
+// ----- Site branding -----
+export interface SiteBranding { title: string }
+
 // ----- Authentication -----
 export type AuthMode = 'Local' | 'Oidc'
 export interface AuthConfig { mode: AuthMode }

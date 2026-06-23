@@ -5,6 +5,7 @@ import type { ChangeRequest, ChangeStatus, ObservationStatus, Project } from './
 export const keys = {
   me: ['me'] as const,
   authConfig: ['authConfig'] as const,
+  siteBranding: ['site-branding'] as const,
   users: ['users'] as const,
   projects: ['projects'] as const,
   members: (projectId: string) => ['members', projectId] as const,
@@ -25,6 +26,20 @@ export const keys = {
 /** The auth mode (Local | Oidc) so the login screen renders the right control. Public endpoint. */
 export function useAuthConfig() {
   return useQuery({ queryKey: keys.authConfig, queryFn: api.getAuthConfig, staleTime: Infinity })
+}
+
+/** The configurable site title (brand). Public endpoint — read on the login screen too. */
+export function useSiteBranding() {
+  return useQuery({ queryKey: keys.siteBranding, queryFn: api.getSiteBranding, staleTime: Infinity })
+}
+
+/** Site-admin: update the site title; refreshes the branding everywhere it's shown. */
+export function useUpdateSiteBranding() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (body: { title: string }) => api.updateSiteBranding(body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.siteBranding }),
+  })
 }
 
 /** The current session. A 401 means "logged out" — don't retry it as a transient failure. */
