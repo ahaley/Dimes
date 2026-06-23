@@ -28,6 +28,7 @@ public class LifecycleServiceTests
     [Theory]
     [InlineData(ChangeStatus.Captured, ChangeStatus.Triaged, MemberRole.Contributor)]
     [InlineData(ChangeStatus.Captured, ChangeStatus.Approved, MemberRole.Maintainer)] // approval shortcut
+    [InlineData(ChangeStatus.InDevelopment, ChangeStatus.Approved, MemberRole.Maintainer)] // kick back to Approved
     [InlineData(ChangeStatus.Approved, ChangeStatus.InDevelopment, MemberRole.Contributor)]
     [InlineData(ChangeStatus.InDevelopment, ChangeStatus.InReview, MemberRole.Contributor)]
     [InlineData(ChangeStatus.InReview, ChangeStatus.InDevelopment, MemberRole.Contributor)]
@@ -70,6 +71,18 @@ public class LifecycleServiceTests
 
         Assert.Equal(MemberRole.Maintainer, ex.Required);
         Assert.Equal(ChangeStatus.Captured, change.Status); // unchanged
+    }
+
+    [Fact]
+    public void TransitionChange_InDevelopmentToApproved_RequiresMaintainer()
+    {
+        var change = ChangeAt(ChangeStatus.InDevelopment);
+
+        var ex = Assert.Throws<InsufficientRoleException>(() =>
+            _lifecycle.TransitionChange(change, ChangeStatus.Approved, Human(), MemberRole.Contributor));
+
+        Assert.Equal(MemberRole.Maintainer, ex.Required);
+        Assert.Equal(ChangeStatus.InDevelopment, change.Status); // unchanged
     }
 
     [Fact]
