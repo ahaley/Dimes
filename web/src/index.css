@@ -13,10 +13,61 @@ html.dark {
 body {
   margin: 0;
   font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  background-color: #f8fafc;
-  color: #0f172a;
+  /* Track the Tailwind neutral tokens so each theme reflows the page chrome automatically. */
+  background-color: var(--color-slate-50);
+  color: var(--color-slate-900);
 }
 html.dark body {
-  background-color: #0f172a;
-  color: #e2e8f0;
+  background-color: var(--color-slate-900);
+  color: var(--color-slate-100);
+}
+
+/*
+ * Extra themes are pure token remaps: Tailwind v4 compiles every color utility to `var(--color-*)`,
+ * so overriding those variables under `html[data-theme="…"]` (specificity 0,1,1 — beats Tailwind's
+ * `:root`) retints the whole UI with no markup changes. Light/dark are the unmodified defaults.
+ * The neutral ramp is `slate`; the primary accent is `indigo`. Semantic colors (amber/green/red/
+ * violet) and project-monogram hues are intentionally left at their defaults.
+ */
+
+/* Sepia — warm paper light theme. Neutrals → cream/brown (easier on the eyes than stark white),
+   accent → deep teal. `--color-white` (card surfaces) warms to a light cream. */
+html[data-theme="sepia"] {
+  --color-white:     #fbf6ea;
+  --color-slate-50:  #f4ecd8;
+  --color-slate-100: #ece0c8;
+  --color-slate-200: #e2d4b8;
+  --color-slate-300: #cdbb97;
+  --color-slate-400: #a8946f;
+  --color-slate-500: #8a7858;
+  --color-slate-600: #6f5e44;
+  --color-slate-700: #4f4230;
+  --color-slate-800: #3a2f20;
+  --color-slate-900: #2c2318;
+  --color-indigo-400: #3f9488;
+  --color-indigo-500: #357f74;
+  --color-indigo-600: #2f7a6f;
+  --color-indigo-700: #266258;
+}
+
+/* Division — near-black gray dark theme with SHD-orange accent (also adds `.dark`). `--color-white`
+   stays true white for button text. Hybrid orange: the primary button fill is `dark:bg-indigo-500`,
+   so indigo-500 = burnt (white text passes AA); bars/links/accents use the vivid indigo-600/300. */
+html[data-theme="division"] {
+  --color-slate-950: #0a0b0d;
+  --color-slate-900: #121417;
+  --color-slate-800: #1b1e22;
+  --color-slate-700: #2a2e34;
+  --color-slate-600: #3a3f47;
+  --color-slate-500: #6b7079;
+  --color-slate-400: #8b8881;
+  --color-slate-300: #b8b4ab;
+  --color-slate-200: #d6d3cc;
+  --color-slate-100: #e8e6e1;
+  --color-indigo-700: #9a3c0c;
+  --color-indigo-600: #ff7a1a; /* vivid: active bar / links / accents on dark */
+  --color-indigo-500: #b8480f; /* burnt: solid button fill (white text) */
+  --color-indigo-400: #d35a14; /* button hover */
+  --color-indigo-300: #ff9d4d; /* accent text on dark */
+  --color-indigo-200: #ffc699;
 }

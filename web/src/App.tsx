@@ -16,6 +16,7 @@ import { SettingsModal } from './features/SettingsModal'
 import { CreateProjectModal } from './features/CreateProjectModal'
 import { LoginView } from './features/LoginView'
 import { SiteSettingsView } from './features/SiteSettingsView'
+import { ThemePicker } from './features/ThemePicker'
 import { applyTheme, getInitialTheme, type Theme } from './theme'
 
 const COLLAPSE_KEY = 'dimes.sidebar.collapsed'
@@ -64,7 +65,6 @@ export default function App() {
   useEffect(() => { applyTheme(theme) }, [theme])
   // Close the mobile drawer whenever the route changes (covers sidebar nav taps).
   useEffect(() => { setMobileOpen(false) }, [location.pathname])
-  const toggleTheme = () => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))
 
   const toggleCollapsed = () => {
     setCollapsed((c) => {
@@ -213,14 +213,7 @@ export default function App() {
               {me.displayName}
             </span>
             <Button variant="subtle" onClick={logout}>Sign out</Button>
-            <button
-              onClick={toggleTheme}
-              title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
-              aria-label="Toggle dark mode"
-              className="rounded-md p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200"
-            >
-              {theme === 'dark' ? '☀' : '☾'}
-            </button>
+            <ThemePicker theme={theme} onChange={setTheme} />
           </div>
         </header>
 
