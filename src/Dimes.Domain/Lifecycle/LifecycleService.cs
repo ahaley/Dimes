@@ -19,7 +19,7 @@ public class LifecycleService
     private static readonly IReadOnlyDictionary<ChangeStatus, ChangeStatus[]> ChangeTransitions =
         new Dictionary<ChangeStatus, ChangeStatus[]>
         {
-            [ChangeStatus.Captured] = [ChangeStatus.Triaged, ChangeStatus.Rejected, ChangeStatus.Duplicate],
+            [ChangeStatus.Captured] = [ChangeStatus.Triaged, ChangeStatus.Approved, ChangeStatus.Rejected, ChangeStatus.Duplicate],
             [ChangeStatus.Triaged] = [ChangeStatus.Approved, ChangeStatus.Rejected, ChangeStatus.Duplicate],
             [ChangeStatus.Approved] = [ChangeStatus.InDevelopment, ChangeStatus.Rejected, ChangeStatus.Duplicate],
             [ChangeStatus.InDevelopment] = [ChangeStatus.InReview, ChangeStatus.Rejected, ChangeStatus.Duplicate],
