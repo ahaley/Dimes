@@ -6,6 +6,7 @@ using Dimes.Api.Realtime;
 using Dimes.Api.Services;
 using Dimes.Infrastructure;
 using Dimes.Infrastructure.Providers;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 
@@ -30,6 +31,14 @@ else if (string.IsNullOrWhiteSpace(connectionString))
 
 builder.Services.AddDimesPersistence(connectionString, dbProvider);
 builder.Services.AddDimesProviders();
+
+// Persist the Data Protection key ring in the database (a DataProtectionKeys table managed via the
+// DbContext). The BFF session cookie is encrypted with these keys; without durable storage the keys are
+// ephemeral and every restart/redeploy silently invalidates all sessions. A fixed application name keeps
+// the ring stable even if the deployment path changes between releases.
+builder.Services.AddDataProtection()
+    .SetApplicationName("Dimes")
+    .PersistKeysToDbContext<DimesDbContext>();
 
 // Authentication: cookie session backed by local login or Keycloak OIDC, chosen via Auth:Mode.
 builder.Services.AddDimesAuthentication(builder.Configuration, builder.Environment);
