@@ -17,6 +17,12 @@ function isRecentlyAccepted(c: ChangeRequest): boolean {
   return c.completedAt != null && Date.now() - new Date(c.completedAt).getTime() < DONE_RECENT_DAYS * 864e5
 }
 
+// Real-time board search. An empty query matches everything; the field predicates are filled in by the
+// follow-on changes (DIMES-41 description, DIMES-40 title) so this scaffold currently matches all.
+function matchesQuery(_c: ChangeRequest, query: string): boolean {
+  return query.trim() === '' || true
+}
+
 // Resolve the drop target from the pointer position — the column or card actually under the cursor —
 // not the dragged card's geometric center. closestCenter measures the dragged rect against every
 // droppable, so it can latch onto a card in an adjacent column and fire an illegal cross-column
@@ -28,8 +34,8 @@ const boardCollisionDetection: CollisionDetection = (args) => {
 }
 
 export function ChangeBoard({
-  projectId, members, onSelect,
-}: { projectId: string; members: Member[]; onSelect: (id: string) => void }) {
+  projectId, members, query, onSelect,
+}: { projectId: string; members: Member[]; query: string; onSelect: (id: string) => void }) {
   const { data: changes } = useChanges(projectId)
   const transition = useTransition(projectId)
   const reorder = useReorderChanges(projectId)
@@ -50,13 +56,17 @@ export function ChangeBoard({
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }))
 
+  // Apply the board search before splitting into columns so every column (and the Closed section)
+  // reflects the current query.
+  const visible = (changes ?? []).filter((c) => matchesQuery(c, query))
+
   // Mirror the server order (OrderBy SortOrder, then UpdatedAt desc) so an optimistic SortOrder change
   // from a drag reorders the column immediately — otherwise the card snaps back until the refetch lands.
   const byStatus = (status: ChangeStatus) =>
-    (changes ?? [])
+    visible
       .filter((c) => c.status === status)
       .sort((a, b) => a.sortOrder - b.sortOrder || b.updatedAt.localeCompare(a.updatedAt))
-  const terminal = (changes ?? []).filter((c) => c.status === 'Rejected' || c.status === 'Duplicate')
+  const terminal = visible.filter((c) => c.status === 'Rejected' || c.status === 'Duplicate')
 
   const requestTransition = (change: ChangeRequest, target: ChangeStatus) => {
     if (target === change.status) return
