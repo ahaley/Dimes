@@ -266,7 +266,7 @@ function SortableProjectRow({
         </span>
         <span className="flex min-w-0 flex-col">
           <span className={cx('truncate leading-tight', active ? 'font-semibold' : 'font-medium')}>{p.name}</span>
-          {p.key && <span className="truncate font-mono text-[10px] uppercase leading-tight text-slate-400">{p.key}</span>}
+          {p.key && <span className="truncate font-mono text-[11px] uppercase tracking-wide leading-tight text-slate-400 dark:text-slate-300">{p.key}</span>}
         </span>
         {assignedCount > 0 && (
           <span className="ml-auto shrink-0" title={`${assignedCount} newly assigned to you`}>
