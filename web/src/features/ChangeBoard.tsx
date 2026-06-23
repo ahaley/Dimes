@@ -17,12 +17,12 @@ function isRecentlyAccepted(c: ChangeRequest): boolean {
   return c.completedAt != null && Date.now() - new Date(c.completedAt).getTime() < DONE_RECENT_DAYS * 864e5
 }
 
-// Real-time board search. An empty query matches everything; otherwise match the change's description
-// (case-insensitive). Title matching is added by DIMES-40.
+// Real-time board search. An empty query matches everything; otherwise match the change's title or
+// description (case-insensitive).
 function matchesQuery(c: ChangeRequest, query: string): boolean {
   const q = query.trim().toLowerCase()
   if (q === '') return true
-  return c.description?.toLowerCase().includes(q) ?? false
+  return c.title.toLowerCase().includes(q) || (c.description?.toLowerCase().includes(q) ?? false)
 }
 
 // Resolve the drop target from the pointer position — the column or card actually under the cursor —
