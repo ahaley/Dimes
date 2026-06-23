@@ -21,6 +21,11 @@ public record MemberDto(Guid ActorId, Guid ProjectId, string DisplayName, ActorT
 // Link an existing actor (a site user) to a project, or change their role — pure membership, no new actor.
 public record SetMemberRoleRequest(MemberRole Role);
 
+// ----- Site branding (public read; site-admin write) -----
+// The customizable site title shown in the brand wordmark, login screen and browser tab.
+public record SiteBrandingDto(string Title);
+public record UpdateSiteBrandingRequest(string Title);
+
 // ----- Authentication -----
 // Mode is a deployment choice (Local | Oidc); the SPA reads it to render the right login UI.
 public record AuthConfigDto(string Mode);

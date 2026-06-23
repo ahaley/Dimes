@@ -72,6 +72,7 @@ builder.Services.AddScoped<CaptureAssistService>();
 builder.Services.AddScoped<AssistConversationService>();
 builder.Services.AddScoped<ScmService>();
 builder.Services.AddScoped<SiteAdminService>();
+builder.Services.AddScoped<SiteSettingsService>();
 builder.Services.AddScoped<IdentifierBootstrapper>();
 
 // Realtime board updates (SignalR).

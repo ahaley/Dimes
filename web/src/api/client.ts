@@ -1,6 +1,6 @@
 import type {
   ActorDetail, ActorSummary, AssistConversation, AssistConversationStatus, AssistConversationSummary, AuthConfig, AuditEvent, CaptureProposal, ChangeKind, ChangeRequest, ChangeRequestDetail, ChangeStatus, ChatTurn, CaptureAssistReply, Comment, GenerateProposalsReply,
-  LlmProviderConfig, Me, Member, Observation, ObservationSource, ObservationStatus, Priority, Project, ProjectAssignmentCount, ScmLink, SiteUser, UserMembership,
+  LlmProviderConfig, Me, Member, Observation, ObservationSource, ObservationStatus, Priority, Project, ProjectAssignmentCount, ScmLink, SiteBranding, SiteUser, UserMembership,
 } from './types'
 
 /** Error carrying the HTTP status + ProblemDetails so the UI can show 403/409 guard failures nicely. */
@@ -185,6 +185,11 @@ export const api = {
   // Export
   exportInDevelopment: (projectId: string) =>
     download(`/api/projects/${projectId}/export/in-development`, 'in-development.md'),
+
+  // Site branding (public read; site-admin write)
+  getSiteBranding: () => request<SiteBranding>('GET', '/api/config/branding'),
+  updateSiteBranding: (body: { title: string }) =>
+    request<SiteBranding>('PUT', '/api/admin/branding', body),
 
   // Authentication
   getAuthConfig: () => request<AuthConfig>('GET', '/api/auth/config'),

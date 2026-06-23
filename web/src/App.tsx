@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Navigate, Route, Routes, useLocation, useMatch, useNavigate } from 'react-router-dom'
 import { api } from './api/client'
-import { useMe, useMembers, useMyAssignmentCounts, useProjects } from './api/hooks'
+import { useMe, useMembers, useMyAssignmentCounts, useProjects, useSiteBranding } from './api/hooks'
 import { useProjectsLiveUpdates } from './api/realtime'
 import { Button, Card } from './components/ui'
 import { Sidebar } from './features/Sidebar'
@@ -126,6 +126,11 @@ export default function App() {
     return m
   }, [rawCounts, seen])
 
+  // Configurable site title (brand). Public, so it's available before login too.
+  const { data: branding } = useSiteBranding()
+  const siteTitle = branding?.title ?? 'Dimes'
+  useEffect(() => { document.title = `${siteTitle} - change tracker` }, [siteTitle])
+
   // Keep the sidebar project list live (create / archive / unarchive from any client).
   useProjectsLiveUpdates(!!me)
 
@@ -157,7 +162,7 @@ export default function App() {
     view === 'providers' ? 'LLM providers'
       : view === 'actors' ? 'Actors'
         : view === 'settings' ? 'Site settings'
-          : (currentProject ? `${currentProject.key ? `${currentProject.key} · ` : ''}${currentProject.name}` : 'Dimes')
+          : (currentProject ? `${currentProject.key ? `${currentProject.key} · ` : ''}${currentProject.name}` : siteTitle)
 
   return (
     <div className="flex h-screen">
@@ -172,6 +177,7 @@ export default function App() {
         projects={activeProjects ?? []}
         archivedProjects={archivedProjects}
         assignmentCounts={assignmentBadgeByProject}
+        siteTitle={siteTitle}
         projectId={projectId}
         onSelect={(id) => navigate(`/projects/${id}`)}
         collapsed={collapsed}
@@ -246,7 +252,7 @@ export default function App() {
             <Route path="/providers" element={me.isSiteAdmin ? <LlmProvidersView projectId={projectId ?? lastProjectId} /> : <Navigate to="/" replace />} />
             <Route path="/actors" element={me.isSiteAdmin ? <ActorsView /> : <Navigate to="/" replace />} />
             <Route path="/actors/:actorId" element={me.isSiteAdmin ? <ActorDetailView /> : <Navigate to="/" replace />} />
-            <Route path="/settings" element={<SiteSettingsView />} />
+            <Route path="/settings" element={me.isSiteAdmin ? <SiteSettingsView /> : <Navigate to="/" replace />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </main>
