@@ -116,9 +116,17 @@ public class ChangeRequestService(
             throw new BadRequestException("Title is required.");
         }
 
+        // The recipient must be a member of this change's project (null clears it). ResolveAsync throws
+        // ForbiddenException for a non-member, enforcing "limit this option to assigned members".
+        if (req.AssigneeActorId is Guid recipientId && recipientId != change.AssigneeActorId)
+        {
+            await members.ResolveAsync(change.ProjectId, recipientId, ct);
+        }
+
         change.Title = req.Title.Trim();
         change.Description = req.Description;
         change.Priority = req.Priority;
+        change.AssigneeActorId = req.AssigneeActorId;
         change.UpdatedAt = DateTimeOffset.UtcNow;
 
         db.AuditEvents.Add(new AuditEvent
