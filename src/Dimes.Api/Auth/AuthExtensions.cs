@@ -2,10 +2,12 @@ using System.Security.Claims;
 using Dimes.Domain.Entities;
 using Dimes.Domain.Providers;
 using Dimes.Infrastructure;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 
 namespace Dimes.Api.Auth;
@@ -50,6 +52,9 @@ public static class AuthExtensions
             // This is an API, not a server-rendered app: return status codes instead of redirecting.
             c.Events.OnRedirectToLogin = ctx => { ctx.Response.StatusCode = StatusCodes.Status401Unauthorized; return Task.CompletedTask; };
             c.Events.OnRedirectToAccessDenied = ctx => { ctx.Response.StatusCode = StatusCodes.Status403Forbidden; return Task.CompletedTask; };
+            // Reconcile the session against the DB on each request so site-admin grants/revocations and
+            // archival take effect immediately, without forcing a sign-out/sign-in.
+            c.Events.OnValidatePrincipal = OnValidatePrincipalAsync;
         });
 
         if (options.Mode == AuthMode.Oidc)
@@ -104,6 +109,54 @@ public static class AuthExtensions
         o.FallbackPolicy = new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build();
         o.AddPolicy(DimesClaims.SiteAdminPolicy, p => p.RequireClaim(DimesClaims.SiteAdmin, "true"));
         return o;
+    }
+
+    /// <summary>Runs on every authenticated request: re-reads the actor's site-admin/archived state
+    /// from the store and reconciles the <see cref="DimesClaims.SiteAdmin"/> claim that was baked into
+    /// the cookie at sign-in. Without this, a freshly-elevated admin keeps a pre-elevation cookie (no
+    /// claim) and is forbidden from site-admin actions until they sign out and back in — and likewise a
+    /// revoked admin or archived user would retain access for the life of the cookie (up to a week).
+    /// The cookie remains the per-request cache; this is a single indexed PK lookup to keep it honest.</summary>
+    private static async Task OnValidatePrincipalAsync(CookieValidatePrincipalContext ctx)
+    {
+        if (ctx.Principal?.Identity is not ClaimsIdentity identity || !identity.IsAuthenticated)
+        {
+            return;
+        }
+        if (!Guid.TryParse(ctx.Principal.FindFirst(DimesClaims.ActorId)?.Value, out var actorId))
+        {
+            return;
+        }
+
+        var db = ctx.HttpContext.RequestServices.GetRequiredService<DimesDbContext>();
+        var actor = await db.Actors
+            .AsNoTracking()
+            .Where(a => a.Id == actorId)
+            .Select(a => new { a.IsSiteAdmin, a.IsArchived })
+            .FirstOrDefaultAsync(ctx.HttpContext.RequestAborted);
+
+        // Actor deleted or archived since the session was issued: terminate the session.
+        if (actor is null || actor.IsArchived)
+        {
+            ctx.RejectPrincipal();
+            await ctx.HttpContext.SignOutAsync(AuthSchemes.Cookie);
+            return;
+        }
+
+        var hasClaim = ctx.Principal.HasClaim(DimesClaims.SiteAdmin, "true");
+        if (actor.IsSiteAdmin && !hasClaim)
+        {
+            identity.AddClaim(new Claim(DimesClaims.SiteAdmin, "true"));
+            ctx.ShouldRenew = true; // persist the reconciled claim back to the cookie
+        }
+        else if (!actor.IsSiteAdmin && hasClaim)
+        {
+            foreach (var stale in identity.FindAll(DimesClaims.SiteAdmin).ToList())
+            {
+                identity.RemoveClaim(stale);
+            }
+            ctx.ShouldRenew = true;
+        }
     }
 
     /// <summary>JIT-provision the external identity into an Actor and stamp the Dimes session claims
