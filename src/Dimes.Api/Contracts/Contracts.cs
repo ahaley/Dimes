@@ -155,6 +155,10 @@ public record ChangeRequestDetailDto(
     IReadOnlyList<ObservationDto> Evidence,
     IReadOnlyList<ScmLinkDto> ScmLinks);
 
+// Per-project count of the current actor's open (non-terminal) assigned change requests — drives the
+// sidebar "assigned to you" indicator. Only projects with a non-zero count are returned.
+public record ProjectAssignmentCountDto(Guid ProjectId, int Count);
+
 public record TransitionChangeRequest(ChangeStatus Target, string? Reason, Guid? DuplicateOfId);
 
 /// <summary>Post-hoc edit of a change's free-form details (author or Maintainer only). Recipient

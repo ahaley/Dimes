@@ -4,16 +4,17 @@ import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } 
 import { CSS } from '@dnd-kit/utilities'
 import type { Project } from '../api/types'
 import { useReorderProjects } from '../api/hooks'
-import { cx } from '../components/ui'
+import { Badge, cx } from '../components/ui'
 import { initials } from '../lifecycle'
 
 export function Sidebar({
-  projects, archivedProjects = [], projectId, onSelect, collapsed, onToggleCollapse,
+  projects, archivedProjects = [], assignmentCounts, projectId, onSelect, collapsed, onToggleCollapse,
   canCreateProject, onNewProject,
   activeView, onShowProviders, onShowActors, onShowSettings, showSettings, mobileOpen,
 }: {
   projects: Project[]
   archivedProjects?: Project[]
+  assignmentCounts: Map<string, number>
   projectId: string | undefined
   onSelect: (id: string) => void
   collapsed: boolean
@@ -78,13 +79,14 @@ export function Sidebar({
         {compact
           ? projects.map((p) => {
             const active = p.id === projectId && activeView === 'board'
+            const assigned = assignmentCounts.get(p.id) ?? 0
             return (
               <button
                 key={p.id}
                 onClick={() => onSelect(p.id)}
-                title={p.name}
+                title={assigned > 0 ? `${p.name} — ${assigned} assigned to you` : p.name}
                 className={cx(
-                  'flex h-9 w-9 items-center justify-center rounded-md text-sm',
+                  'relative flex h-9 w-9 items-center justify-center rounded-md text-sm',
                   active
                     ? 'bg-slate-100 font-medium text-slate-900 dark:bg-slate-800 dark:text-slate-100'
                     : 'text-slate-600 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-800',
@@ -98,6 +100,12 @@ export function Sidebar({
                 >
                   {initials(p.name)}
                 </span>
+                {assigned > 0 && (
+                  <span
+                    aria-label={`${assigned} assigned to you`}
+                    className="absolute right-0.5 top-0.5 h-2 w-2 rounded-full bg-indigo-500 ring-2 ring-white dark:ring-slate-900"
+                  />
+                )}
               </button>
             )
           })
@@ -109,6 +117,7 @@ export function Sidebar({
                     key={p.id}
                     project={p}
                     active={p.id === projectId && activeView === 'board'}
+                    assignedCount={assignmentCounts.get(p.id) ?? 0}
                     onSelect={onSelect}
                   />
                 ))}
@@ -224,8 +233,8 @@ export function Sidebar({
 /// An active-project row in the expanded sidebar: drag the hover-revealed grip (∷) to reorder; click
 /// anywhere else to open the project. Drag listeners live only on the handle so navigation is untouched.
 function SortableProjectRow({
-  project: p, active, onSelect,
-}: { project: Project; active: boolean; onSelect: (id: string) => void }) {
+  project: p, active, assignedCount, onSelect,
+}: { project: Project; active: boolean; assignedCount: number; onSelect: (id: string) => void }) {
   const { setNodeRef, transform, transition, attributes, listeners, isDragging } = useSortable({ id: p.id })
   const style = { transform: CSS.Transform.toString(transform), transition }
   return (
@@ -253,6 +262,11 @@ function SortableProjectRow({
         <span className={cx('h-4 w-0.5 rounded', active ? 'bg-indigo-600' : 'bg-transparent')} />
         {p.key && <span className="shrink-0 font-mono text-[11px] text-slate-400">{p.key}</span>}
         <span className="truncate">{p.name}</span>
+        {assignedCount > 0 && (
+          <span className="ml-auto shrink-0" title={`${assignedCount} assigned to you`}>
+            <Badge tone="indigo">{assignedCount}</Badge>
+          </span>
+        )}
       </button>
     </div>
   )

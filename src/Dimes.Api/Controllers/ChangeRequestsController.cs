@@ -45,6 +45,12 @@ public class ChangeRequestsController(
         return Ok(await changes.ListAsync(projectId, status, ct));
     }
 
+    /// <summary>Per-project counts of open change requests assigned to the current actor — feeds the
+    /// sidebar "assigned to you" indicator. Scoped to the caller's own assignments.</summary>
+    [HttpGet("api/me/assignment-counts")]
+    public async Task<ActionResult<IReadOnlyList<ProjectAssignmentCountDto>>> AssignmentCounts(CancellationToken ct)
+        => Ok(await changes.AssignedOpenCountsAsync(currentActor.ActorId, ct));
+
     [HttpGet("api/changes/{id:guid}")]
     public async Task<ActionResult<ChangeRequestDetailDto>> Get(Guid id, CancellationToken ct)
     {
