@@ -100,11 +100,8 @@ export function ChangeDetailBody({
         <p className="text-sm text-slate-400">Loading…</p>
       ) : (
         <div className="space-y-5">
-          {/* Status + transitions */}
+          {/* Status + transitions — the display key isn't repeated here; the title/heading already shows it. */}
           <div className="flex flex-wrap items-center gap-2">
-            {detail.change.displayKey && (
-              <span className="font-mono text-xs text-slate-400">{detail.change.displayKey}</span>
-            )}
             <Badge tone={STATUS_TONE[detail.change.status]}>{detail.change.status}</Badge>
             <Badge tone="slate">{detail.change.kind}</Badge>
             {detail.change.priority !== 'None' && <Badge tone="amber">{detail.change.priority}</Badge>}
