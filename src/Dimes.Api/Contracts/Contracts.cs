@@ -144,7 +144,8 @@ public record ChangeRequestDto(
     DateTimeOffset UpdatedAt,
     int SortOrder,
     int? Number,
-    string? DisplayKey);
+    string? DisplayKey,
+    DateTimeOffset? CompletedAt);
 
 public record ChangeRequestDetailDto(
     ChangeRequestDto Change,

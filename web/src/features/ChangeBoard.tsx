@@ -4,10 +4,18 @@ import { DndContext, PointerSensor, pointerWithin, rectIntersection, useDroppabl
 import { SortableContext, arrayMove, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { useActors, useChanges, useReorderChanges, useTransition } from '../api/hooks'
 import { LIFECYCLE_COLUMNS, type ChangeRequest, type ChangeStatus, type Member } from '../api/types'
-import { STATUS_TONE } from '../lifecycle'
+import { STATUS_TONE, relativeTime } from '../lifecycle'
 import { Badge, cx } from '../components/ui'
 import { useToast } from '../components/Toast'
 import { ChangeCard } from './ChangeCard'
+
+// The Done column keeps recently-accepted Change Requests visible and collapses older ones so it can't
+// grow without bound. "Recent" = accepted within this window (by CompletedAt); a Done change with no
+// CompletedAt (e.g. pre-feature, before the startup backfill stamps it) counts as older.
+const DONE_RECENT_DAYS = 14
+function isRecentlyAccepted(c: ChangeRequest): boolean {
+  return c.completedAt != null && Date.now() - new Date(c.completedAt).getTime() < DONE_RECENT_DAYS * 864e5
+}
 
 // Resolve the drop target from the pointer position — the column or card actually under the cursor —
 // not the dragged card's geometric center. closestCenter measures the dragged rect against every
@@ -100,20 +108,27 @@ export function ChangeBoard({
   return (
     <DndContext sensors={sensors} collisionDetection={boardCollisionDetection} onDragEnd={onDragEnd}>
       <div className="flex gap-3 overflow-x-auto pb-3">
-        {LIFECYCLE_COLUMNS.map((status) => (
-          <div key={status} className="flex">
-            {status === 'Approved' && <Gate />}
-            <Column
-              status={status}
-              changes={byStatus(status)}
-              members={members}
-              authorOf={authorOf}
-              onSelect={onSelect}
-              onTransition={requestTransition}
-              onFocus={() => navigate(`/projects/${projectId}/focus/${status}`)}
-            />
-          </div>
-        ))}
+        {LIFECYCLE_COLUMNS.map((status) => {
+          // Done is split into recently-accepted (shown) and older (collapsed) Change Requests.
+          const inColumn = byStatus(status)
+          const recent = status === 'Done' ? inColumn.filter(isRecentlyAccepted) : inColumn
+          const older = status === 'Done' ? inColumn.filter((c) => !isRecentlyAccepted(c)) : undefined
+          return (
+            <div key={status} className="flex">
+              {status === 'Approved' && <Gate />}
+              <Column
+                status={status}
+                changes={recent}
+                olderItems={older}
+                members={members}
+                authorOf={authorOf}
+                onSelect={onSelect}
+                onTransition={requestTransition}
+                onFocus={() => navigate(`/projects/${projectId}/focus/${status}`)}
+              />
+            </div>
+          )
+        })}
       </div>
 
       {terminal.length > 0 && (
@@ -143,10 +158,11 @@ export function ChangeBoard({
 }
 
 function Column({
-  status, changes, members, authorOf, onSelect, onTransition, onFocus,
+  status, changes, olderItems, members, authorOf, onSelect, onTransition, onFocus,
 }: {
   status: ChangeStatus
   changes: ChangeRequest[]
+  olderItems?: ChangeRequest[]
   members: Member[]
   authorOf: (change: ChangeRequest) => string
   onSelect: (id: string) => void
@@ -154,6 +170,7 @@ function Column({
   onFocus: () => void
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: status })
+  const [showOlder, setShowOlder] = useState(false)
   // Focus mode is a "work through one by one" queue — meaningful for the active spine columns, not
   // the terminal Done state.
   const canFocus = status !== 'Done'
@@ -192,10 +209,39 @@ function Column({
             />
           ))}
         </SortableContext>
-        {changes.length === 0 && (
+        {changes.length === 0 && !olderItems?.length && (
           <p className="rounded-md border border-dashed border-slate-200 px-2 py-6 text-center text-xs text-slate-300 dark:border-slate-700 dark:text-slate-600">
             Drop here
           </p>
+        )}
+
+        {/* Older accepted Change Requests, collapsed so Done can't grow unbounded (mirrors "Closed"). */}
+        {!!olderItems?.length && (
+          <div className="mt-1 rounded-md border border-slate-200 bg-white/60 dark:border-slate-700 dark:bg-slate-900/40">
+            <button
+              onClick={() => setShowOlder((v) => !v)}
+              className="flex w-full items-center gap-1.5 px-2 py-1.5 text-left text-[11px] font-medium text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
+            >
+              <span>{showOlder ? '▾' : '▸'}</span> {olderItems.length} older
+            </button>
+            {showOlder && (
+              <ul className="space-y-0.5 px-2 pb-2">
+                {olderItems.map((c) => (
+                  <li key={c.id}>
+                    <button
+                      onClick={() => onSelect(c.id)}
+                      className="w-full truncate text-left text-xs text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+                      title={c.title}
+                    >
+                      {c.displayKey && <span className="font-mono text-slate-400">{c.displayKey} </span>}
+                      {c.title}
+                      {c.completedAt && <span className="text-slate-400"> · accepted {relativeTime(c.completedAt)} ago</span>}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         )}
       </div>
     </div>

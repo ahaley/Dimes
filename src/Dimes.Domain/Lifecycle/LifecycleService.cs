@@ -94,6 +94,17 @@ public class LifecycleService
         change.Status = target;
         change.UpdatedAt = DateTimeOffset.UtcNow;
 
+        // Track acceptance time for the board's recent/older Done split: stamp on entering Done,
+        // clear on leaving it (reopen → In Development).
+        if (target == ChangeStatus.Done)
+        {
+            change.CompletedAt = DateTimeOffset.UtcNow;
+        }
+        else if (from == ChangeStatus.Done)
+        {
+            change.CompletedAt = null;
+        }
+
         return new AuditEvent
         {
             EntityType = AuditEntityType.ChangeRequest,

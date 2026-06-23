@@ -193,6 +193,9 @@ namespace Dimes.Infrastructure.Migrations
                     b.Property<Guid?>("AssigneeActorId")
                         .HasColumnType("TEXT");
 
+                    b.Property<long?>("CompletedAt")
+                        .HasColumnType("INTEGER");
+
                     b.Property<long>("CreatedAt")
                         .HasColumnType("INTEGER");
 

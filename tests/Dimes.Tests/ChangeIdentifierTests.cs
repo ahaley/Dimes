@@ -166,6 +166,37 @@ public sealed class ChangeIdentifierTests : IDisposable
         Assert.Equal(2, newer.Number);
     }
 
+    [Fact]
+    public async Task Backfill_StampsCompletedAt_OnPreFeatureDoneChanges_AndIsIdempotent()
+    {
+        var project = new Project { Name = "Legacy", Key = "LEG" };
+        var actor = new Actor { DisplayName = "Dev", Type = ActorType.Human };
+        _db.Projects.Add(project);
+        _db.Actors.Add(actor);
+        var updatedAt = DateTimeOffset.UtcNow.AddDays(-30);
+        var done = new ChangeRequest
+        {
+            Project = project, Title = "shipped", Kind = ChangeKind.Feature, Status = ChangeStatus.Done,
+            CreatedBy = actor, Number = 1, UpdatedAt = updatedAt, CompletedAt = null,
+        };
+        var open = new ChangeRequest
+        {
+            Project = project, Title = "wip", Kind = ChangeKind.Feature, Status = ChangeStatus.InDevelopment,
+            CreatedBy = actor, Number = 2, CompletedAt = null,
+        };
+        _db.ChangeRequests.AddRange(done, open);
+        await _db.SaveChangesAsync();
+
+        await new IdentifierBootstrapper(_db).BackfillAsync();
+
+        Assert.Equal(updatedAt, done.CompletedAt); // Done backfilled from UpdatedAt
+        Assert.Null(open.CompletedAt);              // non-Done untouched
+
+        // Idempotent: a second run leaves the stamped value alone.
+        await new IdentifierBootstrapper(_db).BackfillAsync();
+        Assert.Equal(updatedAt, done.CompletedAt);
+    }
+
     public void Dispose()
     {
         _db.Dispose();
