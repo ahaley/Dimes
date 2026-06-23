@@ -77,6 +77,11 @@ export default function App() {
     window.location.reload()
   }
 
+  // Managing a project (members, sources, details, archive) is a Maintainer/site-admin action — the
+  // backend enforces it; hide the affordance for everyone below that.
+  const myRole = (members ?? []).find((m) => m.actorId === me.actorId)?.role
+  const canManage = me.isSiteAdmin || myRole === 'Maintainer'
+
   const view: View =
     location.pathname.startsWith('/providers') ? 'providers'
       : location.pathname.startsWith('/actors') ? 'actors'
@@ -126,7 +131,7 @@ export default function App() {
           </button>
           <span className="truncate font-semibold text-slate-800 dark:text-slate-100">{headerTitle}</span>
 
-          {view === 'board' && projectId && (
+          {view === 'board' && projectId && canManage && (
             <button
               onClick={() => setShowSettings(true)}
               title="Manage project"
@@ -197,7 +202,7 @@ export default function App() {
           }}
         />
       )}
-      {showSettings && projectId && (
+      {showSettings && projectId && canManage && (
         <SettingsModal projectId={projectId} onClose={() => setShowSettings(false)} />
       )}
     </div>
