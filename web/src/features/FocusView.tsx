@@ -6,11 +6,17 @@ import { STATUS_TONE, initials, relativeTime } from '../lifecycle'
 import { Badge, Button, Card, cx } from '../components/ui'
 import { ChangeDetailBody } from './ChangeDetail'
 
+// Local YYYY-MM-DD (matches <input type="date"> values and avoids UTC off-by-one).
+function toYMD(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
 /**
  * Focus Mode — a full-page, low-chrome queue over a single board state. A developer clearing
  * InDevelopment, or a reviewer validating InReview, works through that column's changes one at a
  * time: a vertical queue rail (left) plus the full change detail (right) with its advance action.
- * Advancing a change drops it from the queue and auto-selects the next one.
+ * Advancing a change drops it from the queue and auto-selects the next one. For the terminal Done
+ * state it's a late-review queue, scoped to a date range by acceptance (CompletedAt).
  */
 export function FocusView({ actingActorId, members }: { actingActorId: string; members: Member[] }) {
   const { projectId = '', status = '' } = useParams()
@@ -22,13 +28,28 @@ export function FocusView({ actingActorId, members }: { actingActorId: string; m
   const [selectedId, setSelectedId] = useState<string>()
   const lastIndexRef = useRef(0)
 
-  // Oldest-updated first, so the backlog is worked top-down.
-  const queue = useMemo(
-    () => (changes ?? [])
+  // Done focus is a review queue over a date range — default the last 30 days, by acceptance date.
+  const isDone = focusStatus === 'Done'
+  const [from, setFrom] = useState(() => toYMD(new Date(Date.now() - 30 * 864e5)))
+  const [to, setTo] = useState(() => toYMD(new Date()))
+
+  const queue = useMemo(() => {
+    const all = changes ?? []
+    if (isDone) {
+      // Done Change Requests accepted within [from, to] (inclusive), newest acceptance first.
+      return all
+        .filter((c) => {
+          if (c.status !== 'Done' || c.completedAt == null) return false
+          const accepted = toYMD(new Date(c.completedAt))
+          return accepted >= from && accepted <= to
+        })
+        .sort((a, b) => (b.completedAt ?? '').localeCompare(a.completedAt ?? ''))
+    }
+    // Other states: oldest-updated first, so the backlog is worked top-down.
+    return all
       .filter((c) => c.status === focusStatus)
-      .sort((a, b) => a.updatedAt.localeCompare(b.updatedAt)),
-    [changes, focusStatus],
-  )
+      .sort((a, b) => a.updatedAt.localeCompare(b.updatedAt))
+  }, [changes, focusStatus, isDone, from, to])
 
   // Keep a valid selection. When the selected change leaves the queue (advanced to the next status),
   // the item that shifted into its index becomes selected — i.e. auto-advance to the next; or the
@@ -75,6 +96,26 @@ export function FocusView({ actingActorId, members }: { actingActorId: string; m
         <span className="text-sm font-semibold uppercase tracking-wide text-slate-500">Focus</span>
         {queue.length > 0 && (
           <span className="text-sm text-slate-400">{Math.max(currentIndex, 0) + 1} of {queue.length}</span>
+        )}
+        {isDone && (
+          <span className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
+            <span className="uppercase tracking-wide">Accepted</span>
+            <input
+              type="date"
+              value={from}
+              max={to}
+              onChange={(e) => setFrom(e.target.value)}
+              className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+            />
+            <span>–</span>
+            <input
+              type="date"
+              value={to}
+              min={from}
+              onChange={(e) => setTo(e.target.value)}
+              className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+            />
+          </span>
         )}
         <span className="ml-auto flex items-center gap-2">
           <Button variant="subtle" onClick={() => setRailOpen((v) => !v)}>
