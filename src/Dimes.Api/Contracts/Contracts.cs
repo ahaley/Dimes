@@ -125,7 +125,7 @@ public record PromoteObservationRequest(string Title, string? Description);
 public record DismissObservationRequest(string? Reason);
 
 // ----- Change requests -----
-public record CreateChangeRequest(string Title, string? Description, ChangeKind Kind, Priority Priority = Priority.None);
+public record CreateChangeRequest(string Title, string? Description, ChangeKind Kind, Priority Priority = Priority.None, Guid? AssigneeActorId = null);
 // Confirm a batch of Freestyle-Mode proposals: each element is a normal create, all land in Captured.
 public record CreateChangesRequest(IReadOnlyList<CreateChangeRequest> Changes);
 // Persist a manual within-column order (board drag-and-drop): the full set of change ids in that
@@ -157,9 +157,13 @@ public record ChangeRequestDetailDto(
 
 public record TransitionChangeRequest(ChangeStatus Target, string? Reason, Guid? DuplicateOfId);
 
-/// <summary>Post-hoc edit of a change's free-form details (author or Maintainer only). The recipient
-/// (AssigneeActorId) must be a member of the change's project; null clears it.</summary>
-public record UpdateChangeDetailsRequest(string Title, string? Description, Priority Priority, Guid? AssigneeActorId);
+/// <summary>Post-hoc edit of a change's free-form details (author or Maintainer only). Recipient
+/// assignment is a separate action — see <see cref="AssignChangeRequest"/>.</summary>
+public record UpdateChangeDetailsRequest(string Title, string? Description, Priority Priority);
+
+/// <summary>Set or clear a change's recipient (AssigneeActorId). Requires Contributor+; the recipient,
+/// when non-null, must be a project member. Null clears it.</summary>
+public record AssignChangeRequest(Guid? AssigneeActorId);
 
 /// <summary>A generated file ready to download (name + UTF-8 text content).</summary>
 public record MarkdownExport(string FileName, string Markdown);

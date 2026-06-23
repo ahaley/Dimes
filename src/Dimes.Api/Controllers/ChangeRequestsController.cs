@@ -56,6 +56,11 @@ public class ChangeRequestsController(
     public async Task<ActionResult<ChangeRequestDto>> UpdateDetails(Guid id, UpdateChangeDetailsRequest req, CancellationToken ct)
         => Ok(await changes.UpdateDetailsAsync(id, currentActor.ActorId, req, ct));
 
+    /// <summary>Set or clear a change's recipient (Contributor+; recipient must be a project member).</summary>
+    [HttpPatch("api/changes/{id:guid}/assignee")]
+    public async Task<ActionResult<ChangeRequestDto>> Assign(Guid id, AssignChangeRequest req, CancellationToken ct)
+        => Ok(await changes.AssignAsync(id, currentActor.ActorId, req, ct));
+
     [HttpPost("api/changes/{id:guid}/transition")]
     public async Task<ActionResult<ChangeRequestDto>> Transition(Guid id, TransitionChangeRequest req, CancellationToken ct)
         => Ok(await changes.TransitionAsync(id, currentActor.ActorId, req, ct));
