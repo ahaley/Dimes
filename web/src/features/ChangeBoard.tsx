@@ -32,7 +32,12 @@ export function ChangeBoard({
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }))
 
-  const byStatus = (status: ChangeStatus) => (changes ?? []).filter((c) => c.status === status)
+  // Mirror the server order (OrderBy SortOrder, then UpdatedAt desc) so an optimistic SortOrder change
+  // from a drag reorders the column immediately — otherwise the card snaps back until the refetch lands.
+  const byStatus = (status: ChangeStatus) =>
+    (changes ?? [])
+      .filter((c) => c.status === status)
+      .sort((a, b) => a.sortOrder - b.sortOrder || b.updatedAt.localeCompare(a.updatedAt))
   const terminal = (changes ?? []).filter((c) => c.status === 'Rejected' || c.status === 'Duplicate')
 
   const requestTransition = (change: ChangeRequest, target: ChangeStatus) => {
