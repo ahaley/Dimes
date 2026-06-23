@@ -131,7 +131,7 @@ export const api = {
   getChange: (id: string) => request<ChangeRequestDetail>('GET', `/api/changes/${id}`),
   updateChangeDetails: (
     id: string,
-    body: { title: string; description?: string | null; priority: Priority },
+    body: { title: string; description?: string | null; priority: Priority; assigneeActorId?: string | null },
   ) => request<ChangeRequest>('PATCH', `/api/changes/${id}`, body),
   transition: (id: string, body: { target: ChangeStatus; reason?: string | null; duplicateOfId?: string | null }) =>
     request<ChangeRequest>('POST', `/api/changes/${id}/transition`, body),

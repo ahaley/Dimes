@@ -150,8 +150,9 @@ public record ChangeRequestDetailDto(
 
 public record TransitionChangeRequest(ChangeStatus Target, string? Reason, Guid? DuplicateOfId);
 
-/// <summary>Post-hoc edit of a change's free-form details (author or Maintainer only).</summary>
-public record UpdateChangeDetailsRequest(string Title, string? Description, Priority Priority);
+/// <summary>Post-hoc edit of a change's free-form details (author or Maintainer only). The recipient
+/// (AssigneeActorId) must be a member of the change's project; null clears it.</summary>
+public record UpdateChangeDetailsRequest(string Title, string? Description, Priority Priority, Guid? AssigneeActorId);
 
 /// <summary>A generated file ready to download (name + UTF-8 text content).</summary>
 public record MarkdownExport(string FileName, string Markdown);

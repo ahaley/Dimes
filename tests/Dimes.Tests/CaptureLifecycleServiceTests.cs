@@ -235,14 +235,27 @@ public sealed class CaptureLifecycleServiceTests : IDisposable
         var seed = await SeedAsync();
         var change = await _changes.CreateAsync(seed.ProjectId, seed.ContributorId, new CreateChangeRequest("Original", "old", ChangeKind.Feature));
 
-        var updated = await _changes.UpdateDetailsAsync(change.Id, seed.ContributorId, new UpdateChangeDetailsRequest("Renamed", "new body", Priority.High));
+        var updated = await _changes.UpdateDetailsAsync(change.Id, seed.ContributorId,
+            new UpdateChangeDetailsRequest("Renamed", "new body", Priority.High, seed.MaintainerId));
 
         Assert.Equal("Renamed", updated.Title);
         Assert.Equal("new body", updated.Description);
         Assert.Equal(Priority.High, updated.Priority);
+        Assert.Equal(seed.MaintainerId, updated.AssigneeActorId); // recipient set to a project member
 
         var trail = await _changes.GetAuditAsync(change.Id);
         Assert.Contains(trail, e => e.Action == "DetailsEdited");
+    }
+
+    [Fact]
+    public async Task UpdateDetails_RecipientMustBeProjectMember()
+    {
+        var seed = await SeedAsync();
+        var change = await _changes.CreateAsync(seed.ProjectId, seed.ContributorId, new CreateChangeRequest("Original", null, ChangeKind.Feature));
+
+        await Assert.ThrowsAsync<ForbiddenException>(() =>
+            _changes.UpdateDetailsAsync(change.Id, seed.ContributorId,
+                new UpdateChangeDetailsRequest("Original", null, Priority.None, Guid.NewGuid())));
     }
 
     [Fact]
@@ -251,7 +264,7 @@ public sealed class CaptureLifecycleServiceTests : IDisposable
         var seed = await SeedAsync();
         var change = await _changes.CreateAsync(seed.ProjectId, seed.ContributorId, new CreateChangeRequest("Original", null, ChangeKind.Feature));
 
-        var updated = await _changes.UpdateDetailsAsync(change.Id, seed.MaintainerId, new UpdateChangeDetailsRequest("Maintainer edit", null, Priority.None));
+        var updated = await _changes.UpdateDetailsAsync(change.Id, seed.MaintainerId, new UpdateChangeDetailsRequest("Maintainer edit", null, Priority.None, null));
 
         Assert.Equal("Maintainer edit", updated.Title);
     }
@@ -265,7 +278,7 @@ public sealed class CaptureLifecycleServiceTests : IDisposable
         var change = await _changes.CreateAsync(seed.ProjectId, seed.ContributorId, new CreateChangeRequest("Original", null, ChangeKind.Feature));
 
         await Assert.ThrowsAsync<ForbiddenException>(() =>
-            _changes.UpdateDetailsAsync(change.Id, other.ActorId, new UpdateChangeDetailsRequest("hijack", null, Priority.None)));
+            _changes.UpdateDetailsAsync(change.Id, other.ActorId, new UpdateChangeDetailsRequest("hijack", null, Priority.None, null)));
     }
 
     [Fact]
@@ -275,7 +288,7 @@ public sealed class CaptureLifecycleServiceTests : IDisposable
         var change = await _changes.CreateAsync(seed.ProjectId, seed.ContributorId, new CreateChangeRequest("Original", null, ChangeKind.Feature));
 
         await Assert.ThrowsAsync<ForbiddenException>(() =>
-            _changes.UpdateDetailsAsync(change.Id, Guid.NewGuid(), new UpdateChangeDetailsRequest("x", null, Priority.None)));
+            _changes.UpdateDetailsAsync(change.Id, Guid.NewGuid(), new UpdateChangeDetailsRequest("x", null, Priority.None, null)));
     }
 
     [Fact]

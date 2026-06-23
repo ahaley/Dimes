@@ -48,12 +48,14 @@ export function ChangeDetailBody({
   const [eTitle, setETitle] = useState('')
   const [eDesc, setEDesc] = useState('')
   const [ePriority, setEPriority] = useState<Priority>('None')
+  const [eRecipient, setERecipient] = useState('')
 
   const startEdit = () => {
     if (!detail) return
     setETitle(detail.change.title)
     setEDesc(detail.change.description ?? '')
     setEPriority(detail.change.priority)
+    setERecipient(detail.change.assigneeActorId ?? '')
     setEditing(true)
   }
   const saveDetails = useMutation({
@@ -62,6 +64,7 @@ export function ChangeDetailBody({
         title: eTitle,
         description: eDesc || null,
         priority: ePriority,
+        assigneeActorId: eRecipient || null,
       }),
     onSuccess: () => { invalidate(changeId); setEditing(false); toast.success('Change updated') },
     onError: (e) => toast.error(e instanceof Error ? e.message : 'Could not save changes'),
@@ -121,6 +124,12 @@ export function ChangeDetailBody({
                   {PRIORITIES.map((p) => <option key={p} value={p}>{p}</option>)}
                 </Select>
               </Field>
+              <Field label="Recipient">
+                <Select value={eRecipient} onChange={(e) => setERecipient(e.target.value)}>
+                  <option value="">Unassigned</option>
+                  {members.map((m) => <option key={m.actorId} value={m.actorId}>{m.displayName}</option>)}
+                </Select>
+              </Field>
               <ErrorText error={saveDetails.error} />
               <div className="flex justify-end gap-2">
                 <Button variant="subtle" onClick={() => setEditing(false)}>Cancel</Button>
@@ -133,6 +142,16 @@ export function ChangeDetailBody({
             <p className="text-sm text-slate-600 dark:text-slate-300">{detail.change.description}</p>
           ) : (
             canEdit && <p className="text-sm italic text-slate-400">No description — click Edit to add one.</p>
+          )}
+
+          {/* Recipient */}
+          {!editing && detail.change.assigneeActorId && (
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Recipient:{' '}
+              <span className="font-medium text-slate-700 dark:text-slate-200">
+                {members.find((m) => m.actorId === detail.change.assigneeActorId)?.displayName ?? 'Unknown'}
+              </span>
+            </p>
           )}
 
           {/* Evidence */}
