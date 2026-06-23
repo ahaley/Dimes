@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { DndContext, PointerSensor, closestCenter, useDroppable, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core'
+import { DndContext, PointerSensor, pointerWithin, rectIntersection, useDroppable, useSensor, useSensors, type CollisionDetection, type DragEndEvent } from '@dnd-kit/core'
 import { SortableContext, arrayMove, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { useActors, useChanges, useReorderChanges, useTransition } from '../api/hooks'
 import { LIFECYCLE_COLUMNS, type ChangeRequest, type ChangeStatus, type Member } from '../api/types'
@@ -8,6 +8,16 @@ import { STATUS_TONE } from '../lifecycle'
 import { Badge, cx } from '../components/ui'
 import { useToast } from '../components/Toast'
 import { ChangeCard } from './ChangeCard'
+
+// Resolve the drop target from the pointer position — the column or card actually under the cursor —
+// not the dragged card's geometric center. closestCenter measures the dragged rect against every
+// droppable, so it can latch onto a card in an adjacent column and fire an illegal cross-column
+// transition (e.g. dragging toward InReview resolving to a Done card). Fall back to rect intersection
+// only when the pointer is outside every droppable (fast drags / auto-scroll).
+const boardCollisionDetection: CollisionDetection = (args) => {
+  const byPointer = pointerWithin(args)
+  return byPointer.length > 0 ? byPointer : rectIntersection(args)
+}
 
 export function ChangeBoard({
   projectId, members, onSelect,
@@ -88,7 +98,7 @@ export function ChangeBoard({
   }
 
   return (
-    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+    <DndContext sensors={sensors} collisionDetection={boardCollisionDetection} onDragEnd={onDragEnd}>
       <div className="flex gap-3 overflow-x-auto pb-3">
         {LIFECYCLE_COLUMNS.map((status) => (
           <div key={status} className="flex">
