@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Navigate, Route, Routes, useLocation, useMatch, useNavigate } from 'react-router-dom'
 import { api } from './api/client'
 import { useMe, useMembers, useMyAssignmentCounts, useProjects } from './api/hooks'
@@ -19,6 +19,22 @@ import { SiteSettingsView } from './features/SiteSettingsView'
 import { applyTheme, getInitialTheme, type Theme } from './theme'
 
 const COLLAPSE_KEY = 'dimes.sidebar.collapsed'
+
+// Per-project baseline of assignment counts the user has already seen — the sidebar badge shows only
+// assignments new since the project's board was last viewed. Stored per-browser like the collapse/theme
+// prefs; shape is { [projectId]: countSeen }.
+const SEEN_KEY = 'dimes.assignmentsSeen'
+function readSeenAssignments(): Record<string, number> {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(SEEN_KEY) ?? '{}')
+    return parsed && typeof parsed === 'object' ? (parsed as Record<string, number>) : {}
+  } catch {
+    return {}
+  }
+}
+function writeSeenAssignments(seen: Record<string, number>): void {
+  localStorage.setItem(SEEN_KEY, JSON.stringify(seen))
+}
 
 type View = 'board' | 'providers' | 'actors' | 'settings'
 
@@ -63,7 +79,52 @@ export default function App() {
 
   // Per-project count of change requests assigned to me, for the sidebar "assigned to you" indicator.
   const { data: assignmentCounts } = useMyAssignmentCounts(!!me)
-  const assignmentCountByProject = new Map((assignmentCounts ?? []).map((a) => [a.projectId, a.count]))
+  // Stable identity so the seen-tracking effects below don't re-run every render.
+  const rawCounts = useMemo(
+    () => new Map((assignmentCounts ?? []).map((a) => [a.projectId, a.count])),
+    [assignmentCounts],
+  )
+  // "Seen" baseline per project; the badge surfaces only assignments new since the project was viewed.
+  const [seen, setSeen] = useState<Record<string, number>>(readSeenAssignments)
+
+  // When assignments leave a project (completed/reassigned), clamp its baseline down so a later new
+  // assignment still surfaces. Returns the previous object unchanged when nothing clamps (no render loop).
+  useEffect(() => {
+    setSeen((prev) => {
+      let next = prev
+      for (const [pid, c] of rawCounts) {
+        if (prev[pid] != null && prev[pid] > c) {
+          if (next === prev) next = { ...prev }
+          next[pid] = c
+        }
+      }
+      if (next === prev) return prev
+      writeSeenAssignments(next)
+      return next
+    })
+  }, [rawCounts])
+
+  // Viewing a project (any /projects/:id route) marks its current count as seen, clearing its badge.
+  const activeCount = projectId ? rawCounts.get(projectId) ?? 0 : 0
+  useEffect(() => {
+    if (!projectId) return
+    setSeen((prev) => {
+      if (prev[projectId] === activeCount) return prev
+      const next = { ...prev, [projectId]: activeCount }
+      writeSeenAssignments(next)
+      return next
+    })
+  }, [projectId, activeCount])
+
+  // Badge value = assignments new since the project's board was last viewed (hidden when zero).
+  const assignmentBadgeByProject = useMemo(() => {
+    const m = new Map<string, number>()
+    for (const [pid, c] of rawCounts) {
+      const delta = c - Math.min(seen[pid] ?? 0, c)
+      if (delta > 0) m.set(pid, delta)
+    }
+    return m
+  }, [rawCounts, seen])
 
   // Keep the sidebar project list live (create / archive / unarchive from any client).
   useProjectsLiveUpdates(!!me)
@@ -110,7 +171,7 @@ export default function App() {
       <Sidebar
         projects={activeProjects ?? []}
         archivedProjects={archivedProjects}
-        assignmentCounts={assignmentCountByProject}
+        assignmentCounts={assignmentBadgeByProject}
         projectId={projectId}
         onSelect={(id) => navigate(`/projects/${id}`)}
         collapsed={collapsed}

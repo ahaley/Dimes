@@ -84,7 +84,7 @@ export function Sidebar({
               <button
                 key={p.id}
                 onClick={() => onSelect(p.id)}
-                title={assigned > 0 ? `${p.name} — ${assigned} assigned to you` : p.name}
+                title={assigned > 0 ? `${p.name} — ${assigned} newly assigned to you` : p.name}
                 className={cx(
                   'relative flex h-9 w-9 items-center justify-center rounded-md text-sm',
                   active
@@ -102,7 +102,7 @@ export function Sidebar({
                 </span>
                 {assigned > 0 && (
                   <span
-                    aria-label={`${assigned} assigned to you`}
+                    aria-label={`${assigned} newly assigned to you`}
                     className="absolute right-0.5 top-0.5 h-2 w-2 rounded-full bg-indigo-500 ring-2 ring-white dark:ring-slate-900"
                   />
                 )}
@@ -269,7 +269,7 @@ function SortableProjectRow({
           {p.key && <span className="truncate font-mono text-[10px] uppercase leading-tight text-slate-400">{p.key}</span>}
         </span>
         {assignedCount > 0 && (
-          <span className="ml-auto shrink-0" title={`${assignedCount} assigned to you`}>
+          <span className="ml-auto shrink-0" title={`${assignedCount} newly assigned to you`}>
             <Badge tone="indigo">{assignedCount}</Badge>
           </span>
         )}
