@@ -181,6 +181,14 @@ export function FocusView({ actingActorId, members }: { actingActorId: string; m
               <Button variant="subtle" disabled={currentIndex >= queue.length - 1} onClick={() => goTo(currentIndex + 1)}>Next →</Button>
               <span className="ml-auto text-xs text-slate-400">Advance with the status buttons below</span>
             </div>
+            {selected && (
+              <div className="shrink-0 border-b border-slate-200 px-4 py-3 dark:border-slate-800">
+                <div className="flex items-baseline gap-2">
+                  {selected.displayKey && <span className="font-mono text-xs text-slate-400">{selected.displayKey}</span>}
+                  <h2 className="text-lg font-semibold leading-snug text-slate-800 dark:text-slate-100">{selected.title}</h2>
+                </div>
+              </div>
+            )}
             <div className="min-h-0 flex-1 overflow-auto p-4">
               {selected && (
                 <ChangeDetailBody
