@@ -1,5 +1,9 @@
 import { useState } from 'react'
+import { DndContext, PointerSensor, pointerWithin, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core'
+import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 import type { Project } from '../api/types'
+import { useReorderProjects } from '../api/hooks'
 import { cx } from '../components/ui'
 import { initials } from '../lifecycle'
 
@@ -26,6 +30,19 @@ export function Sidebar({
   // "collapsed" is a desktop-only rail concept; the mobile drawer always shows full labels.
   const compact = collapsed && !mobileOpen
   const [showArchived, setShowArchived] = useState(false)
+
+  // Personal project ordering via drag (expanded mode only). The grip handle carries the drag; the row
+  // itself stays click-to-navigate. A 5px activation distance keeps a quick click from starting a drag.
+  const reorder = useReorderProjects()
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }))
+  const onProjectDragEnd = (e: DragEndEvent) => {
+    const overId = e.over?.id as string | undefined
+    if (!overId || overId === e.active.id) return
+    const from = projects.findIndex((p) => p.id === e.active.id)
+    const to = projects.findIndex((p) => p.id === overId)
+    if (from === -1 || to === -1) return
+    reorder.mutate({ orderedIds: arrayMove(projects.map((p) => p.id), from, to) })
+  }
   return (
     <aside
       className={cx(
@@ -58,22 +75,21 @@ export function Sidebar({
 
       {/* Project list */}
       <nav className="flex-1 space-y-1 overflow-y-auto px-2 py-1">
-        {projects.map((p) => {
-          const active = p.id === projectId && activeView === 'board'
-          return (
-            <button
-              key={p.id}
-              onClick={() => onSelect(p.id)}
-              title={p.name}
-              className={cx(
-                'flex w-full items-center rounded-md text-sm',
-                compact ? 'h-9 w-9 justify-center' : 'gap-2 px-2 py-1.5 text-left',
-                active
-                  ? 'bg-slate-100 font-medium text-slate-900 dark:bg-slate-800 dark:text-slate-100'
-                  : 'text-slate-600 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-800',
-              )}
-            >
-              {compact ? (
+        {compact
+          ? projects.map((p) => {
+            const active = p.id === projectId && activeView === 'board'
+            return (
+              <button
+                key={p.id}
+                onClick={() => onSelect(p.id)}
+                title={p.name}
+                className={cx(
+                  'flex h-9 w-9 items-center justify-center rounded-md text-sm',
+                  active
+                    ? 'bg-slate-100 font-medium text-slate-900 dark:bg-slate-800 dark:text-slate-100'
+                    : 'text-slate-600 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-800',
+                )}
+              >
                 <span
                   className={cx(
                     'flex h-7 w-7 items-center justify-center rounded-md text-xs font-semibold',
@@ -82,16 +98,23 @@ export function Sidebar({
                 >
                   {initials(p.name)}
                 </span>
-              ) : (
-                <>
-                  <span className={cx('h-4 w-0.5 rounded', active ? 'bg-indigo-600' : 'bg-transparent')} />
-                  {p.key && <span className="shrink-0 font-mono text-[11px] text-slate-400">{p.key}</span>}
-                  <span className="truncate">{p.name}</span>
-                </>
-              )}
-            </button>
-          )
-        })}
+              </button>
+            )
+          })
+          : (
+            <DndContext sensors={sensors} collisionDetection={pointerWithin} onDragEnd={onProjectDragEnd}>
+              <SortableContext items={projects.map((p) => p.id)} strategy={verticalListSortingStrategy}>
+                {projects.map((p) => (
+                  <SortableProjectRow
+                    key={p.id}
+                    project={p}
+                    active={p.id === projectId && activeView === 'board'}
+                    onSelect={onSelect}
+                  />
+                ))}
+              </SortableContext>
+            </DndContext>
+          )}
 
         {/* Only site admins can create projects (the API enforces this; hide the affordance too). */}
         {canCreateProject && (
@@ -193,5 +216,42 @@ export function Sidebar({
         </button>
       )}
     </aside>
+  )
+}
+
+/// An active-project row in the expanded sidebar: drag the hover-revealed grip (∷) to reorder; click
+/// anywhere else to open the project. Drag listeners live only on the handle so navigation is untouched.
+function SortableProjectRow({
+  project: p, active, onSelect,
+}: { project: Project; active: boolean; onSelect: (id: string) => void }) {
+  const { setNodeRef, transform, transition, attributes, listeners, isDragging } = useSortable({ id: p.id })
+  const style = { transform: CSS.Transform.toString(transform), transition }
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={cx(
+        'group/proj flex items-center rounded-md text-sm',
+        isDragging && 'opacity-50',
+        active
+          ? 'bg-slate-100 font-medium text-slate-900 dark:bg-slate-800 dark:text-slate-100'
+          : 'text-slate-600 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-800',
+      )}
+    >
+      <button
+        {...attributes}
+        {...listeners}
+        aria-label={`Reorder ${p.name}`}
+        title="Drag to reorder"
+        className="cursor-grab touch-none px-1 py-1.5 text-slate-300 opacity-0 transition-opacity hover:text-slate-500 focus:opacity-100 group-hover/proj:opacity-100 active:cursor-grabbing dark:text-slate-600 dark:hover:text-slate-400"
+      >
+        ∷
+      </button>
+      <button onClick={() => onSelect(p.id)} title={p.name} className="flex min-w-0 flex-1 items-center gap-2 py-1.5 pr-2 text-left">
+        <span className={cx('h-4 w-0.5 rounded', active ? 'bg-indigo-600' : 'bg-transparent')} />
+        {p.key && <span className="shrink-0 font-mono text-[11px] text-slate-400">{p.key}</span>}
+        <span className="truncate">{p.name}</span>
+      </button>
+    </div>
   )
 }

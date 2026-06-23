@@ -45,6 +45,9 @@ namespace Dimes.Infrastructure.Migrations
                     b.Property<Guid?>("LlmProviderConfigId")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("ProjectOrderJson")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("Type")
                         .IsRequired()
                         .HasColumnType("TEXT");

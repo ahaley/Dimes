@@ -27,6 +27,14 @@ public class ProjectsController(
     public async Task<ActionResult<IReadOnlyList<ProjectDto>>> List([FromQuery] bool includeArchived, CancellationToken ct)
         => Ok(await projects.ListAsync(currentActor.ActorId, currentActor.IsSiteAdmin, includeArchived, ct));
 
+    /// <summary>Save the caller's personal project ordering (sidebar order; the top one is their default).</summary>
+    [HttpPost("reorder")]
+    public async Task<IActionResult> Reorder(ReorderProjectsRequest req, CancellationToken ct)
+    {
+        await projects.ReorderProjectsAsync(currentActor.ActorId, req, ct);
+        return NoContent();
+    }
+
     /// <summary>Edit a project's name and description. Authority: a project Maintainer or a site admin.</summary>
     [HttpPatch("{projectId:guid}")]
     public async Task<ActionResult<ProjectDto>> Update(Guid projectId, UpdateProjectRequest req, CancellationToken ct)

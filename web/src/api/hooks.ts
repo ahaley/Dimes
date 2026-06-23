@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from './client'
-import type { ChangeRequest, ChangeStatus, ObservationStatus } from './types'
+import type { ChangeRequest, ChangeStatus, ObservationStatus, Project } from './types'
 
 export const keys = {
   me: ['me'] as const,
@@ -49,6 +49,31 @@ export function useProjects(enabled = true, includeArchived = false) {
     queryKey: [...keys.projects, includeArchived],
     queryFn: () => api.listProjects(includeArchived),
     enabled,
+  })
+}
+
+/** Persists the user's personal project order (sidebar order; the top one is their default project).
+ * Optimistically reorders every cached project-list variant (active/archived share the keys.projects
+ * prefix) so the drag feels instant, rolling back on error, then reconciles. */
+export function useReorderProjects() {
+  const qc = useQueryClient()
+
+  return useMutation({
+    mutationFn: (vars: { orderedIds: string[] }) => api.reorderProjects(vars),
+    onMutate: (vars) => {
+      const rank = new Map(vars.orderedIds.map((id, i) => [id, i]))
+      const previous = qc.getQueriesData<Project[]>({ queryKey: keys.projects })
+      // Stable sort: ranked projects first in the new order, unranked (archived/new) keep their order after.
+      qc.setQueriesData<Project[]>({ queryKey: keys.projects }, (old) =>
+        old ? [...old].sort((a, b) => (rank.get(a.id) ?? Infinity) - (rank.get(b.id) ?? Infinity)) : old,
+      )
+      void qc.cancelQueries({ queryKey: keys.projects })
+      return { previous }
+    },
+    onError: (_err, _vars, context) => {
+      context?.previous?.forEach(([key, data]) => qc.setQueryData(key, data))
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: keys.projects }),
   })
 }
 

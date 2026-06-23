@@ -102,6 +102,9 @@ public class ProjectService(DimesDbContext db, MembershipResolver members)
     public async Task<IReadOnlyList<ProjectDto>> ListAsync(
         Guid actorId, bool isSiteAdmin, bool includeArchived = false, CancellationToken ct = default)
     {
+        var orderJson = await db.Actors.Where(a => a.Id == actorId).Select(a => a.ProjectOrderJson).FirstOrDefaultAsync(ct);
+        var rank = ParseProjectOrder(orderJson);
+
         var query = db.Projects.AsQueryable();
         if (!isSiteAdmin)
         {
@@ -111,7 +114,48 @@ public class ProjectService(DimesDbContext db, MembershipResolver members)
         {
             query = query.Where(p => !p.IsArchived);
         }
-        return await query.OrderBy(p => p.Name).Select(p => p.ToDto()).ToListAsync(ct);
+        // Order by the actor's personal ranking (the sidebar order + default project), with unranked /
+        // new projects falling back to alphabetical. Applied in memory so the JSON preference is honored.
+        var projects = await query.ToListAsync(ct);
+        return projects
+            .OrderBy(p => rank.TryGetValue(p.Id, out var i) ? i : int.MaxValue)
+            .ThenBy(p => p.Name)
+            .Select(p => p.ToDto())
+            .ToList();
+    }
+
+    /// <summary>Persist the acting actor's personal project ordering (the sidebar order; its first entry is
+    /// their default project). A per-user preference — no role gate.</summary>
+    public async Task ReorderProjectsAsync(Guid actorId, ReorderProjectsRequest req, CancellationToken ct = default)
+    {
+        var actor = await db.Actors.FindAsync([actorId], ct)
+            ?? throw new NotFoundException($"Actor '{actorId}' not found.");
+        actor.ProjectOrderJson = System.Text.Json.JsonSerializer.Serialize(req.OrderedIds);
+        await db.SaveChangesAsync(ct);
+    }
+
+    /// <summary>Parse the stored project-order JSON into a project-id → position rank. Tolerant: bad/empty
+    /// JSON yields an empty rank (everything falls back to alphabetical).</summary>
+    private static Dictionary<Guid, int> ParseProjectOrder(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            return [];
+        }
+        try
+        {
+            var ids = System.Text.Json.JsonSerializer.Deserialize<List<Guid>>(json) ?? [];
+            var rank = new Dictionary<Guid, int>(ids.Count);
+            for (var i = 0; i < ids.Count; i++)
+            {
+                rank.TryAdd(ids[i], i);
+            }
+            return rank;
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return [];
+        }
     }
 
     /// <summary>Edit a project's free-form details (name, description). Authority matches other project
