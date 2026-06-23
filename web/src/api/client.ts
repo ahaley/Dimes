@@ -1,6 +1,6 @@
 import type {
   ActorDetail, ActorSummary, AssistConversation, AssistConversationStatus, AssistConversationSummary, AuthConfig, AuditEvent, CaptureProposal, ChangeKind, ChangeRequest, ChangeRequestDetail, ChangeStatus, ChatTurn, CaptureAssistReply, Comment, GenerateProposalsReply,
-  LlmProviderConfig, Me, Member, Observation, ObservationSource, ObservationStatus, Priority, Project, ScmLink, SiteUser, UserMembership,
+  LlmProviderConfig, Me, Member, Observation, ObservationSource, ObservationStatus, Priority, Project, ProjectAssignmentCount, ScmLink, SiteUser, UserMembership,
 } from './types'
 
 /** Error carrying the HTTP status + ProblemDetails so the UI can show 403/409 guard failures nicely. */
@@ -131,6 +131,8 @@ export const api = {
   listChanges: (projectId: string, status?: ChangeStatus) =>
     request<ChangeRequest[]>('GET', `/api/projects/${projectId}/changes${status ? `?status=${status}` : ''}`),
   getChange: (id: string) => request<ChangeRequestDetail>('GET', `/api/changes/${id}`),
+  myAssignmentCounts: () =>
+    request<ProjectAssignmentCount[]>('GET', '/api/me/assignment-counts'),
   updateChangeDetails: (
     id: string,
     body: { title: string; description?: string | null; priority: Priority },

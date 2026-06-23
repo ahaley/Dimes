@@ -51,6 +51,10 @@ export interface AuditEvent {
 export interface ChangeRequestDetail {
   change: ChangeRequest; comments: Comment[]; evidence: Observation[]; scmLinks: ScmLink[]
 }
+// Per-project count of open change requests assigned to the current user (sidebar indicator).
+export interface ProjectAssignmentCount {
+  projectId: string; count: number
+}
 export interface LlmProviderConfig {
   id: string; projectId?: string | null; type: LlmProviderType; name: string
   baseUrl?: string | null; model: string; apiKeySecretRef?: string | null; enabled: boolean

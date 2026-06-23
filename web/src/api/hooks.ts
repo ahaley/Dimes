@@ -15,6 +15,7 @@ export const keys = {
   inbox: (projectId: string, status?: ObservationStatus) => ['inbox', projectId, status ?? 'all'] as const,
   changes: (projectId: string, status?: ChangeStatus) => ['changes', projectId, status ?? 'all'] as const,
   change: (id: string) => ['change', id] as const,
+  assignmentCounts: ['assignment-counts'] as const,
   audit: (id: string) => ['audit', id] as const,
   assistConversation: (id: string) => ['assist', id] as const,
   pendingAssist: (projectId: string) => ['assist-pending', projectId] as const,
@@ -161,6 +162,15 @@ export function useChanges(projectId: string | undefined, status?: ChangeStatus)
   })
 }
 
+/** Per-project counts of open change requests assigned to the current user (sidebar indicator). */
+export function useMyAssignmentCounts(enabled = true) {
+  return useQuery({
+    queryKey: keys.assignmentCounts,
+    queryFn: api.myAssignmentCounts,
+    enabled,
+  })
+}
+
 export function useChangeDetail(id: string | undefined) {
   return useQuery({
     queryKey: keys.change(id ?? ''),
@@ -183,6 +193,8 @@ export function useProjectInvalidator(projectId: string | undefined) {
   return (changeId?: string) => {
     qc.invalidateQueries({ queryKey: ['changes'] })
     qc.invalidateQueries({ queryKey: ['inbox'] })
+    // Creation / assignment / transition can change the caller's open-assignment counts (sidebar badge).
+    qc.invalidateQueries({ queryKey: keys.assignmentCounts })
     if (projectId) qc.invalidateQueries({ queryKey: keys.projects })
     if (changeId) {
       qc.invalidateQueries({ queryKey: keys.change(changeId) })

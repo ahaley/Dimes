@@ -314,6 +314,23 @@ public class ChangeRequestService(
         return ordered.Select(c => c.ToDto(projectKey)).ToList();
     }
 
+    /// <summary>Per-project counts of the caller's open (non-terminal) assigned change requests, for the
+    /// sidebar "assigned to you" indicator. Assignees are always project members, so this is inherently
+    /// scoped to the caller's projects. Terminal statuses (Done/Rejected/Duplicate) are excluded; only
+    /// projects with at least one match are returned.</summary>
+    public async Task<IReadOnlyList<ProjectAssignmentCountDto>> AssignedOpenCountsAsync(
+        Guid actorId, CancellationToken ct = default)
+    {
+        return await db.ChangeRequests
+            .Where(c => c.AssigneeActorId == actorId
+                && c.Status != ChangeStatus.Done
+                && c.Status != ChangeStatus.Rejected
+                && c.Status != ChangeStatus.Duplicate)
+            .GroupBy(c => c.ProjectId)
+            .Select(g => new ProjectAssignmentCountDto(g.Key, g.Count()))
+            .ToListAsync(ct);
+    }
+
     /// <summary>Persist a manual within-column order from board drag-and-drop. Assigns SortOrder 1..n to
     /// the given changes in order; all ids must belong to the project and the named status. Not a
     /// lifecycle/details change, so no audit event is written.</summary>
