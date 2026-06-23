@@ -5,7 +5,7 @@ import { CSS } from '@dnd-kit/utilities'
 import type { Project } from '../api/types'
 import { useReorderProjects } from '../api/hooks'
 import { Badge, cx } from '../components/ui'
-import { initials } from '../lifecycle'
+import { initials, projectColor } from '../lifecycle'
 
 export function Sidebar({
   projects, archivedProjects = [], assignmentCounts, projectId, onSelect, collapsed, onToggleCollapse,
@@ -95,7 +95,7 @@ export function Sidebar({
                 <span
                   className={cx(
                     'flex h-7 w-7 items-center justify-center rounded-md text-xs font-semibold',
-                    active ? 'bg-indigo-600 text-white' : 'bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-300',
+                    active ? 'bg-indigo-600 text-white' : projectColor(p.id),
                   )}
                 >
                   {initials(p.name)}
@@ -259,9 +259,15 @@ function SortableProjectRow({
         ∷
       </button>
       <button onClick={() => onSelect(p.id)} title={p.name} className="flex min-w-0 flex-1 items-center gap-2 py-1.5 pr-2 text-left">
-        <span className={cx('h-4 w-0.5 rounded', active ? 'bg-indigo-600' : 'bg-transparent')} />
-        {p.key && <span className="shrink-0 font-mono text-[11px] text-slate-400">{p.key}</span>}
-        <span className="truncate">{p.name}</span>
+        {/* Active accent bar, then a stable colored monogram for fast at-a-glance project recognition. */}
+        <span className={cx('h-7 w-0.5 shrink-0 rounded', active ? 'bg-indigo-600' : 'bg-transparent')} />
+        <span className={cx('flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-[11px] font-semibold', projectColor(p.id))}>
+          {initials(p.name)}
+        </span>
+        <span className="flex min-w-0 flex-col">
+          <span className={cx('truncate leading-tight', active ? 'font-semibold' : 'font-medium')}>{p.name}</span>
+          {p.key && <span className="truncate font-mono text-[10px] uppercase leading-tight text-slate-400">{p.key}</span>}
+        </span>
         {assignedCount > 0 && (
           <span className="ml-auto shrink-0" title={`${assignedCount} assigned to you`}>
             <Badge tone="indigo">{assignedCount}</Badge>

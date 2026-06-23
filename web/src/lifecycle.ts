@@ -49,3 +49,22 @@ export function initials(name: string): string {
   if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase()
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
 }
+
+// A fixed, dark-mode-aware palette so each project gets a stable, distinguishable monogram color.
+const PROJECT_COLORS = [
+  'bg-indigo-100 text-indigo-700 dark:bg-indigo-500/25 dark:text-indigo-200',
+  'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/25 dark:text-emerald-200',
+  'bg-amber-100 text-amber-800 dark:bg-amber-500/25 dark:text-amber-200',
+  'bg-rose-100 text-rose-700 dark:bg-rose-500/25 dark:text-rose-200',
+  'bg-sky-100 text-sky-700 dark:bg-sky-500/25 dark:text-sky-200',
+  'bg-violet-100 text-violet-700 dark:bg-violet-500/25 dark:text-violet-200',
+  'bg-teal-100 text-teal-700 dark:bg-teal-500/25 dark:text-teal-200',
+  'bg-orange-100 text-orange-700 dark:bg-orange-500/25 dark:text-orange-200',
+]
+
+/** Deterministic Tailwind bg/text classes for a project's monogram, hashed from a stable key (its id). */
+export function projectColor(key: string): string {
+  let hash = 0
+  for (let i = 0; i < key.length; i++) hash = (hash * 31 + key.charCodeAt(i)) | 0
+  return PROJECT_COLORS[Math.abs(hash) % PROJECT_COLORS.length]
+}
