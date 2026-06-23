@@ -5,7 +5,7 @@ import type { Member } from '../api/types'
 import { useChanges, useInbox, useMyAssistConversations, useProjects } from '../api/hooks'
 import { useBoardLiveUpdates } from '../api/realtime'
 import { api } from '../api/client'
-import { Badge, Button } from '../components/ui'
+import { Badge, Button, TextInput } from '../components/ui'
 import { useToast } from '../components/Toast'
 import { ChangeBoard } from './ChangeBoard'
 import { ChangeDetail } from './ChangeDetail'
@@ -19,6 +19,7 @@ export function Workspace({
   const navigate = useNavigate()
   const [inboxOpen, setInboxOpen] = useState(false)
   const [creating, setCreating] = useState(false)
+  const [query, setQuery] = useState('')
   const toast = useToast()
 
   // Live board updates from other users (create / edit / move / promote).
@@ -52,6 +53,15 @@ export function Workspace({
       <div className="flex items-center justify-between">
         <h1 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Change board</h1>
         <div className="flex items-center gap-2">
+          <div className="w-40 sm:w-56">
+            <TextInput
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search changes…"
+              aria-label="Search changes"
+            />
+          </div>
           <Button variant="default" onClick={() => setInboxOpen(true)}>
             Inbox{inboxCount > 0 && <span className="ml-1.5"><Badge tone="amber">{inboxCount}</Badge></span>}
           </Button>
@@ -79,6 +89,7 @@ export function Workspace({
       <ChangeBoard
         projectId={projectId}
         members={members}
+        query={query}
         onSelect={(id) => navigate(`/projects/${projectId}/changes/${id}`)}
       />
 
