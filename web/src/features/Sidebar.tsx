@@ -163,7 +163,8 @@ export function Sidebar({
           </div>
         )}
 
-        {/* App-level settings */}
+        {/* App-level settings — LLM providers + Actors are site-admin-only (gated by showSettings). */}
+        {showSettings && (
         <div className="pt-3">
           {!compact && (
             <div className="px-2 pb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">Settings</div>
@@ -197,6 +198,7 @@ export function Sidebar({
             {!compact && <span>Actors</span>}
           </button>
         </div>
+        )}
       </nav>
 
       {showSettings && (
