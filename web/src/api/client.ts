@@ -122,7 +122,7 @@ export const api = {
   // Change requests
   createChange: (
     projectId: string,
-    body: { title: string; description?: string | null; kind: ChangeKind; priority?: Priority },
+    body: { title: string; description?: string | null; kind: ChangeKind; priority?: Priority; assigneeActorId?: string | null },
   ) => request<ChangeRequest>('POST', `/api/projects/${projectId}/changes`, body),
   createChangesBatch: (projectId: string, body: { changes: CaptureProposal[] }) =>
     request<ChangeRequest[]>('POST', `/api/projects/${projectId}/changes/batch`, body),
@@ -133,8 +133,10 @@ export const api = {
   getChange: (id: string) => request<ChangeRequestDetail>('GET', `/api/changes/${id}`),
   updateChangeDetails: (
     id: string,
-    body: { title: string; description?: string | null; priority: Priority; assigneeActorId?: string | null },
+    body: { title: string; description?: string | null; priority: Priority },
   ) => request<ChangeRequest>('PATCH', `/api/changes/${id}`, body),
+  assignChange: (id: string, body: { assigneeActorId?: string | null }) =>
+    request<ChangeRequest>('PATCH', `/api/changes/${id}/assignee`, body),
   transition: (id: string, body: { target: ChangeStatus; reason?: string | null; duplicateOfId?: string | null }) =>
     request<ChangeRequest>('POST', `/api/changes/${id}/transition`, body),
   addComment: (id: string, body: { body: string }) =>

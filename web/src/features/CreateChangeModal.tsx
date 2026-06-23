@@ -2,21 +2,26 @@ import { useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { api } from '../api/client'
 import { useProjectInvalidator } from '../api/hooks'
-import type { ChangeKind, Priority } from '../api/types'
+import type { ChangeKind, Member, Priority } from '../api/types'
 import { Button, ErrorText, Field, Modal, Select, TextInput, Textarea } from '../components/ui'
 
 export function CreateChangeModal({
-  projectId, onClose,
-}: { projectId: string; onClose: () => void }) {
+  projectId, members, actingActorId, onClose,
+}: { projectId: string; members: Member[]; actingActorId: string; onClose: () => void }) {
   const invalidate = useProjectInvalidator(projectId)
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [kind, setKind] = useState<ChangeKind>('Feature')
   const [priority, setPriority] = useState<Priority>('None')
+  const [recipient, setRecipient] = useState('')
+
+  // Setting a recipient is a Contributor+ action (matches the inline control on the change detail).
+  const myRole = members.find((m) => m.actorId === actingActorId)?.role
+  const canAssign = myRole === 'Contributor' || myRole === 'Maintainer'
 
   const create = useMutation({
     mutationFn: () =>
-      api.createChange(projectId, { title, description: description || null, kind, priority }),
+      api.createChange(projectId, { title, description: description || null, kind, priority, assigneeActorId: recipient || null }),
     onSuccess: () => {
       invalidate()
       onClose()
@@ -56,6 +61,19 @@ export function CreateChangeModal({
             </Select>
           </Field>
         </div>
+        {canAssign && (
+          <Field label="Recipient">
+            <div className="flex items-center gap-2">
+              <Select value={recipient} onChange={(e) => setRecipient(e.target.value)} className="flex-1">
+                <option value="">Unassigned</option>
+                {members.map((m) => <option key={m.actorId} value={m.actorId}>{m.displayName}</option>)}
+              </Select>
+              <Button variant="subtle" disabled={recipient === actingActorId} onClick={() => setRecipient(actingActorId)}>
+                Assign to me
+              </Button>
+            </div>
+          </Field>
+        )}
         <ErrorText error={create.error} />
         <div className="flex justify-end gap-2 pt-1">
           <Button variant="subtle" onClick={attemptClose}>Cancel</Button>

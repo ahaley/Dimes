@@ -86,7 +86,12 @@ export function Workspace({
         <InboxDrawer projectId={projectId} onClose={() => setInboxOpen(false)} />
       )}
       {creating && (
-        <CreateChangeModal projectId={projectId} onClose={() => setCreating(false)} />
+        <CreateChangeModal
+          projectId={projectId}
+          members={members}
+          actingActorId={actingActorId}
+          onClose={() => setCreating(false)}
+        />
       )}
       {changeId && (
         <ChangeDetail

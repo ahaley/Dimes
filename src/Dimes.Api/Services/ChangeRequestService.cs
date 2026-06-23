@@ -21,7 +21,18 @@ public class ChangeRequestService(
             throw new BadRequestException("Title is required.");
         }
 
-        var (actor, _) = await members.ResolveAsync(projectId, actorId, ct);
+        var (actor, role) = await members.ResolveAsync(projectId, actorId, ct);
+
+        // An optional recipient at creation: only a Contributor+ may direct work, and the target must be
+        // a project member (assignment otherwise has its own endpoint — see AssignAsync).
+        if (req.AssigneeActorId is Guid recipientId)
+        {
+            if (role < MemberRole.Contributor)
+            {
+                throw new ForbiddenException("Assigning a recipient requires at least the Contributor role.");
+            }
+            await members.ResolveAsync(projectId, recipientId, ct); // throws ForbiddenException for a non-member
+        }
 
         var change = new ChangeRequest
         {
@@ -32,6 +43,7 @@ public class ChangeRequestService(
             Priority = req.Priority,
             Status = ChangeStatus.Captured,
             CreatedByActorId = actor.Id,
+            AssigneeActorId = req.AssigneeActorId,
             Number = await NextNumberAsync(projectId, ct),
         };
         db.ChangeRequests.Add(change);
@@ -128,17 +140,9 @@ public class ChangeRequestService(
             throw new BadRequestException("Title is required.");
         }
 
-        // The recipient must be a member of this change's project (null clears it). ResolveAsync throws
-        // ForbiddenException for a non-member, enforcing "limit this option to assigned members".
-        if (req.AssigneeActorId is Guid recipientId && recipientId != change.AssigneeActorId)
-        {
-            await members.ResolveAsync(change.ProjectId, recipientId, ct);
-        }
-
         change.Title = req.Title.Trim();
         change.Description = req.Description;
         change.Priority = req.Priority;
-        change.AssigneeActorId = req.AssigneeActorId;
         change.UpdatedAt = DateTimeOffset.UtcNow;
 
         db.AuditEvents.Add(new AuditEvent
@@ -147,6 +151,40 @@ public class ChangeRequestService(
             EntityId = change.Id,
             ActorId = actor.Id,
             Action = "DetailsEdited",
+        });
+        await db.SaveChangesAsync(ct);
+        await notifier.ChangedAsync(change.ProjectId, change.Id, "updated", ct);
+        return change.ToDto(await ProjectKeyAsync(change.ProjectId, ct));
+    }
+
+    /// <summary>Set or clear a change's recipient. Requires Contributor+ (anyone working the project can
+    /// direct/claim work); a non-null recipient must be a project member. Records an "Assigned" audit
+    /// event.</summary>
+    public async Task<ChangeRequestDto> AssignAsync(
+        Guid id, Guid actorId, AssignChangeRequest req, CancellationToken ct = default)
+    {
+        var change = await db.ChangeRequests.FindAsync([id], ct)
+            ?? throw new NotFoundException($"Change request '{id}' not found.");
+
+        var (actor, role) = await members.ResolveAsync(change.ProjectId, actorId, ct);
+        if (role < MemberRole.Contributor)
+        {
+            throw new ForbiddenException("Assigning a recipient requires at least the Contributor role.");
+        }
+
+        if (req.AssigneeActorId is Guid recipientId)
+        {
+            await members.ResolveAsync(change.ProjectId, recipientId, ct); // throws ForbiddenException for a non-member
+        }
+
+        change.AssigneeActorId = req.AssigneeActorId;
+        change.UpdatedAt = DateTimeOffset.UtcNow;
+        db.AuditEvents.Add(new AuditEvent
+        {
+            EntityType = AuditEntityType.ChangeRequest,
+            EntityId = change.Id,
+            ActorId = actor.Id,
+            Action = "Assigned",
         });
         await db.SaveChangesAsync(ct);
         await notifier.ChangedAsync(change.ProjectId, change.Id, "updated", ct);

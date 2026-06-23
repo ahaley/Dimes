@@ -49,18 +49,19 @@ export function ChangeDetailBody({
     detail.change.createdByActorId === actingActorId ||
     members.find((m) => m.actorId === actingActorId)?.role === 'Maintainer'
   )
+  // Recipient assignment is a Contributor+ action (anyone working the project can direct/claim work).
+  const myRole = members.find((m) => m.actorId === actingActorId)?.role
+  const canAssign = myRole === 'Contributor' || myRole === 'Maintainer'
   const [editing, setEditing] = useState(false)
   const [eTitle, setETitle] = useState('')
   const [eDesc, setEDesc] = useState('')
   const [ePriority, setEPriority] = useState<Priority>('None')
-  const [eRecipient, setERecipient] = useState('')
 
   const startEdit = () => {
     if (!detail) return
     setETitle(detail.change.title)
     setEDesc(detail.change.description ?? '')
     setEPriority(detail.change.priority)
-    setERecipient(detail.change.assigneeActorId ?? '')
     setEditing(true)
   }
   const saveDetails = useMutation({
@@ -69,10 +70,15 @@ export function ChangeDetailBody({
         title: eTitle,
         description: eDesc || null,
         priority: ePriority,
-        assigneeActorId: eRecipient || null,
       }),
     onSuccess: () => { invalidate(changeId); setEditing(false); toast.success('Change updated') },
     onError: (e) => toast.error(e instanceof Error ? e.message : 'Could not save changes'),
+  })
+  // Inline recipient assignment — commits immediately (no Edit mode).
+  const assign = useMutation({
+    mutationFn: (assigneeActorId: string | null) => api.assignChange(changeId, { assigneeActorId }),
+    onSuccess: () => { invalidate(changeId); toast.success('Recipient updated') },
+    onError: (e) => toast.error(e instanceof Error ? e.message : 'Could not update recipient'),
   })
 
   const addComment = useMutation({
@@ -132,23 +138,6 @@ export function ChangeDetailBody({
                   {PRIORITIES.map((p) => <option key={p} value={p}>{p}</option>)}
                 </Select>
               </Field>
-              <Field label="Recipient">
-                <div className="flex items-center gap-2">
-                  <Select value={eRecipient} onChange={(e) => setERecipient(e.target.value)} className="flex-1">
-                    <option value="">Unassigned</option>
-                    {members.map((m) => <option key={m.actorId} value={m.actorId}>{m.displayName}</option>)}
-                  </Select>
-                  {members.some((m) => m.actorId === actingActorId) && (
-                    <Button
-                      variant="subtle"
-                      disabled={eRecipient === actingActorId}
-                      onClick={() => setERecipient(actingActorId)}
-                    >
-                      Assign to me
-                    </Button>
-                  )}
-                </div>
-              </Field>
               <ErrorText error={saveDetails.error} />
               <div className="flex justify-end gap-2">
                 <Button variant="subtle" onClick={() => setEditing(false)}>Cancel</Button>
@@ -163,14 +152,38 @@ export function ChangeDetailBody({
             canEdit && <p className="text-sm italic text-slate-400">No description — click Edit to add one.</p>
           )}
 
-          {/* Recipient */}
-          {!editing && detail.change.assigneeActorId && (
-            <p className="text-xs text-slate-500 dark:text-slate-400">
-              Recipient:{' '}
-              <span className="font-medium text-slate-700 dark:text-slate-200">
-                {members.find((m) => m.actorId === detail.change.assigneeActorId)?.displayName ?? 'Unknown'}
-              </span>
-            </p>
+          {/* Recipient — a first-class, always-visible control (no Edit mode needed). Contributor+ can
+              set/clear it inline; everyone else sees it read-only. */}
+          {!editing && (
+            <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+              <span className="font-medium uppercase tracking-wide">Recipient</span>
+              {canAssign ? (
+                <>
+                  <Select
+                    value={detail.change.assigneeActorId ?? ''}
+                    disabled={assign.isPending}
+                    className="max-w-48"
+                    onChange={(e) => assign.mutate(e.target.value || null)}
+                  >
+                    <option value="">Unassigned</option>
+                    {members.map((m) => <option key={m.actorId} value={m.actorId}>{m.displayName}</option>)}
+                  </Select>
+                  <Button
+                    variant="subtle"
+                    disabled={assign.isPending || detail.change.assigneeActorId === actingActorId}
+                    onClick={() => assign.mutate(actingActorId)}
+                  >
+                    Assign to me
+                  </Button>
+                </>
+              ) : (
+                <span className="font-medium text-slate-700 dark:text-slate-200">
+                  {detail.change.assigneeActorId
+                    ? (members.find((m) => m.actorId === detail.change.assigneeActorId)?.displayName ?? 'Unknown')
+                    : 'Unassigned'}
+                </span>
+              )}
+            </div>
           )}
 
           {/* Evidence */}
