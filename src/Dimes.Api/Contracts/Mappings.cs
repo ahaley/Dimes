@@ -37,7 +37,7 @@ public static class Mappings
     public static ChangeRequestDto ToDto(this ChangeRequest c, string? projectKey) => new(
         c.Id, c.ProjectId, c.Title, c.Description, c.Kind, c.Status, c.Priority,
         c.CreatedByActorId, c.AssigneeActorId, c.DuplicateOfId, c.CreatedAt, c.UpdatedAt, c.SortOrder,
-        c.Number, projectKey != null && c.Number is int n ? $"{projectKey}-{n}" : null);
+        c.Number, projectKey != null && c.Number is int n ? $"{projectKey}-{n}" : null, c.CompletedAt);
 
     public static CommentDto ToDto(this Comment c) =>
         new(c.Id, c.ChangeRequestId, c.AuthorActorId, c.Body, c.Kind, c.CreatedAt);

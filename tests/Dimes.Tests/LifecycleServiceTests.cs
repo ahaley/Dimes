@@ -83,6 +83,21 @@ public class LifecycleServiceTests
     }
 
     [Fact]
+    public void TransitionChange_Acceptance_StampsCompletedAt_AndReopenClearsIt()
+    {
+        var change = ChangeAt(ChangeStatus.InReview);
+        Assert.Null(change.CompletedAt);
+
+        // In Review → Done (acceptance) stamps CompletedAt.
+        _lifecycle.TransitionChange(change, ChangeStatus.Done, Human(), MemberRole.Maintainer);
+        Assert.NotNull(change.CompletedAt);
+
+        // Done → In Development (reopen) clears it.
+        _lifecycle.TransitionChange(change, ChangeStatus.InDevelopment, Human(), MemberRole.Contributor);
+        Assert.Null(change.CompletedAt);
+    }
+
+    [Fact]
     public void TransitionChange_DoneAcceptance_RequiresMaintainer()
     {
         var change = ChangeAt(ChangeStatus.InReview);

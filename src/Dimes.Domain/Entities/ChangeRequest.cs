@@ -36,6 +36,10 @@ public class ChangeRequest : Entity
     /// startup. Unique per project, never reused.</summary>
     public int? Number { get; set; }
 
+    /// <summary>When this change was last accepted into Done (set on the In Review → Done transition,
+    /// cleared on reopen). Drives the board's "recent vs. older" Done split. Null until first accepted.</summary>
+    public DateTimeOffset? CompletedAt { get; set; }
+
     public ICollection<Comment> Comments { get; set; } = new List<Comment>();
     public ICollection<ScmLink> ScmLinks { get; set; } = new List<ScmLink>();
 
