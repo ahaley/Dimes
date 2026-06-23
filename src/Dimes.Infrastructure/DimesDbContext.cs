@@ -93,9 +93,17 @@ public class DimesDbContext(DbContextOptions<DimesDbContext> options) : DbContex
                 .HasForeignKey(m => m.AuthorActorId).OnDelete(DeleteBehavior.Restrict);
         });
 
+        modelBuilder.Entity<Project>(b =>
+        {
+            // Project keys are globally unique (NULLs permitted pre-backfill, and distinct in a unique index).
+            b.HasIndex(p => p.Key).IsUnique();
+        });
+
         modelBuilder.Entity<ChangeRequest>(b =>
         {
             b.HasIndex(c => new { c.ProjectId, c.Status });
+            // Per-project display number is unique (NULLs distinct, so pre-backfill rows don't collide).
+            b.HasIndex(c => new { c.ProjectId, c.Number }).IsUnique();
             b.HasOne(c => c.Project).WithMany(p => p.ChangeRequests)
                 .HasForeignKey(c => c.ProjectId).OnDelete(DeleteBehavior.Cascade);
             b.HasOne(c => c.CreatedBy).WithMany()

@@ -64,6 +64,9 @@ export function ChangeCard({
         </div>
 
         <div className="mt-2 flex flex-wrap items-center gap-1.5">
+          {change.displayKey && (
+            <span className="font-mono text-[11px] text-slate-400">{change.displayKey}</span>
+          )}
           {change.kind === 'ObservationDriven' && (
             <span title="Promoted from an observation" className="inline-block h-1.5 w-1.5 rounded-full bg-amber-400" />
           )}

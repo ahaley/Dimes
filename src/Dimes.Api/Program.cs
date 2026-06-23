@@ -63,6 +63,7 @@ builder.Services.AddScoped<CaptureAssistService>();
 builder.Services.AddScoped<AssistConversationService>();
 builder.Services.AddScoped<ScmService>();
 builder.Services.AddScoped<SiteAdminService>();
+builder.Services.AddScoped<IdentifierBootstrapper>();
 
 // Realtime board updates (SignalR).
 builder.Services.AddSignalR();
@@ -113,6 +114,8 @@ using (var scope = app.Services.CreateScope())
     var db = scope.ServiceProvider.GetRequiredService<DimesDbContext>();
     db.Database.Migrate();
     await scope.ServiceProvider.GetRequiredService<AuthBootstrapper>().SeedAsync();
+    // Backfill display-key/number on any pre-feature projects and changes (idempotent).
+    await scope.ServiceProvider.GetRequiredService<IdentifierBootstrapper>().BackfillAsync();
 }
 
 // Behind a TLS-terminating proxy/edge (DO App Platform, nginx, etc.) HTTPS is enforced upstream and

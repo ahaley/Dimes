@@ -214,6 +214,9 @@ namespace Dimes.Infrastructure.Postgres.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<int?>("Number")
+                        .HasColumnType("integer");
+
                     b.Property<string>("Priority")
                         .IsRequired()
                         .HasColumnType("text");
@@ -242,6 +245,9 @@ namespace Dimes.Infrastructure.Postgres.Migrations
                     b.HasIndex("CreatedByActorId");
 
                     b.HasIndex("DuplicateOfId");
+
+                    b.HasIndex("ProjectId", "Number")
+                        .IsUnique();
 
                     b.HasIndex("ProjectId", "Status");
 
@@ -498,6 +504,9 @@ namespace Dimes.Infrastructure.Postgres.Migrations
                     b.Property<bool>("IsArchived")
                         .HasColumnType("boolean");
 
+                    b.Property<string>("Key")
+                        .HasColumnType("text");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasColumnType("text");
@@ -506,6 +515,9 @@ namespace Dimes.Infrastructure.Postgres.Migrations
                         .HasColumnType("boolean");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("Key")
+                        .IsUnique();
 
                     b.ToTable("Projects");
                 });

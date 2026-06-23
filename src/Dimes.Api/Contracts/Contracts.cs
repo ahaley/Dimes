@@ -7,9 +7,11 @@ namespace Dimes.Api.Contracts;
 // services, which still authorize via MembershipResolver.
 
 // ----- Projects & members -----
-public record CreateProjectRequest(string Name, string? Description);
+// Key is optional over the wire: the web form always supplies one, but when absent the server derives a
+// unique key from the name (so legacy/automation callers still get a valid display-id prefix).
+public record CreateProjectRequest(string Name, string? Description, string? Key = null);
 public record UpdateProjectRequest(string Name, string? Description, bool SourceControlEnabled, bool HumanOnly);
-public record ProjectDto(Guid Id, string Name, string? Description, DateTimeOffset CreatedAt, bool IsArchived, DateTimeOffset? ArchivedAt, bool SourceControlEnabled, bool HumanOnly);
+public record ProjectDto(Guid Id, string Name, string? Description, DateTimeOffset CreatedAt, bool IsArchived, DateTimeOffset? ArchivedAt, bool SourceControlEnabled, bool HumanOnly, string? Key);
 
 public record AddMemberRequest(string DisplayName, ActorType Type, string? Email, MemberRole Role, Guid? LlmProviderConfigId = null);
 public record UpdateMemberRequest(string DisplayName, string? Email, MemberRole Role, Guid? LlmProviderConfigId);
@@ -140,7 +142,9 @@ public record ChangeRequestDto(
     Guid? DuplicateOfId,
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt,
-    int SortOrder);
+    int SortOrder,
+    int? Number,
+    string? DisplayKey);
 
 public record ChangeRequestDetailDto(
     ChangeRequestDto Change,

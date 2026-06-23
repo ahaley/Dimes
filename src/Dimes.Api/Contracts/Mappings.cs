@@ -6,7 +6,7 @@ namespace Dimes.Api.Contracts;
 public static class Mappings
 {
     public static ProjectDto ToDto(this Project p) =>
-        new(p.Id, p.Name, p.Description, p.CreatedAt, p.IsArchived, p.ArchivedAt, p.SourceControlEnabled, p.HumanOnly);
+        new(p.Id, p.Name, p.Description, p.CreatedAt, p.IsArchived, p.ArchivedAt, p.SourceControlEnabled, p.HumanOnly, p.Key);
 
     public static MemberDto ToMemberDto(this Membership m) =>
         new(m.ActorId, m.ProjectId, m.Actor.DisplayName, m.Actor.Type, m.Actor.Email, m.Role, m.Actor.LlmProviderConfigId);
@@ -32,9 +32,12 @@ public static class Mappings
         c.Status, c.Title, c.Draft, c.ChangeRequestId, c.CreatedAt, c.UpdatedAt,
         c.Messages.OrderBy(m => m.CreatedAt).Select(m => m.ToDto()).ToList());
 
-    public static ChangeRequestDto ToDto(this ChangeRequest c) => new(
+    /// <summary>Maps a change to its DTO. <paramref name="projectKey"/> is the owning project's key, used
+    /// to build the human-readable display id "KEY-NUMBER" (null until both are backfilled/assigned).</summary>
+    public static ChangeRequestDto ToDto(this ChangeRequest c, string? projectKey) => new(
         c.Id, c.ProjectId, c.Title, c.Description, c.Kind, c.Status, c.Priority,
-        c.CreatedByActorId, c.AssigneeActorId, c.DuplicateOfId, c.CreatedAt, c.UpdatedAt, c.SortOrder);
+        c.CreatedByActorId, c.AssigneeActorId, c.DuplicateOfId, c.CreatedAt, c.UpdatedAt, c.SortOrder,
+        c.Number, projectKey != null && c.Number is int n ? $"{projectKey}-{n}" : null);
 
     public static CommentDto ToDto(this Comment c) =>
         new(c.Id, c.ChangeRequestId, c.AuthorActorId, c.Body, c.Kind, c.CreatedAt);

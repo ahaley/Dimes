@@ -7,6 +7,11 @@ public class Project : Entity
     public required string Name { get; set; }
     public string? Description { get; set; }
 
+    /// <summary>Short, immutable, human-readable key (e.g. "DIMES") — the prefix of a change's display
+    /// id "KEY-NUMBER". Unique across projects; required on create, but nullable in the DB so existing
+    /// rows can be backfilled on startup. Stored uppercase (^[A-Z][A-Z0-9]{1,5}$).</summary>
+    public string? Key { get; set; }
+
     /// <summary>Whether the source-control feature is surfaced for this project. When off, change
     /// requests hide their Source control section. Defaults to on so existing projects are unchanged.</summary>
     public bool SourceControlEnabled { get; set; } = true;

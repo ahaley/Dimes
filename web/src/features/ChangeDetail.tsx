@@ -13,7 +13,9 @@ export function ChangeDetail({
   changeId, projectId, actingActorId, members, onClose,
 }: { changeId: string; projectId: string; actingActorId: string; members: Member[]; onClose: () => void }) {
   const { data: detail } = useChangeDetail(changeId)
-  const title = detail?.change.title ?? 'Change'
+  const title = detail
+    ? `${detail.change.displayKey ? `${detail.change.displayKey} · ` : ''}${detail.change.title}`
+    : 'Change'
   return (
     <Modal title={title} onClose={onClose} wide>
       <ChangeDetailBody changeId={changeId} projectId={projectId} actingActorId={actingActorId} members={members} />
@@ -94,6 +96,9 @@ export function ChangeDetailBody({
         <div className="space-y-5">
           {/* Status + transitions */}
           <div className="flex flex-wrap items-center gap-2">
+            {detail.change.displayKey && (
+              <span className="font-mono text-xs text-slate-400">{detail.change.displayKey}</span>
+            )}
             <Badge tone={STATUS_TONE[detail.change.status]}>{detail.change.status}</Badge>
             <Badge tone="slate">{detail.change.kind}</Badge>
             {detail.change.priority !== 'None' && <Badge tone="amber">{detail.change.priority}</Badge>}

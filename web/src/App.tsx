@@ -87,7 +87,7 @@ export default function App() {
     view === 'providers' ? 'LLM providers'
       : view === 'actors' ? 'Actors'
         : view === 'settings' ? 'Site settings'
-          : (currentProject?.name ?? 'Dimes')
+          : (currentProject ? `${currentProject.key ? `${currentProject.key} · ` : ''}${currentProject.name}` : 'Dimes')
 
   return (
     <div className="flex h-screen">

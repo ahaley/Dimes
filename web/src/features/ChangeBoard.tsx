@@ -129,6 +129,7 @@ export function ChangeBoard({
               {terminal.map((c) => (
                 <li key={c.id}>
                   <button onClick={() => onSelect(c.id)} className="text-sm text-slate-500 hover:text-slate-800 dark:hover:text-slate-200">
+                    {c.displayKey && <span className="font-mono text-xs text-slate-400">{c.displayKey} </span>}
                     {c.title} <span className="text-slate-400">· {c.status}</span>
                   </button>
                 </li>
