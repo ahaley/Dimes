@@ -124,6 +124,8 @@ export const api = {
   ) => request<ChangeRequest>('POST', `/api/projects/${projectId}/changes`, body),
   createChangesBatch: (projectId: string, body: { changes: CaptureProposal[] }) =>
     request<ChangeRequest[]>('POST', `/api/projects/${projectId}/changes/batch`, body),
+  reorderChanges: (projectId: string, body: { status: ChangeStatus; orderedIds: string[] }) =>
+    request<void>('POST', `/api/projects/${projectId}/changes/reorder`, body),
   listChanges: (projectId: string, status?: ChangeStatus) =>
     request<ChangeRequest[]>('GET', `/api/projects/${projectId}/changes${status ? `?status=${status}` : ''}`),
   getChange: (id: string) => request<ChangeRequestDetail>('GET', `/api/changes/${id}`),

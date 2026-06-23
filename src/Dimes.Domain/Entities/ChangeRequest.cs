@@ -26,6 +26,11 @@ public class ChangeRequest : Entity
 
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
 
+    /// <summary>Manual within-column order set by board drag-and-drop. 0 = unordered (the default),
+    /// so a never-reordered column falls back to newest-updated-first; a reordered column gets
+    /// explicit 1..n. Scoped per (project, status).</summary>
+    public int SortOrder { get; set; }
+
     public ICollection<Comment> Comments { get; set; } = new List<Comment>();
     public ICollection<ScmLink> ScmLinks { get; set; } = new List<ScmLink>();
 

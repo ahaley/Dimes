@@ -124,6 +124,9 @@ public record DismissObservationRequest(string? Reason);
 public record CreateChangeRequest(string Title, string? Description, ChangeKind Kind, Priority Priority = Priority.None);
 // Confirm a batch of Freestyle-Mode proposals: each element is a normal create, all land in Captured.
 public record CreateChangesRequest(IReadOnlyList<CreateChangeRequest> Changes);
+// Persist a manual within-column order (board drag-and-drop): the full set of change ids in that
+// status, in their new top-to-bottom order.
+public record ReorderChangesRequest(ChangeStatus Status, IReadOnlyList<Guid> OrderedIds);
 public record ChangeRequestDto(
     Guid Id,
     Guid ProjectId,
@@ -136,7 +139,8 @@ public record ChangeRequestDto(
     Guid? AssigneeActorId,
     Guid? DuplicateOfId,
     DateTimeOffset CreatedAt,
-    DateTimeOffset UpdatedAt);
+    DateTimeOffset UpdatedAt,
+    int SortOrder);
 
 public record ChangeRequestDetailDto(
     ChangeRequestDto Change,

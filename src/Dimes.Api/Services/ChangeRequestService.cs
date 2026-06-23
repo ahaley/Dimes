@@ -247,9 +247,41 @@ public class ChangeRequestService(
         }
 
         return await query
-            .OrderByDescending(c => c.UpdatedAt)
+            // Manual board order first (0 = unordered → newest-updated-first within those).
+            .OrderBy(c => c.SortOrder)
+            .ThenByDescending(c => c.UpdatedAt)
             .Select(c => c.ToDto())
             .ToListAsync(ct);
+    }
+
+    /// <summary>Persist a manual within-column order from board drag-and-drop. Assigns SortOrder 1..n to
+    /// the given changes in order; all ids must belong to the project and the named status. Not a
+    /// lifecycle/details change, so no audit event is written.</summary>
+    public async Task ReorderAsync(
+        Guid projectId, Guid actorId, ReorderChangesRequest req, CancellationToken ct = default)
+    {
+        var (_, role) = await members.ResolveAsync(projectId, actorId, ct);
+        if (role < MemberRole.Contributor)
+        {
+            throw new ForbiddenException("Reordering the board requires at least the Contributor role.");
+        }
+
+        var inColumn = await db.ChangeRequests
+            .Where(c => c.ProjectId == projectId && c.Status == req.Status)
+            .ToListAsync(ct);
+        var byId = inColumn.ToDictionary(c => c.Id);
+
+        if (req.OrderedIds.Count != inColumn.Count || req.OrderedIds.Any(id => !byId.ContainsKey(id)))
+        {
+            throw new BadRequestException("The ordered ids must be exactly the changes in that column.");
+        }
+
+        for (var i = 0; i < req.OrderedIds.Count; i++)
+        {
+            byId[req.OrderedIds[i]].SortOrder = i + 1;
+        }
+        await db.SaveChangesAsync(ct);
+        await notifier.ChangedAsync(projectId, Guid.Empty, "reordered", ct);
     }
 
     public async Task<ChangeRequestDetailDto> GetDetailAsync(Guid id, CancellationToken ct = default)

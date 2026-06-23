@@ -35,7 +35,7 @@ export interface ChangeRequest {
   id: string; projectId: string; title: string; description?: string | null
   kind: ChangeKind; status: ChangeStatus; priority: Priority
   createdByActorId: string; assigneeActorId?: string | null; duplicateOfId?: string | null
-  createdAt: string; updatedAt: string
+  createdAt: string; updatedAt: string; sortOrder: number
 }
 export interface Comment {
   id: string; changeRequestId: string; authorActorId: string; body: string; kind: CommentKind; createdAt: string

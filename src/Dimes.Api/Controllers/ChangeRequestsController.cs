@@ -29,6 +29,14 @@ public class ChangeRequestsController(
         Guid projectId, CreateChangesRequest req, CancellationToken ct)
         => Ok(await changes.CreateManyAsync(projectId, currentActor.ActorId, req.Changes, ct));
 
+    /// <summary>Persist a manual within-column order from board drag-and-drop.</summary>
+    [HttpPost("api/projects/{projectId:guid}/changes/reorder")]
+    public async Task<IActionResult> Reorder(Guid projectId, ReorderChangesRequest req, CancellationToken ct)
+    {
+        await changes.ReorderAsync(projectId, currentActor.ActorId, req, ct);
+        return NoContent();
+    }
+
     [HttpGet("api/projects/{projectId:guid}/changes")]
     public async Task<ActionResult<IReadOnlyList<ChangeRequestDto>>> List(
         Guid projectId, [FromQuery] ChangeStatus? status, CancellationToken ct)
