@@ -1,5 +1,6 @@
 using System.Reflection;
 using Dimes.Domain.Entities;
+using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
@@ -11,7 +12,7 @@ namespace Dimes.Infrastructure;
 /// human-readable, ordinal-stable database, and actor-referencing relationships use Restrict to
 /// keep the model free of multiple-cascade-path conflicts on stricter providers.
 /// </summary>
-public class DimesDbContext(DbContextOptions<DimesDbContext> options) : DbContext(options)
+public class DimesDbContext(DbContextOptions<DimesDbContext> options) : DbContext(options), IDataProtectionKeyContext
 {
     public DbSet<Project> Projects => Set<Project>();
     public DbSet<Actor> Actors => Set<Actor>();
@@ -27,6 +28,9 @@ public class DimesDbContext(DbContextOptions<DimesDbContext> options) : DbContex
     public DbSet<LocalCredential> LocalCredentials => Set<LocalCredential>();
     public DbSet<AssistConversation> AssistConversations => Set<AssistConversation>();
     public DbSet<AssistMessage> AssistMessages => Set<AssistMessage>();
+    // Backing store for the ASP.NET Core Data Protection key ring (encrypts the BFF session cookie),
+    // so cookies stay valid across restarts/deploys. Managed by the framework — not a domain entity.
+    public DbSet<DataProtectionKey> DataProtectionKeys => Set<DataProtectionKey>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
