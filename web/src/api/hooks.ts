@@ -207,8 +207,9 @@ export function useReorderChanges(projectId: string | undefined) {
 
   return useMutation({
     mutationFn: (vars: ReorderVars) => api.reorderChanges(projectId!, vars),
-    onMutate: async (vars) => {
-      await qc.cancelQueries({ queryKey: listKey })
+    onMutate: (vars) => {
+      // Apply the new SortOrder synchronously (before any await) so the optimistic order is committed
+      // in the same frame as the drop — a deferred write lets the card paint back at its origin first.
       const previous = qc.getQueryData<ChangeRequest[]>(listKey)
       if (previous) {
         const rank = new Map(vars.orderedIds.map((id, i) => [id, i + 1]))
@@ -217,6 +218,8 @@ export function useReorderChanges(projectId: string | undefined) {
           previous.map((c) => (rank.has(c.id) ? { ...c, sortOrder: rank.get(c.id)! } : c)),
         )
       }
+      // Cancel any in-flight board refetch so it can't clobber the optimistic order (fire-and-forget).
+      void qc.cancelQueries({ queryKey: listKey })
       return { previous }
     },
     onError: (_err, _vars, context) => {
