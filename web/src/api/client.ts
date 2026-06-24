@@ -3,7 +3,8 @@ import type {
   LlmProviderConfig, Me, Member, Observation, ObservationSource, ObservationStatus, Priority, Project, ProjectAssignmentCount, ScmLink, SiteBranding, SiteUser, UserMembership,
 } from './types'
 
-/** Error carrying the HTTP status + ProblemDetails so the UI can show 403/409 guard failures nicely. */
+/** Error carrying the HTTP status + ProblemDetails so the UI can show 403/409 guard failures nicely.
+ * status === 0 is a synthetic "couldn't reach the server" (fetch rejected before any HTTP response). */
 export class ApiError extends Error {
   status: number
   title: string
@@ -14,13 +15,27 @@ export class ApiError extends Error {
   }
 }
 
+/** True when an error means the API couldn't be reached (offline / connection refused / dev proxy
+ * can't connect) or the server is unhealthy (5xx) — as opposed to a normal 4xx like a 401 logged-out.
+ * Lets the UI show an "API unreachable" state instead of mistaking a down backend for a logout. */
+export function isConnectivityError(err: unknown): boolean {
+  return err instanceof ApiError && (err.status === 0 || err.status >= 500)
+}
+
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
-  const res = await fetch(path, {
-    method,
-    credentials: 'same-origin', // carry the session cookie
-    headers: body !== undefined ? { 'Content-Type': 'application/json' } : undefined,
-    body: body !== undefined ? JSON.stringify(body) : undefined,
-  })
+  let res: Response
+  try {
+    res = await fetch(path, {
+      method,
+      credentials: 'same-origin', // carry the session cookie
+      headers: body !== undefined ? { 'Content-Type': 'application/json' } : undefined,
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    })
+  } catch {
+    // fetch rejects (offline / connection refused / dev proxy can't reach the API) before any HTTP
+    // status — surface it as status 0 so callers can tell "server unreachable" from an HTTP error.
+    throw new ApiError(0, 'Network error', "Couldn't reach the Dimes API.")
+  }
 
   if (!res.ok) {
     let title = res.statusText

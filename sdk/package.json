@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "description": "Embeddable latent-observation capture SDK for Dimes",
   "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
