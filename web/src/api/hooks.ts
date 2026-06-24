@@ -11,6 +11,7 @@ export const keys = {
   members: (projectId: string) => ['members', projectId] as const,
   providers: (projectId: string) => ['providers', projectId] as const,
   sources: (projectId: string) => ['sources', projectId] as const,
+  exportInstruction: (projectId: string) => ['export-instruction', projectId] as const,
   actors: (agentsOnly: boolean, includeArchived: boolean) => ['actors', agentsOnly, includeArchived] as const,
   actor: (id: string) => ['actor', id] as const,
   inbox: (projectId: string, status?: ObservationStatus) => ['inbox', projectId, status ?? 'all'] as const,
@@ -39,6 +40,23 @@ export function useUpdateSiteBranding() {
   return useMutation({
     mutationFn: (body: { title: string }) => api.updateSiteBranding(body),
     onSuccess: () => qc.invalidateQueries({ queryKey: keys.siteBranding }),
+  })
+}
+
+/** A project's editable export "work order" guidance (or the built-in default when none is stored). */
+export function useExportInstruction(projectId: string) {
+  return useQuery({
+    queryKey: keys.exportInstruction(projectId),
+    queryFn: () => api.getExportInstruction(projectId),
+  })
+}
+
+/** Maintainer/site-admin: edit or reset (blank body) the project's export guidance. */
+export function useUpdateExportInstruction(projectId: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (body: { content: string }) => api.updateExportInstruction(projectId, body),
+    onSuccess: (data) => qc.setQueryData(keys.exportInstruction(projectId), data),
   })
 }
 

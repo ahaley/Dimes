@@ -1,5 +1,5 @@
 import type {
-  ActorDetail, ActorSummary, AssistConversation, AssistConversationStatus, AssistConversationSummary, AuthConfig, AuditEvent, CaptureProposal, ChangeKind, ChangeRequest, ChangeRequestDetail, ChangeStatus, ChatTurn, CaptureAssistReply, Comment, GenerateProposalsReply,
+  ActorDetail, ActorSummary, AssistConversation, AssistConversationStatus, AssistConversationSummary, AuthConfig, AuditEvent, CaptureProposal, ChangeKind, ChangeRequest, ChangeRequestDetail, ChangeStatus, ChatTurn, CaptureAssistReply, Comment, ExportInstruction, GenerateProposalsReply,
   LlmProviderConfig, Me, Member, Observation, ObservationSource, ObservationStatus, Priority, Project, ProjectAssignmentCount, ScmLink, SiteBranding, SiteUser, UserMembership,
 } from './types'
 
@@ -200,6 +200,10 @@ export const api = {
   // Export
   exportInDevelopment: (projectId: string) =>
     download(`/api/projects/${projectId}/export/in-development`, 'in-development.md'),
+  getExportInstruction: (projectId: string) =>
+    request<ExportInstruction>('GET', `/api/projects/${projectId}/export/instruction`),
+  updateExportInstruction: (projectId: string, body: { content: string }) =>
+    request<ExportInstruction>('PUT', `/api/projects/${projectId}/export/instruction`, body),
 
   // Site branding (public read; site-admin write)
   getSiteBranding: () => request<SiteBranding>('GET', '/api/config/branding'),
