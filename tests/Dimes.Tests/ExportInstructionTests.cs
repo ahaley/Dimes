@@ -1,4 +1,3 @@
-using Dimes.Api.Contracts;
 using Dimes.Api.Services;
 using Dimes.Domain;
 using Dimes.Domain.Entities;
@@ -16,7 +15,6 @@ public sealed class ExportInstructionTests : IDisposable
 {
     private readonly SqliteConnection _connection;
     private readonly DimesDbContext _db;
-    private readonly ProjectService _projects;
     private readonly ChangeRequestService _changes;
 
     public ExportInstructionTests()
@@ -28,8 +26,16 @@ public sealed class ExportInstructionTests : IDisposable
         _db.Database.Migrate();
 
         var resolver = new MembershipResolver(_db);
-        _projects = new ProjectService(_db, resolver);
         _changes = new ChangeRequestService(_db, new LifecycleService(), resolver, new FakeBoardNotifier());
+    }
+
+    // Add a project directly, with no seeded instruction row, so each test controls whether an override exists.
+    private async Task<Project> AddProjectAsync(string name)
+    {
+        var project = new Project { Name = name };
+        _db.Projects.Add(project);
+        await _db.SaveChangesAsync();
+        return project;
     }
 
     private static string Lf(string s) => s.Replace("\r\n", "\n");
@@ -37,7 +43,7 @@ public sealed class ExportInstructionTests : IDisposable
     [Fact]
     public async Task Export_WithNoInstructionRow_UsesTheBuiltInDefault()
     {
-        var project = await _projects.CreateAsync(new CreateProjectRequest("Demo", null));
+        var project = await AddProjectAsync("Demo");
 
         var export = await _changes.ExportInDevelopmentAsync(project.Id);
         var md = Lf(export.Markdown);
@@ -50,7 +56,7 @@ public sealed class ExportInstructionTests : IDisposable
     [Fact]
     public async Task Export_WithCustomInstructionRow_UsesTheCustomGuidance()
     {
-        var project = await _projects.CreateAsync(new CreateProjectRequest("Demo", null));
+        var project = await AddProjectAsync("Demo");
         _db.SystemInstructions.Add(new SystemInstruction
         {
             ProjectId = project.Id,

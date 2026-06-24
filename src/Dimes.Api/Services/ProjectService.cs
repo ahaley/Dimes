@@ -92,6 +92,14 @@ public class ProjectService(DimesDbContext db, MembershipResolver members)
 
         var project = new Project { Name = req.Name.Trim(), Description = req.Description, Key = key };
         db.Projects.Add(project);
+        // Give the project its own editable copy of the export guidance up front, so it's customizable
+        // from creation (the export still falls back to this same default if the row is later reset).
+        db.SystemInstructions.Add(new SystemInstruction
+        {
+            ProjectId = project.Id,
+            Kind = SystemInstructionKind.ExportWorkOrder,
+            Content = SystemInstructionDefaults.ExportWorkOrder,
+        });
         await db.SaveChangesAsync(ct);
         return project.ToDto();
     }
