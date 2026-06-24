@@ -74,6 +74,7 @@ builder.Services.AddScoped<ScmService>();
 builder.Services.AddScoped<SiteAdminService>();
 builder.Services.AddScoped<SiteSettingsService>();
 builder.Services.AddScoped<IdentifierBootstrapper>();
+builder.Services.AddScoped<SystemInstructionBootstrapper>();
 
 // Realtime board updates (SignalR).
 builder.Services.AddSignalR();
@@ -153,6 +154,8 @@ using (var scope = app.Services.CreateScope())
     await scope.ServiceProvider.GetRequiredService<AuthBootstrapper>().SeedAsync();
     // Backfill display-key/number on any pre-feature projects and changes (idempotent).
     await scope.ServiceProvider.GetRequiredService<IdentifierBootstrapper>().BackfillAsync();
+    // Seed each project's editable system instructions from the built-in defaults (idempotent).
+    await scope.ServiceProvider.GetRequiredService<SystemInstructionBootstrapper>().SeedAsync();
 }
 
 // Behind a TLS-terminating proxy/edge (DO App Platform, nginx, etc.) HTTPS is enforced upstream and
