@@ -211,7 +211,11 @@ public sealed class CaptureLifecycleServiceTests : IDisposable
 
         // Filename carries a short UTC timestamp: <slug>-in-development-yyyyMMdd-HHmmss.md
         Assert.Matches(@"-in-development-\d{8}-\d{6}\.md$", export.FileName);
-        Assert.Contains("Claude Code", export.Markdown);
+        // The work-order guidance preamble is present (the built-in default, since this project's
+        // instruction wasn't customized). Compared to the constant so wording tweaks don't break this.
+        Assert.Contains(
+            SystemInstructionDefaults.ExportWorkOrder.Replace("\r\n", "\n"),
+            export.Markdown.Replace("\r\n", "\n"));
         Assert.Contains("Add CSV export", export.Markdown);
         Assert.Contains("Let users download a CSV.", export.Markdown);
         Assert.Contains("Fix login redirect", export.Markdown);

@@ -13,9 +13,10 @@ public static class SystemInstructionDefaults
         """
         ## Objective
 
-        You are Claude Code working in this repository. Implement every change request in the
-        "Changes" section below against this codebase. This file is the full task list — keep
-        going until each change is implemented and merged, or explicitly recorded as blocked.
+        This file is a work order: implement every change request in the "Changes" section below
+        against this repository, until each is merged or recorded as blocked. The changes differ in
+        nature — engineering, design, docs, infrastructure — so size up each one and bring (or
+        delegate to a specialized agent with) the expertise it actually needs.
 
         ## How to work
 
