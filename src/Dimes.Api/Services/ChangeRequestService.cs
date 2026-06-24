@@ -210,32 +210,7 @@ public class ChangeRequestService(
         var sb = new StringBuilder();
         sb.AppendLine($"# Work order — implement In-Development changes ({project.Name})");
         sb.AppendLine();
-        sb.AppendLine("## Objective");
-        sb.AppendLine();
-        sb.AppendLine("You are Claude Code working in this repository. Implement every change request in the");
-        sb.AppendLine("\"Changes\" section below against this codebase. This file is the full task list — keep");
-        sb.AppendLine("going until each change is implemented and merged, or explicitly recorded as blocked.");
-        sb.AppendLine();
-        sb.AppendLine("## How to work");
-        sb.AppendLine();
-        sb.AppendLine("1. **Record the integration branch.** Note the branch you start on (e.g. `main`); call it");
-        sb.AppendLine("   the *integration branch*. Every change branches from it and merges back into it.");
-        sb.AppendLine("2. **One branch per change**, in order. Create a branch off the *current* integration");
-        sb.AppendLine("   branch using the `Branch:` name given for each change below.");
-        sb.AppendLine("3. **Implement only that change**, then **verify before committing**: the project must");
-        sb.AppendLine("   build and the relevant tests must pass. Never commit a broken change.");
-        sb.AppendLine("4. **Commit on the branch.** First line is the change title, then a blank line, then");
-        sb.AppendLine("   `Dimes change <id>`. Keep unrelated edits out of the commit.");
-        sb.AppendLine("5. **Merge back.** Switch to the integration branch and run");
-        sb.AppendLine("   `git merge --no-ff <branch>` so each change is one reviewable merge commit. Resolve");
-        sb.AppendLine("   any conflicts and re-verify the build after merging.");
-        sb.AppendLine("6. **Sequence matters.** Branch each subsequent change from the *updated* integration");
-        sb.AppendLine("   branch so later changes build on earlier ones.");
-        sb.AppendLine("7. **If a change can't be completed** (won't build, tests fail, unresolvable conflict),");
-        sb.AppendLine("   leave its branch unmerged, check it off as blocked with a one-line reason, and");
-        sb.AppendLine("   continue with the remaining changes.");
-        sb.AppendLine("8. Work autonomously through the whole list; pause only if a change is too ambiguous to");
-        sb.AppendLine("   implement safely. When finished, report what merged and what's blocked.");
+        AppendBlock(sb, SystemInstructionDefaults.ExportWorkOrder);
         sb.AppendLine();
         sb.AppendLine("## Changes");
         sb.AppendLine();
@@ -275,6 +250,17 @@ public class ChangeRequestService(
             .Select(ch => char.IsLetterOrDigit(ch) ? ch : '-').ToArray()).Trim('-');
         while (slug.Contains("--")) slug = slug.Replace("--", "-");
         return string.IsNullOrEmpty(slug) ? "project" : slug;
+    }
+
+    /// <summary>Append a multi-line block one line at a time so every line ends with the platform newline,
+    /// regardless of how the source text stores its breaks (a stored instruction may carry \n or \r\n). This
+    /// reproduces the historical line-by-line <see cref="StringBuilder.AppendLine(string)"/> output exactly.</summary>
+    private static void AppendBlock(StringBuilder sb, string text)
+    {
+        foreach (var line in text.Replace("\r\n", "\n").Split('\n'))
+        {
+            sb.AppendLine(line);
+        }
     }
 
     /// <summary>Read authority for a change by id: a member of its project, or a site admin. Used by the
