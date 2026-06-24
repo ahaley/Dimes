@@ -2,6 +2,7 @@ using Dimes.Api;
 using Dimes.Api.Contracts;
 using Dimes.Api.Services;
 using Dimes.Domain;
+using Dimes.Domain.Entities;
 using Dimes.Infrastructure;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
@@ -37,11 +38,29 @@ public sealed class ExportInstructionServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task Get_WithNoRow_ReturnsBuiltInDefault()
+    public async Task Create_SeedsTheDefaultExportInstruction()
     {
-        var (projectId, _, _) = await SeedProjectAsync();
+        var project = await _projects.CreateAsync(new CreateProjectRequest("Fresh", null));
 
-        var dto = await _projects.GetExportInstructionAsync(projectId);
+        var row = Assert.Single(await _db.SystemInstructions.ToListAsync());
+        Assert.Equal(project.Id, row.ProjectId);
+        Assert.Equal(SystemInstructionKind.ExportWorkOrder, row.Kind);
+        Assert.Equal(SystemInstructionDefaults.ExportWorkOrder, row.Content);
+
+        // It's a real per-project row, so the editor reports it as a customizable override, not the fallback.
+        var dto = await _projects.GetExportInstructionAsync(project.Id);
+        Assert.False(dto.IsDefault);
+    }
+
+    [Fact]
+    public async Task Get_WithNoRow_FallsBackToBuiltInDefault()
+    {
+        // A project with no instruction row (predating the seed, or reset) falls back to the default.
+        var project = new Project { Name = "Bare" };
+        _db.Projects.Add(project);
+        await _db.SaveChangesAsync();
+
+        var dto = await _projects.GetExportInstructionAsync(project.Id);
 
         Assert.True(dto.IsDefault);
         Assert.Equal(SystemInstructionDefaults.ExportWorkOrder, dto.Content);
@@ -64,14 +83,15 @@ public sealed class ExportInstructionServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task Update_BelowMaintainer_IsForbidden_AndPersistsNothing()
+    public async Task Update_BelowMaintainer_IsForbidden_AndLeavesGuidanceUnchanged()
     {
         var (projectId, _, contributorId) = await SeedProjectAsync();
 
         await Assert.ThrowsAsync<ForbiddenException>(() => _projects.UpdateExportInstructionAsync(
             projectId, new UpdateExportInstructionRequest("nope"), contributorId, callerIsSiteAdmin: false));
 
-        Assert.Equal(0, await _db.SystemInstructions.CountAsync());
+        var dto = await _projects.GetExportInstructionAsync(projectId);
+        Assert.Equal(SystemInstructionDefaults.ExportWorkOrder, dto.Content);
     }
 
     [Fact]
