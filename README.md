@@ -41,7 +41,7 @@ the agent proposes, you edit, and you approve what lands on the board. Nothing i
 sign-off. Like everything else in Dimes, it runs on your own LLM, whether Anthropic or any
 OpenAI-compatible endpoint, so the problem you're working through never leaves infrastructure you control.
 
-- **Capture:** an explicit feedback widget; the [`@dimes/sdk`](#embedding-the-capture-sdk) for latent
+- **Capture:** an explicit feedback widget; the [`dimes-capture-sdk`](#embedding-the-capture-sdk) for latent
   client signals (uncaught errors, rage clicks, navigation breadcrumbs); a Seq integration for server-side
   exceptions; **Capture Assist** (described above); plus a Simulate Capture harness for testing.
 - **Observation inbox:** triage incoming signals (`New → Clustered`), **Promote** an observation into a
@@ -94,12 +94,12 @@ Password: dimes-dev
 
 ## Embedding the capture SDK
 
-The `@dimes/sdk` is a framework-agnostic, dependency-light TypeScript library you embed in a host app to
+The `dimes-capture-sdk` package is a framework-agnostic, dependency-light TypeScript library you embed in a host app to
 capture latent and explicit signals. First create an **Observation Source** in the project's settings to
 get a `sourceId`, then:
 
 ```ts
-import { init, mountFeedbackWidget } from '@dimes/sdk'
+import { init, mountFeedbackWidget } from 'dimes-capture-sdk'
 
 const client = init({
   endpoint: 'https://dimes.example.com', // your Dimes API origin
@@ -126,7 +126,7 @@ Dimes is three independently-built pieces:
   that is the single authority for every status change), `Dimes.Infrastructure` (EF Core, migrations,
   provider implementations), and `Dimes.Api` (controllers, services, DTOs).
 - **`web/`, the React 19 SPA.** Vite, Tailwind CSS v4, TanStack Query, and dnd-kit for the board.
-- **`sdk/`, the TypeScript capture SDK** (`@dimes/sdk`), built with tsup to CJS + ESM + types.
+- **`sdk/`, the TypeScript capture SDK** (`dimes-capture-sdk`), built with tsup to CJS + ESM + types.
 
 ```bash
 # Backend (from repo root)

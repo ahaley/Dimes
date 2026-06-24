@@ -1,11 +1,37 @@
 {
-  "name": "@dimes/sdk",
+  "name": "dimes-capture-sdk",
   "version": "0.1.0",
   "description": "Embeddable latent-observation capture SDK for Dimes",
+  "license": "MIT",
+  "author": "Antonio Haley",
+  "homepage": "https://github.com/ahaley/Dimes/tree/main/sdk#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ahaley/Dimes.git",
+    "directory": "sdk"
+  },
+  "bugs": {
+    "url": "https://github.com/ahaley/Dimes/issues"
+  },
+  "keywords": [
+    "dimes",
+    "capture",
+    "observations",
+    "feedback",
+    "telemetry",
+    "rum",
+    "error-tracking",
+    "sdk"
+  ],
   "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "unpkg": "./dist/index.global.js",
+  "jsdelivr": "./dist/index.global.js",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -20,7 +46,8 @@
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
-    "test": "vitest run"
+    "test": "vitest run",
+    "prepublishOnly": "npm run build && npm test"
   },
   "devDependencies": {
     "happy-dom": "^20.10.6",

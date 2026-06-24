@@ -1,4 +1,4 @@
-# @dimes/sdk
+# dimes-capture-sdk
 
 Embeddable, dependency-free, framework-agnostic capture SDK for [Dimes](../specs/spec.md).
 It posts **observations** to a configured Dimes ingest source: explicit user feedback, uncaught
@@ -8,11 +8,11 @@ enriched with context metadata (route, app version, identity, breadcrumbs, viewp
 ## Install
 
 ```bash
-npm install @dimes/sdk
+npm install dimes-capture-sdk
 ```
 
 ```ts
-import { init } from '@dimes/sdk'
+import { init } from 'dimes-capture-sdk'
 
 const dimes = init({
   endpoint: 'https://dimes.internal',   // base URL of the Dimes API
@@ -30,7 +30,7 @@ dimes.captureFeedback('The export button does nothing')   // explicit feedback
 ### Script tag (no bundler)
 
 ```html
-<script src="https://unpkg.com/@dimes/sdk/dist/index.global.js"></script>
+<script src="https://unpkg.com/dimes-capture-sdk/dist/index.global.js"></script>
 <script>
   const dimes = Dimes.init({ endpoint: 'https://dimes.internal', sourceId: '...' })
   Dimes.mountFeedbackWidget(dimes)   // optional floating feedback button
