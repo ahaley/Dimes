@@ -207,10 +207,18 @@ public class ChangeRequestService(
             .ThenBy(c => c.Title)
             .ToList();
 
+        // Use the project's editable guidance if present; otherwise fall back to the built-in default
+        // (covers projects created after the one-time seed, or whose row was reset).
+        var instruction = await db.SystemInstructions
+            .Where(s => s.ProjectId == projectId && s.Kind == SystemInstructionKind.ExportWorkOrder)
+            .Select(s => s.Content)
+            .FirstOrDefaultAsync(ct);
+        var guidance = string.IsNullOrWhiteSpace(instruction) ? SystemInstructionDefaults.ExportWorkOrder : instruction;
+
         var sb = new StringBuilder();
         sb.AppendLine($"# Work order — implement In-Development changes ({project.Name})");
         sb.AppendLine();
-        AppendBlock(sb, SystemInstructionDefaults.ExportWorkOrder);
+        AppendBlock(sb, guidance);
         sb.AppendLine();
         sb.AppendLine("## Changes");
         sb.AppendLine();
