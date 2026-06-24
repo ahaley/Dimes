@@ -29,6 +29,7 @@ public class DimesDbContext(DbContextOptions<DimesDbContext> options) : DbContex
     public DbSet<AssistConversation> AssistConversations => Set<AssistConversation>();
     public DbSet<AssistMessage> AssistMessages => Set<AssistMessage>();
     public DbSet<SiteSettings> SiteSettings => Set<SiteSettings>();
+    public DbSet<SystemInstruction> SystemInstructions => Set<SystemInstruction>();
     // Backing store for the ASP.NET Core Data Protection key ring (encrypts the BFF session cookie),
     // so cookies stay valid across restarts/deploys. Managed by the framework — not a domain entity.
     public DbSet<DataProtectionKey> DataProtectionKeys => Set<DataProtectionKey>();
@@ -157,6 +158,14 @@ public class DimesDbContext(DbContextOptions<DimesDbContext> options) : DbContex
         {
             // Single-row site config; cap the title so it can't break the brand layout.
             b.Property(s => s.Title).HasMaxLength(60);
+        });
+
+        modelBuilder.Entity<SystemInstruction>(b =>
+        {
+            // At most one editable instruction per kind per project.
+            b.HasIndex(s => new { s.ProjectId, s.Kind }).IsUnique();
+            b.HasOne(s => s.Project).WithMany(p => p.SystemInstructions)
+                .HasForeignKey(s => s.ProjectId).OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<LocalCredential>(b =>
