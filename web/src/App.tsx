@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Navigate, Route, Routes, useLocation, useMatch, useNavigate } from 'react-router-dom'
-import { api } from './api/client'
+import { api, isConnectivityError } from './api/client'
 import { useMe, useMembers, useMyAssignmentCounts, useProjects, useSiteBranding } from './api/hooks'
 import { useProjectsLiveUpdates } from './api/realtime'
 import { Button, Card } from './components/ui'
@@ -39,8 +39,38 @@ function writeSeenAssignments(seen: Record<string, number>): void {
 
 type View = 'board' | 'providers' | 'actors' | 'settings'
 
+/** Shown when the session check can't reach the backend (the most common first-run confusion: the
+ * web app is up but the API isn't). useMe() keeps polling, so this clears itself once the API
+ * responds — the button is just for the impatient. The dev hint is omitted in production builds. */
+function ApiUnreachable({ onRetry }: { onRetry: () => void }) {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-slate-50 p-4 dark:bg-slate-950">
+      <Card className="w-full max-w-md space-y-4 p-6 text-center">
+        <div>
+          <div className="text-lg font-semibold text-slate-800 dark:text-slate-100">Cannot reach the Dimes API</div>
+          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+            The app loaded, but the backend is not responding. Retrying automatically…
+          </p>
+        </div>
+        {import.meta.env.DEV && (
+          <div className="rounded-md bg-slate-100 p-3 text-left text-xs text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+            <p className="mb-1">Start the API from the repo root, then this clears on its own:</p>
+            <code className="block font-mono text-[11px] text-slate-800 dark:text-slate-100">
+              dotnet run --project src/Dimes.Api
+            </code>
+            <p className="mt-1">
+              It should be listening on <span className="font-mono">http://localhost:5080</span>.
+            </p>
+          </div>
+        )}
+        <Button variant="primary" className="w-full" onClick={onRetry}>Try again</Button>
+      </Card>
+    </div>
+  )
+}
+
 export default function App() {
-  const { data: me, isLoading: meLoading, isError: loggedOut } = useMe()
+  const { data: me, isLoading: meLoading, isError: meErrored, error: meError, refetch: refetchMe } = useMe()
   // Include archived so the sidebar can surface them in a separate group; split for the active list.
   // Keep activeProjects undefined while loading so IndexRedirect can distinguish "loading" from "none".
   const { data: projects } = useProjects(!!me, true)
@@ -134,11 +164,16 @@ export default function App() {
   // Keep the sidebar project list live (create / archive / unarchive from any client).
   useProjectsLiveUpdates(!!me)
 
-  // Auth gate: wait for the session, then either show the login screen or the app.
+  // Auth gate: wait for the session, then either show the API-down screen, the login screen, or the app.
   if (meLoading) {
     return <div className="flex h-screen items-center justify-center text-sm text-slate-400">Loading…</div>
   }
-  if (loggedOut || !me) {
+  // A down/unreachable API looks different from a logout (401): show a clear "is the API running?"
+  // panel instead of bouncing the user to a login form that would only fail again.
+  if (meErrored && isConnectivityError(meError)) {
+    return <ApiUnreachable onRetry={() => void refetchMe()} />
+  }
+  if (meErrored || !me) {
     return <LoginView />
   }
 

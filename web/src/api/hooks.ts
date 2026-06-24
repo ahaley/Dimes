@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { api } from './client'
+import { api, isConnectivityError } from './client'
 import type { ChangeRequest, ChangeStatus, ObservationStatus, Project } from './types'
 
 export const keys = {
@@ -42,9 +42,16 @@ export function useUpdateSiteBranding() {
   })
 }
 
-/** The current session. A 401 means "logged out" — don't retry it as a transient failure. */
+/** The current session. A 401 means "logged out" — settle immediately (retry:false) rather than
+ * treating it as a transient failure. But if the API is unreachable (network/5xx), poll quietly so
+ * the app recovers on its own once the API comes up — no manual reload needed. */
 export function useMe() {
-  return useQuery({ queryKey: keys.me, queryFn: api.getMe, retry: false })
+  return useQuery({
+    queryKey: keys.me,
+    queryFn: api.getMe,
+    retry: false,
+    refetchInterval: (query) => (isConnectivityError(query.state.error) ? 5000 : false),
+  })
 }
 
 export function useSiteUsers(enabled: boolean) {

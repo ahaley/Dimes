@@ -66,16 +66,21 @@ OpenAI-compatible endpoint, so the problem you're working through never leaves i
 
 ## Quick start
 
-**Prerequisites:** [.NET 10 SDK](https://dotnet.microsoft.com/) and Node.js 20+.
+**Prerequisites:** the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0) and
+[Node.js 20+](https://nodejs.org/). Check what you have with `dotnet --version` (expect `10.0.x`) and
+`node --version` (expect `v20` or newer). A `global.json` pins the SDK to the .NET 10 band, so an older
+SDK fails fast with a clear message instead of a confusing build error.
 
 The API uses SQLite by default and applies its migrations automatically on startup, so a fresh checkout
 needs no manual database step.
 
 ```bash
-# 1. Run the API (from the repo root). Port 5080 is what the web dev proxy expects.
-dotnet run --project src/Dimes.Api --urls http://localhost:5080
+# 1. Run the API (from the repo root). The default launch profile binds http://localhost:5080 — the
+#    port the web proxy expects — and runs in Development, which seeds the dev admin shown below.
+dotnet run --project src/Dimes.Api
 
-# 2. In a second terminal, run the web app.
+# 2. In a second terminal, run the web app. You only need web/ to run Dimes; sdk/ is a separate
+#    embeddable library (see below) and isn't required here.
 cd web
 npm install
 npm run dev        # Vite dev server on http://localhost:5173 (proxies /api → :5080)
@@ -88,9 +93,26 @@ Email:    admin@dimes.local
 Password: dimes-dev
 ```
 
-> Run the API **first**; the web app has no mock backend. These dev credentials come from
-> `src/Dimes.Api/appsettings.Development.json`; **change them for any real deployment** (see
-> [Security](#security)).
+> Run the API **first**; the web app has no mock backend. If you open the web app before the API is
+> up, you'll see a "Cannot reach the Dimes API" screen that clears itself once the API is running.
+> These dev credentials come from `src/Dimes.Api/appsettings.Development.json`; **change them for any
+> real deployment** (see [Security](#security)).
+
+<details>
+<summary>First-run notes & troubleshooting</summary>
+
+- **"Cannot reach the Dimes API":** the web app loaded but the API isn't responding. Start it with
+  `dotnet run --project src/Dimes.Api` from the repo root; the screen recovers on its own.
+- **API on a different host/port:** the dev server is pinned to `5173` and proxies the API on `5080`.
+  To point it elsewhere, copy `web/.env.example` to `web/.env` and set `DIMES_API`.
+- **First build is slow:** the initial `dotnet run` restores NuGet packages and the first `npm install`
+  pulls the web dependencies — both need network access and take a minute. Later runs are fast.
+- **Version complaints:** `global.json` requires a .NET 10 SDK and `web/package.json` expects Node 20+.
+  Install the versions linked above if a build fails citing a version.
+- **Adding a migration (contributors):** run `dotnet tool restore` once so the pinned `dotnet-ef` tool
+  is available — see [`CLAUDE.md`](CLAUDE.md) for the two-provider (SQLite + Postgres) workflow.
+
+</details>
 
 ## Embedding the capture SDK
 
