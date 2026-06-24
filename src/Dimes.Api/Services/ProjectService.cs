@@ -180,6 +180,71 @@ public class ProjectService(DimesDbContext db, MembershipResolver members)
         return project.ToDto();
     }
 
+    /// <summary>Read a project's editable export "work order" guidance. Returns the stored override, or the
+    /// built-in default with <c>IsDefault=true</c> when the project has no row (e.g. created after the
+    /// one-time seed, or reset). The controller gates reads with <see cref="EnsureProjectReadAsync"/>.</summary>
+    public async Task<ExportInstructionDto> GetExportInstructionAsync(Guid projectId, CancellationToken ct = default)
+    {
+        if (!await db.Projects.AnyAsync(p => p.Id == projectId, ct))
+        {
+            throw new NotFoundException($"Project '{projectId}' not found.");
+        }
+
+        var content = await db.SystemInstructions
+            .Where(s => s.ProjectId == projectId && s.Kind == SystemInstructionKind.ExportWorkOrder)
+            .Select(s => s.Content)
+            .FirstOrDefaultAsync(ct);
+        return content is null
+            ? new ExportInstructionDto(SystemInstructionDefaults.ExportWorkOrder, IsDefault: true)
+            : new ExportInstructionDto(content, IsDefault: false);
+    }
+
+    /// <summary>Edit or reset a project's export guidance. Authority matches other project management — a
+    /// Maintainer or site admin (via <see cref="EnsureProjectAdminAsync"/>). A blank body resets to the
+    /// built-in default by removing any override; otherwise the single per-project row is upserted. This is
+    /// configuration, not a lifecycle transition, so it writes no audit event (matching SiteSettings).</summary>
+    public async Task<ExportInstructionDto> UpdateExportInstructionAsync(
+        Guid projectId, UpdateExportInstructionRequest req, Guid callerActorId, bool callerIsSiteAdmin, CancellationToken ct = default)
+    {
+        if (!await db.Projects.AnyAsync(p => p.Id == projectId, ct))
+        {
+            throw new NotFoundException($"Project '{projectId}' not found.");
+        }
+        await EnsureProjectAdminAsync(projectId, callerActorId, callerIsSiteAdmin, ct);
+
+        var row = await db.SystemInstructions
+            .FirstOrDefaultAsync(s => s.ProjectId == projectId && s.Kind == SystemInstructionKind.ExportWorkOrder, ct);
+
+        var content = req.Content?.Trim();
+        if (string.IsNullOrWhiteSpace(content))
+        {
+            // Reset to the built-in default by dropping the override.
+            if (row is not null)
+            {
+                db.SystemInstructions.Remove(row);
+                await db.SaveChangesAsync(ct);
+            }
+            return new ExportInstructionDto(SystemInstructionDefaults.ExportWorkOrder, IsDefault: true);
+        }
+
+        if (row is null)
+        {
+            db.SystemInstructions.Add(new SystemInstruction
+            {
+                ProjectId = projectId,
+                Kind = SystemInstructionKind.ExportWorkOrder,
+                Content = content,
+            });
+        }
+        else
+        {
+            row.Content = content;
+            row.UpdatedAt = DateTimeOffset.UtcNow;
+        }
+        await db.SaveChangesAsync(ct);
+        return new ExportInstructionDto(content, IsDefault: false);
+    }
+
     /// <summary>Archive (or unarchive) a project: keep all its data but hide it from active lists.
     /// Soft-delete equivalent. Authority matches other project management — a Maintainer of the
     /// project or a site admin (via <see cref="EnsureProjectAdminAsync"/>).</summary>

@@ -71,6 +71,11 @@ export interface ActorDetail {
   deletable: boolean; isArchived: boolean; memberships: UserMembership[]
 }
 
+// ----- Export -----
+// A project's editable export "work order" guidance. `isDefault` is true when no override is stored
+// and the built-in default is in effect.
+export interface ExportInstruction { content: string; isDefault: boolean }
+
 // ----- Site branding -----
 export interface SiteBranding { title: string }
 

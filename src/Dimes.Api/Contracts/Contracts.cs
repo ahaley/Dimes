@@ -177,6 +177,13 @@ public record AssignChangeRequest(Guid? AssigneeActorId);
 /// <summary>A generated file ready to download (name + UTF-8 text content).</summary>
 public record MarkdownExport(string FileName, string Markdown);
 
+/// <summary>A project's editable export "work order" guidance. <paramref name="IsDefault"/> is true when
+/// the project has no stored override and the built-in default is in effect.</summary>
+public record ExportInstructionDto(string Content, bool IsDefault);
+
+/// <summary>Set a project's export guidance. A blank body resets to the built-in default.</summary>
+public record UpdateExportInstructionRequest(string Content);
+
 public record AddCommentRequest(string Body);
 public record CommentDto(Guid Id, Guid ChangeRequestId, Guid AuthorActorId, string Body, CommentKind Kind, DateTimeOffset CreatedAt);
 

@@ -101,4 +101,18 @@ public class ChangeRequestsController(
         var export = await changes.ExportInDevelopmentAsync(projectId, ct);
         return File(Encoding.UTF8.GetBytes(export.Markdown), "text/markdown", export.FileName);
     }
+
+    /// <summary>Read the project's editable export work-order guidance (or the built-in default).</summary>
+    [HttpGet("api/projects/{projectId:guid}/export/instruction")]
+    public async Task<ActionResult<ExportInstructionDto>> GetExportInstruction(Guid projectId, CancellationToken ct)
+    {
+        await projects.EnsureProjectReadAsync(projectId, currentActor.ActorId, currentActor.IsSiteAdmin, ct);
+        return Ok(await projects.GetExportInstructionAsync(projectId, ct));
+    }
+
+    /// <summary>Edit or reset the project's export work-order guidance (Maintainer or site admin).</summary>
+    [HttpPut("api/projects/{projectId:guid}/export/instruction")]
+    public async Task<ActionResult<ExportInstructionDto>> UpdateExportInstruction(
+        Guid projectId, UpdateExportInstructionRequest req, CancellationToken ct)
+        => Ok(await projects.UpdateExportInstructionAsync(projectId, req, currentActor.ActorId, currentActor.IsSiteAdmin, ct));
 }

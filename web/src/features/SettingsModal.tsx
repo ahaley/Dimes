@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '../api/client'
-import { keys, useActors, useLlmProviders, useMembers, useProjects, useSources } from '../api/hooks'
+import { keys, useActors, useExportInstruction, useLlmProviders, useMembers, useProjects, useSources, useUpdateExportInstruction } from '../api/hooks'
 import type { LlmProviderConfig, Member, MemberRole } from '../api/types'
 import { Badge, Button, cx, ErrorText, Field, Modal, Select, TextInput, Textarea } from '../components/ui'
 import { initials } from '../lifecycle'
@@ -12,7 +12,7 @@ const ROLES: MemberRole[] = ['Reporter', 'Contributor', 'Maintainer']
 const AGENT_ROLES: MemberRole[] = ['Assistant', 'Reporter', 'Contributor', 'Maintainer']
 
 export function SettingsModal({ projectId, onClose }: { projectId: string; onClose: () => void }) {
-  const [tab, setTab] = useState<'general' | 'members' | 'sources' | 'danger'>('general')
+  const [tab, setTab] = useState<'general' | 'members' | 'sources' | 'export' | 'danger'>('general')
   return (
     <Modal title="Manage project" onClose={onClose} wide>
       <div className="space-y-4">
@@ -21,12 +21,14 @@ export function SettingsModal({ projectId, onClose }: { projectId: string; onClo
           <TabButton active={tab === 'general'} onClick={() => setTab('general')}>General</TabButton>
           <TabButton active={tab === 'members'} onClick={() => setTab('members')}>Members</TabButton>
           <TabButton active={tab === 'sources'} onClick={() => setTab('sources')}>Sources</TabButton>
+          <TabButton active={tab === 'export'} onClick={() => setTab('export')}>Export</TabButton>
           <TabButton active={tab === 'danger'} onClick={() => setTab('danger')}>Danger</TabButton>
         </div>
         {tab === 'general' ? <GeneralSection projectId={projectId} />
           : tab === 'members' ? <MembersSection projectId={projectId} />
             : tab === 'sources' ? <SourcesSection projectId={projectId} />
-              : <DangerSection projectId={projectId} />}
+              : tab === 'export' ? <ExportSection projectId={projectId} />
+                : <DangerSection projectId={projectId} />}
       </div>
     </Modal>
   )
@@ -162,6 +164,61 @@ function DangerSection({ projectId }: { projectId: string }) {
             {archived ? 'Unarchive project' : 'Archive project'}
           </Button>
         </div>
+      </div>
+    </section>
+  )
+}
+
+/// Export guidance: view/edit the work-order preamble used by the In-Development export. The backend
+/// gates edits on Maintainer (or site admin); a 403 surfaces inline. Saving an empty body resets to the
+/// built-in default, which the "Reset to default" action does explicitly.
+function ExportSection({ projectId }: { projectId: string }) {
+  const { data } = useExportInstruction(projectId)
+  const update = useUpdateExportInstruction(projectId)
+
+  // Seed the editor once the instruction loads, then leave it to the user.
+  const [content, setContent] = useState('')
+  const [seeded, setSeeded] = useState(false)
+  if (data && !seeded) {
+    setContent(data.content)
+    setSeeded(true)
+  }
+
+  const dirty = !!data && content.trim() !== data.content.trim()
+  const save = () => update.mutate({ content }, { onSuccess: (res) => setContent(res.content) })
+  const reset = () => {
+    if (!window.confirm('Reset the export guidance to the built-in default? Your custom text will be removed.')) return
+    update.mutate({ content: '' }, { onSuccess: (res) => setContent(res.content) })
+  }
+
+  return (
+    <section className="space-y-3">
+      <p className="text-sm text-slate-600 dark:text-slate-400">
+        The guidance inserted into the In-Development export between the work-order title and the change
+        list. The project name and the change list are generated automatically.
+        {data?.isDefault && (
+          <span className="block text-xs text-slate-400">
+            Using the built-in default — saving an edit creates a project-specific override.
+          </span>
+        )}
+      </p>
+      <Field label="Export guidance (Markdown)">
+        <Textarea
+          value={content}
+          onChange={(e) => setContent(e.target.value)}
+          rows={16}
+          className="font-mono text-xs"
+          placeholder="Markdown guidance for the export work order…"
+        />
+      </Field>
+      <ErrorText error={update.error} />
+      <div className="flex justify-between">
+        <Button variant="subtle" disabled={!data || data.isDefault || update.isPending} onClick={reset}>
+          Reset to default
+        </Button>
+        <Button variant="primary" disabled={!content.trim() || !dirty || update.isPending} onClick={save}>
+          {update.isPending ? 'Saving…' : 'Save changes'}
+        </Button>
       </div>
     </section>
   )
