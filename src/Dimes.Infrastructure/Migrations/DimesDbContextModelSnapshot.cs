@@ -608,6 +608,37 @@ namespace Dimes.Infrastructure.Migrations
                     b.ToTable("SiteSettings");
                 });
 
+            modelBuilder.Entity("Dimes.Domain.Entities.SystemInstruction", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Content")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("CreatedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ProjectId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("UpdatedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProjectId", "Kind")
+                        .IsUnique();
+
+                    b.ToTable("SystemInstructions");
+                });
+
             modelBuilder.Entity("Microsoft.AspNetCore.DataProtection.EntityFrameworkCore.DataProtectionKey", b =>
                 {
                     b.Property<int>("Id")
@@ -864,6 +895,17 @@ namespace Dimes.Infrastructure.Migrations
                     b.Navigation("Project");
                 });
 
+            modelBuilder.Entity("Dimes.Domain.Entities.SystemInstruction", b =>
+                {
+                    b.HasOne("Dimes.Domain.Entities.Project", "Project")
+                        .WithMany("SystemInstructions")
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Project");
+                });
+
             modelBuilder.Entity("Dimes.Domain.Entities.Actor", b =>
                 {
                     b.Navigation("Memberships");
@@ -897,6 +939,8 @@ namespace Dimes.Infrastructure.Migrations
                     b.Navigation("ObservationSources");
 
                     b.Navigation("Observations");
+
+                    b.Navigation("SystemInstructions");
                 });
 #pragma warning restore 612, 618
         }

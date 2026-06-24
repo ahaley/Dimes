@@ -118,3 +118,11 @@ public enum AuditEntityType
     ChangeRequest,
     Observation,
 }
+
+/// <summary>Which feature an editable <see cref="Entities.SystemInstruction"/> drives. Today only the
+/// In-Development export "work order" preamble; the discriminator lets future instruction blocks reuse
+/// the same per-project table.</summary>
+public enum SystemInstructionKind
+{
+    ExportWorkOrder,
+}

@@ -30,4 +30,5 @@ public class Project : Entity
     public ICollection<ChangeRequest> ChangeRequests { get; set; } = new List<ChangeRequest>();
     public ICollection<Observation> Observations { get; set; } = new List<Observation>();
     public ICollection<ObservationSource> ObservationSources { get; set; } = new List<ObservationSource>();
+    public ICollection<SystemInstruction> SystemInstructions { get; set; } = new List<SystemInstruction>();
 }
