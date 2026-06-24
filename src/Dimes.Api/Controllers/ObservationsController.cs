@@ -3,6 +3,7 @@ using Dimes.Api.Contracts;
 using Dimes.Api.Services;
 using Dimes.Domain;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Cors;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 
@@ -16,6 +17,7 @@ public class ObservationsController(
     /// host app has no Dimes session, and the unguessable source id acts as the capability. (A future
     /// slice may add per-source ingest tokens.)</summary>
     [AllowAnonymous]
+    [EnableCors(CorsPolicies.Ingest)]
     [EnableRateLimiting(RateLimitPolicies.Ingest)]
     [RequestSizeLimit(256 * 1024)]
     [HttpPost("api/sources/{sourceId:guid}/observations")]

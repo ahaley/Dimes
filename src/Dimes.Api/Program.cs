@@ -115,6 +115,18 @@ builder.Services.AddRateLimiter(options =>
     });
 });
 
+// Cross-origin access for the capture SDK. Only the anonymous observation ingest endpoint opts in
+// (via [EnableCors(CorsPolicies.Ingest)]); every other endpoint stays same-origin, which the BFF
+// session cookie and the OIDC redirect flow rely on. Origins are an operator allowlist of host apps
+// that embed the SDK from another domain; credentials are never allowed because the endpoint reads no
+// cookies (the unguessable source id is the only capability). Empty/unset => no cross-origin access.
+var corsOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
+builder.Services.AddCors(options => options.AddPolicy(CorsPolicies.Ingest, policy =>
+    policy.WithOrigins(corsOrigins)
+        .WithMethods("POST")
+        .WithHeaders("Content-Type")
+        .SetPreflightMaxAge(TimeSpan.FromHours(1))));
+
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddProblemDetails();
 builder.Services
@@ -155,6 +167,10 @@ if (!useForwardedHeaders)
 // served before auth; the SPA fallback is anonymous so the shell loads and drives the login flow.
 app.UseDefaultFiles();
 app.UseStaticFiles();
+
+// CORS must sit after routing and before auth. Only the ingest endpoint carries an [EnableCors]
+// policy, so this is a no-op for every other (same-origin) endpoint and for the SPA.
+app.UseCors();
 
 app.UseAuthentication();
 app.UseAuthorization();
