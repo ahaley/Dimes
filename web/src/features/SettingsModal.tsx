@@ -433,8 +433,19 @@ function SourcesSection({ projectId }: { projectId: string }) {
     <section className="space-y-3">
       <div className="divide-y divide-slate-100 overflow-hidden rounded-md border border-slate-200 dark:divide-slate-800 dark:border-slate-700">
         {(sources ?? []).map((s) => (
-          <div key={s.id} className="px-3 py-2 text-sm text-slate-700 dark:text-slate-200">
-            {s.name} · <span className="text-slate-400">{s.type}</span>
+          <div key={s.id} className="flex items-center justify-between gap-3 px-3 py-2 text-sm">
+            <div className="min-w-0">
+              <div className="text-slate-700 dark:text-slate-200">
+                {s.name} · <span className="text-slate-400">{s.type}</span>
+              </div>
+              {/* The GUID below is the SDK's `sourceId` — surfaced here so it's copyable without
+                  digging through the API or DB. */}
+              <div className="mt-0.5 flex items-center gap-1.5">
+                <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">ID</span>
+                <code className="break-all font-mono text-xs text-slate-500 dark:text-slate-400">{s.id}</code>
+              </div>
+            </div>
+            <CopyButton value={s.id} />
           </div>
         ))}
         {sources?.length === 0 && <p className="px-3 py-4 text-sm text-slate-400">None configured.</p>}
@@ -451,5 +462,25 @@ function SourcesSection({ projectId }: { projectId: string }) {
       </div>
       <ErrorText error={add.error} />
     </section>
+  )
+}
+
+// Copies a value (the source's `sourceId`) to the clipboard, flashing confirmation briefly.
+function CopyButton({ value }: { value: string }) {
+  const [copied, setCopied] = useState(false)
+  return (
+    <Button
+      variant="subtle"
+      className="shrink-0"
+      onClick={async () => {
+        try {
+          await navigator.clipboard.writeText(value)
+          setCopied(true)
+          setTimeout(() => setCopied(false), 1500)
+        } catch { /* clipboard blocked (e.g. insecure context) — the ID is still visible to copy by hand */ }
+      }}
+    >
+      {copied ? 'Copied' : 'Copy ID'}
+    </Button>
   )
 }
