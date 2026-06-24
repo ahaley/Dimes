@@ -21,22 +21,25 @@ public static class SystemInstructionDefaults
         ## How to work
 
         1. **Record the integration branch.** Note the branch you start on (e.g. `main`); call it
-           the *integration branch*. Every change branches from it and merges back into it.
+           the *integration branch*. Every change branches from it and integrates back into it.
         2. **One branch per change**, in order. Create a branch off the *current* integration
            branch using the `Branch:` name given for each change below.
-        3. **Implement only that change**, then **verify before committing**: the project must
-           build and the relevant tests must pass. Never commit a broken change.
+        3. **Implement only that change**, then **verify before committing**: confirm it works the
+           way that change can be checked — the project builds and its tests pass for code, the result
+           renders and behaves correctly for UI or design, content is accurate for docs. Never commit
+           a change you haven't verified.
         4. **Commit on the branch.** First line is the change title, then a blank line, then
-           `Dimes change <id>`. Keep unrelated edits out of the commit.
-        5. **Merge back.** Switch to the integration branch and run
-           `git merge --no-ff <branch>` so each change is one reviewable merge commit. Resolve
-           any conflicts and re-verify the build after merging.
-        6. **Sequence matters.** Branch each subsequent change from the *updated* integration
-           branch so later changes build on earlier ones.
-        7. **If a change can't be completed** (won't build, tests fail, unresolvable conflict),
-           leave its branch unmerged, check it off as blocked with a one-line reason, and
-           continue with the remaining changes.
-        8. Work autonomously through the whole list; pause only if a change is too ambiguous to
-           implement safely. When finished, report what merged and what's blocked.
+           `Dimes change <id>` (this links the commit back to the request). Keep unrelated edits out
+           of the commit.
+        5. **Integrate back.** Switch to the integration branch and merge the change as one
+           reviewable unit (e.g. `git merge --no-ff <branch>`). Resolve any conflicts and re-verify
+           after merging.
+        6. **Sequence matters.** Branch each subsequent change from the *updated* integration branch
+           so later changes build on earlier ones.
+        7. **If a change can't be completed or verified** (it doesn't work, conflicts can't be
+           resolved, or it needs a decision you can't make), leave it unintegrated, check it off as
+           blocked with a one-line reason, and continue with the remaining changes.
+        8. Work autonomously through the whole list; pause only if a change is too ambiguous to carry
+           out safely. When finished, report what integrated and what's blocked.
         """;
 }
