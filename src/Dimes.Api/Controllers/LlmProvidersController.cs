@@ -16,7 +16,16 @@ public class LlmProvidersController(ProjectService projects, ICurrentActor curre
 {
     [HttpGet]
     public async Task<ActionResult<IReadOnlyList<LlmProviderConfigDto>>> ListGlobal(CancellationToken ct)
-        => Ok(await projects.ListGlobalLlmProvidersAsync(ct));
+    {
+        // Managing website-wide providers is site-admin authority, and so is enumerating them — this is
+        // the admin management list. Per-project provider selection uses the membership-gated project
+        // endpoint (ListLlmProvidersAsync, which already merges globals), so non-admins don't need this.
+        if (!currentActor.IsSiteAdmin)
+        {
+            throw new ForbiddenException("Only a site administrator can list website-wide LLM providers.");
+        }
+        return Ok(await projects.ListGlobalLlmProvidersAsync(ct));
+    }
 
     [HttpPost]
     public async Task<ActionResult<LlmProviderConfigDto>> CreateGlobal(CreateLlmProviderRequest req, CancellationToken ct)

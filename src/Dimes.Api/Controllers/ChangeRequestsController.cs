@@ -79,10 +79,12 @@ public class ChangeRequestsController(
     public async Task<ActionResult<ScmLinkDto>> AddScmLink(Guid id, AddScmLinkRequest req, CancellationToken ct)
         => Ok(await scm.AddLinkAsync(id, currentActor.ActorId, req, ct));
 
-    /// <summary>Recommend-only agent commentary — posts a comment, never changes state.</summary>
+    /// <summary>Recommend-only agent commentary — posts a comment, never changes state. The caller must
+    /// be a member of the change's project (CommentaryService enforces it), like adding a human comment.</summary>
     [HttpPost("api/changes/{id:guid}/agent-comment")]
     public async Task<ActionResult<CommentDto>> AgentComment(Guid id, AgentCommentRequest req, CancellationToken ct)
-        => Ok(await commentary.CommentOnChangeAsync(id, req.AgentActorId, ct));
+        => Ok(await commentary.CommentOnChangeAsync(
+            id, req.AgentActorId, currentActor.ActorId, currentActor.IsSiteAdmin, ct));
 
     [HttpGet("api/changes/{id:guid}/audit")]
     public async Task<ActionResult<IReadOnlyList<AuditEventDto>>> Audit(Guid id, CancellationToken ct)

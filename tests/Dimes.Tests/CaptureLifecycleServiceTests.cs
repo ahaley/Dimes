@@ -400,19 +400,19 @@ public sealed class CaptureLifecycleServiceTests : IDisposable
         var agent = await _projects.AddMemberAsync(seed.ProjectId,
             new AddMemberRequest("Aria", ActorType.Agent, null, MemberRole.Contributor, llm.Id));
 
-        var listed = await _projects.ListActorsAsync(agentsOnly: true);
+        var listed = await _projects.ListActorsAsync(agentsOnly: true, callerIsSiteAdmin: true);
         var row = listed.Single(a => a.Id == agent.ActorId);
         Assert.Equal(1, row.ProjectCount);
         Assert.False(row.Deletable);
         Assert.Equal("claude", row.ProviderName);
 
         await _projects.RemoveMemberAsync(seed.ProjectId, agent.ActorId);
-        var afterRemove = (await _projects.ListActorsAsync(agentsOnly: true)).Single(a => a.Id == agent.ActorId);
+        var afterRemove = (await _projects.ListActorsAsync(agentsOnly: true, callerIsSiteAdmin: true)).Single(a => a.Id == agent.ActorId);
         Assert.Equal(0, afterRemove.ProjectCount);
         Assert.True(afterRemove.Deletable);
 
         await _projects.DeleteActorAsync(agent.ActorId);
-        Assert.DoesNotContain(await _projects.ListActorsAsync(agentsOnly: true), a => a.Id == agent.ActorId);
+        Assert.DoesNotContain(await _projects.ListActorsAsync(agentsOnly: true, callerIsSiteAdmin: true), a => a.Id == agent.ActorId);
     }
 
     [Fact]
@@ -487,6 +487,47 @@ public sealed class CaptureLifecycleServiceTests : IDisposable
 
         var inbox = await _observations.ListInboxAsync(seed.ProjectId, null);
         Assert.Equal(2, inbox.Count);
+    }
+
+    [Fact]
+    public async Task Ingest_NoFingerprint_IdenticalContent_Aggregates()
+    {
+        var seed = await SeedAsync();
+        var req = new IngestObservationRequest(ObservationKind.TechnicalError, "{\"err\":\"boom\"}", null, null);
+
+        var first = await _observations.IngestAsync(seed.SourceId, req);
+        var second = await _observations.IngestAsync(seed.SourceId, req);
+
+        // A derived content fingerprint makes identical anonymous signals aggregate instead of
+        // multiplying rows — closing the "omit the fingerprint to flood" vector.
+        Assert.Equal(first.Id, second.Id);
+        Assert.Equal(2, second.OccurrenceCount);
+        Assert.Single(await _observations.ListInboxAsync(seed.ProjectId, ObservationStatus.New));
+    }
+
+    [Fact]
+    public async Task Ingest_NoFingerprint_DifferentContent_CreatesDistinct()
+    {
+        var seed = await SeedAsync();
+        await _observations.IngestAsync(seed.SourceId,
+            new IngestObservationRequest(ObservationKind.TechnicalError, "{\"err\":\"a\"}", null, null));
+        await _observations.IngestAsync(seed.SourceId,
+            new IngestObservationRequest(ObservationKind.TechnicalError, "{\"err\":\"b\"}", null, null));
+
+        Assert.Equal(2, (await _observations.ListInboxAsync(seed.ProjectId, null)).Count);
+    }
+
+    [Fact]
+    public async Task AddMember_DuplicateEmail_IsRejected()
+    {
+        var seed = await SeedAsync();
+        await _projects.AddMemberAsync(seed.ProjectId,
+            new AddMemberRequest("Dana", ActorType.Human, "Dana@X.com", MemberRole.Contributor));
+
+        // Email is the login identity; a case-insensitive duplicate would make the login/JIT lookup
+        // non-deterministic, so it must be rejected (and normalized).
+        await Assert.ThrowsAsync<BadRequestException>(() => _projects.AddMemberAsync(seed.ProjectId,
+            new AddMemberRequest("Dana 2", ActorType.Human, "dana@x.com", MemberRole.Reporter)));
     }
 
     [Fact]

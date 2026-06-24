@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
@@ -23,6 +24,12 @@ public class AuthController(
     IPasswordHasher<Actor> hasher,
     IOptions<AuthOptions> options) : ControllerBase
 {
+    /// <summary>A throwaway hash verified on the no-such-user / no-credential path so it costs the same
+    /// PBKDF2 work as a real login. Without this, the early return for an unknown email is measurably
+    /// faster than a wrong password, letting an attacker enumerate valid accounts by latency.</summary>
+    private static readonly string DummyPasswordHash =
+        new PasswordHasher<Actor>().HashPassword(new Actor { DisplayName = "" }, "timing-equalization-placeholder");
+
     /// <summary>The deployment's auth mode, so the SPA can render the correct login UI. Anonymous.</summary>
     [AllowAnonymous]
     [HttpGet("config")]
@@ -38,6 +45,7 @@ public class AuthController(
 
     /// <summary>Local-mode email + password login. Returns 404 in OIDC mode.</summary>
     [AllowAnonymous]
+    [EnableRateLimiting(RateLimitPolicies.Login)]
     [HttpPost("login")]
     public async Task<ActionResult<MeDto>> Login(LoginRequest req, CancellationToken ct)
     {
@@ -56,6 +64,9 @@ public class AuthController(
 
         if (actor is null || credential is null || actor.IsArchived)
         {
+            // Verify against a dummy hash so an unknown/archived account costs the same as a real one —
+            // closes the account-enumeration timing oracle. The result is discarded; this still 401s.
+            hasher.VerifyHashedPassword(actor ?? new Actor { DisplayName = "" }, credential?.PasswordHash ?? DummyPasswordHash, req.Password ?? string.Empty);
             throw new UnauthorizedException("Invalid email or password.");
         }
 

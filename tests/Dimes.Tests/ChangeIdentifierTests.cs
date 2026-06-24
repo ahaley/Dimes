@@ -36,8 +36,10 @@ public sealed class ChangeIdentifierTests : IDisposable
     private async Task<(Guid ProjectId, Guid ActorId)> SeedProjectAsync(string name, string? key)
     {
         var project = await _projects.CreateAsync(new CreateProjectRequest(name, null, key));
+        // No email: this helper seeds several projects, and email is now a unique login identity, so a
+        // shared address would (correctly) collide. These tests don't exercise login.
         var member = await _projects.AddMemberAsync(project.Id,
-            new AddMemberRequest("Cory", ActorType.Human, "cory@x.com", MemberRole.Contributor));
+            new AddMemberRequest("Cory", ActorType.Human, null, MemberRole.Contributor));
         return (project.Id, member.ActorId);
     }
 

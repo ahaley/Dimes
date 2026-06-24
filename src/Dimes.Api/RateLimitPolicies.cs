@@ -6,4 +6,8 @@ public static class RateLimitPolicies
 {
     /// <summary>Per-source fixed window on the anonymous observation capture endpoint.</summary>
     public const string Ingest = "ingest";
+
+    /// <summary>Per-client-IP fixed window on the anonymous local-login endpoint, to blunt online
+    /// password brute-forcing and credential stuffing.</summary>
+    public const string Login = "login";
 }

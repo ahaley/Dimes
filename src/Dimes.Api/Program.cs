@@ -98,6 +98,21 @@ builder.Services.AddRateLimiter(options =>
             QueueLimit = 0,
         });
     });
+
+    // Throttle local login per client IP. PBKDF2 verification slows offline cracking but does nothing
+    // against unlimited online guessing, and the login endpoint is [AllowAnonymous] with no account
+    // lockout — so cap attempts per source IP and 429 the excess. Generous enough for fat-fingered
+    // humans, tight enough to make brute force / credential stuffing impractical.
+    options.AddPolicy(RateLimitPolicies.Login, httpContext =>
+    {
+        var key = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        return RateLimitPartition.GetFixedWindowLimiter(key, _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = 10,
+            Window = TimeSpan.FromMinutes(1),
+            QueueLimit = 0,
+        });
+    });
 });
 
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();

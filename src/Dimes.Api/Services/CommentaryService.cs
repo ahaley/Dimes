@@ -16,10 +16,20 @@ public class CommentaryService(
     ISecretResolver secrets,
     MembershipResolver members)
 {
-    public async Task<CommentDto> CommentOnChangeAsync(Guid changeId, Guid agentActorId, CancellationToken ct = default)
+    public async Task<CommentDto> CommentOnChangeAsync(
+        Guid changeId, Guid agentActorId, Guid callerActorId, bool callerIsSiteAdmin, CancellationToken ct = default)
     {
         var change = await db.ChangeRequests.FindAsync([changeId], ct)
             ?? throw new NotFoundException($"Change request '{changeId}' not found.");
+
+        // Authorize the *caller*, not just the agent actor. Membership in the change's project is the
+        // same bar as adding a human comment (AddCommentAsync). Without this, any authenticated user
+        // could trigger an LLM completion on any change id — leaking its content to a non-member and
+        // spending the configured provider's credits on demand.
+        if (!callerIsSiteAdmin)
+        {
+            await members.ResolveAsync(change.ProjectId, callerActorId, ct); // throws ForbiddenException for non-members
+        }
 
         var (actor, _) = await members.ResolveAsync(change.ProjectId, agentActorId, ct);
         if (actor.Type != ActorType.Agent)
@@ -37,6 +47,11 @@ public class CommentaryService(
 
         var provider = providers.FirstOrDefault(p => p.Type == config.Type)
             ?? throw new BadRequestException($"No adapter is registered for provider type '{config.Type}'.");
+
+        // Re-validate at call time, not just at save time: a hostname that passed validation when the
+        // provider was configured could now resolve to a cloud metadata endpoint (DNS rebinding). This
+        // closes that TOCTOU window right before the outbound request is made.
+        await ProviderUrlValidator.ValidateAsync(config.BaseUrl, ct);
 
         var connection = new LlmConnection(config.BaseUrl, config.Model, secrets.Resolve(config.ApiKeySecretRef));
         var result = await provider.CompleteAsync(BuildPrompt(change), connection, ct);

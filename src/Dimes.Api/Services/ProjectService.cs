@@ -221,11 +221,20 @@ public class ProjectService(DimesDbContext db, MembershipResolver members)
             }
         }
 
+        // Email is the login identity, so normalize + enforce uniqueness here too — otherwise a
+        // duplicate makes the login/JIT email lookup (FirstOrDefault) non-deterministic, and a
+        // Maintainer could pre-seed an actor carrying a colleague's email. Matches UpdateActorAsync.
+        var email = string.IsNullOrWhiteSpace(req.Email) ? null : req.Email.Trim().ToLowerInvariant();
+        if (email is not null && await db.Actors.AnyAsync(a => a.Email != null && a.Email.ToLower() == email, ct))
+        {
+            throw new BadRequestException("An actor with that email already exists.");
+        }
+
         var actor = new Actor
         {
             DisplayName = req.DisplayName.Trim(),
             Type = req.Type,
-            Email = req.Email,
+            Email = email,
             LlmProviderConfigId = req.LlmProviderConfigId,
         };
         var membership = new Membership { Actor = actor, ProjectId = project.Id, Role = req.Role };
@@ -296,8 +305,16 @@ public class ProjectService(DimesDbContext db, MembershipResolver members)
             }
         }
 
+        // Normalize + enforce email uniqueness (login identity), matching AddMemberAsync/UpdateActorAsync.
+        var email = string.IsNullOrWhiteSpace(req.Email) ? null : req.Email.Trim().ToLowerInvariant();
+        if (email is not null
+            && await db.Actors.AnyAsync(a => a.Id != actorId && a.Email != null && a.Email.ToLower() == email, ct))
+        {
+            throw new BadRequestException("An actor with that email already exists.");
+        }
+
         membership.Actor.DisplayName = req.DisplayName.Trim();
-        membership.Actor.Email = req.Email;
+        membership.Actor.Email = email;
         membership.Actor.LlmProviderConfigId =
             membership.Actor.Type == ActorType.Agent ? req.LlmProviderConfigId : null;
         membership.Role = req.Role;
@@ -319,7 +336,7 @@ public class ProjectService(DimesDbContext db, MembershipResolver members)
     /// <summary>App-level list of actors with their provider binding, project membership count, and
     /// whether they can be safely hard-deleted (no memberships and no references anywhere).</summary>
     public async Task<IReadOnlyList<ActorDto>> ListActorsAsync(
-        bool agentsOnly, bool includeArchived = false, CancellationToken ct = default)
+        bool agentsOnly, bool callerIsSiteAdmin, bool includeArchived = false, CancellationToken ct = default)
     {
         var query = db.Actors.AsQueryable();
         if (agentsOnly)
@@ -331,10 +348,12 @@ public class ProjectService(DimesDbContext db, MembershipResolver members)
             query = query.Where(a => !a.IsArchived);
         }
 
+        // Email is the login identity (PII). The board needs only id/name/type to resolve assignees and
+        // comment authors, so only expose email to site admins (who manage actors); strip it otherwise.
         return await query
             .OrderBy(a => a.DisplayName)
             .Select(a => new ActorDto(
-                a.Id, a.DisplayName, a.Type, a.Email,
+                a.Id, a.DisplayName, a.Type, callerIsSiteAdmin ? a.Email : null,
                 a.LlmProviderConfigId,
                 a.LlmProviderConfig != null ? a.LlmProviderConfig.Name : null,
                 db.Memberships.Count(m => m.ActorId == a.Id),

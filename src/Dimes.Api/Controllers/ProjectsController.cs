@@ -115,7 +115,12 @@ public class ProjectsController(
     [HttpPost("{projectId:guid}/sources")]
     public async Task<ActionResult<ObservationSourceDto>> CreateSource(
         Guid projectId, CreateSourceRequest req, CancellationToken ct)
-        => Ok(await observations.CreateSourceAsync(projectId, req, ct));
+    {
+        // A source id is an anonymous ingest capability (the [AllowAnonymous] capture endpoint trusts
+        // it), so minting one is project configuration — gate it like the sibling provider create.
+        await projects.EnsureProjectAdminAsync(projectId, currentActor.ActorId, currentActor.IsSiteAdmin, ct);
+        return Ok(await observations.CreateSourceAsync(projectId, req, ct));
+    }
 
     [HttpPost("{projectId:guid}/llm-providers")]
     public async Task<ActionResult<LlmProviderConfigDto>> CreateLlmProvider(

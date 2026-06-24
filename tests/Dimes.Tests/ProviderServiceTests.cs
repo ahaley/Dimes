@@ -72,7 +72,7 @@ public sealed class ProviderServiceTests : IDisposable
             new StubSecrets(),
             new MembershipResolver(_db));
 
-        var comment = await commentary.CommentOnChangeAsync(change.Id, agent.ActorId);
+        var comment = await commentary.CommentOnChangeAsync(change.Id, agent.ActorId, human.ActorId, callerIsSiteAdmin: false);
 
         Assert.Equal(CommentKind.AgentRecommendation, comment.Kind);
         Assert.Equal("Looks reasonable; suggest Medium priority.", comment.Body);
@@ -94,7 +94,28 @@ public sealed class ProviderServiceTests : IDisposable
             _db, [new StubLlm(LlmProviderType.Anthropic, "x")], new StubSecrets(), new MembershipResolver(_db));
 
         await Assert.ThrowsAsync<BadRequestException>(() =>
-            commentary.CommentOnChangeAsync(change.Id, human.ActorId));
+            commentary.CommentOnChangeAsync(change.Id, human.ActorId, human.ActorId, callerIsSiteAdmin: false));
+    }
+
+    [Fact]
+    public async Task AgentCommentary_NonMemberCaller_IsForbidden()
+    {
+        var project = await _projects.CreateAsync(new CreateProjectRequest("P", null));
+        var human = await _projects.AddMemberAsync(project.Id,
+            new AddMemberRequest("Cory", ActorType.Human, null, MemberRole.Contributor));
+        var llm = await _projects.CreateLlmProviderAsync(project.Id,
+            new CreateLlmProviderRequest(LlmProviderType.Anthropic, "claude", null, "claude-sonnet-4-6", "ANTHROPIC_KEY"));
+        var agent = await _projects.AddMemberAsync(project.Id,
+            new AddMemberRequest("Aria", ActorType.Agent, null, MemberRole.Contributor, llm.Id));
+        var change = await _changes.CreateAsync(project.Id, human.ActorId, new CreateChangeRequest("x", null, ChangeKind.Problem));
+
+        var commentary = new CommentaryService(
+            _db, [new StubLlm(LlmProviderType.Anthropic, "x")], new StubSecrets(), new MembershipResolver(_db));
+
+        // An authenticated non-member of the change's project can't trigger agent commentary — this
+        // would otherwise leak the change's content to a non-member and spend provider credits.
+        await Assert.ThrowsAsync<ForbiddenException>(() =>
+            commentary.CommentOnChangeAsync(change.Id, agent.ActorId, Guid.NewGuid(), callerIsSiteAdmin: false));
     }
 
     [Fact]

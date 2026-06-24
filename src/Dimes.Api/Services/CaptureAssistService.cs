@@ -97,6 +97,11 @@ public class CaptureAssistService(
         var provider = providers.FirstOrDefault(p => p.Type == config.Type)
             ?? throw new BadRequestException($"No adapter is registered for provider type '{config.Type}'.");
 
+        // Re-validate at call time, not just at save time: a hostname that passed validation when the
+        // provider was configured could now resolve to a cloud metadata endpoint (DNS rebinding). This
+        // closes that TOCTOU window right before the outbound request is made.
+        await ProviderUrlValidator.ValidateAsync(config.BaseUrl, ct);
+
         var connection = new LlmConnection(config.BaseUrl, config.Model, secrets.Resolve(config.ApiKeySecretRef));
         return (provider, connection);
     }

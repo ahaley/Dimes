@@ -11,20 +11,22 @@ namespace Dimes.Api.Controllers;
 ///
 /// The mutations here are site-admin only: an actor's email is its login identity (editing another
 /// user's email breaks their sign-in / enables impersonation) and archiving rejects future logins
-/// (account lockout). Reads stay open to any authenticated user — the board resolves assignee and
-/// comment-author names from this list.</summary>
+/// (account lockout). The List read stays open so the board can resolve assignee and comment-author
+/// names — but it discloses only identity (email is stripped for non-admins). The detail read, which
+/// exposes a user's email and full cross-project role map, is site-admin only.</summary>
 [ApiController]
 [Route("api/actors")]
-public class ActorsController(ProjectService projects) : ControllerBase
+public class ActorsController(ProjectService projects, ICurrentActor currentActor) : ControllerBase
 {
     [HttpGet]
     public async Task<ActionResult<IReadOnlyList<ActorDto>>> List(
         [FromQuery] bool agentsOnly = true, [FromQuery] bool includeArchived = false, CancellationToken ct = default)
-        => Ok(await projects.ListActorsAsync(agentsOnly, includeArchived, ct));
+        => Ok(await projects.ListActorsAsync(agentsOnly, currentActor.IsSiteAdmin, includeArchived, ct));
 
-    /// <summary>Actor detail (identity + provider + per-project roles). Read-only, like List — open to
-    /// any authenticated user so the actor presentation can be viewed.</summary>
+    /// <summary>Actor detail: identity + provider + the actor's per-project role map. Site-admin only —
+    /// it crosses the project boundary the rest of the API guards and exposes the login email.</summary>
     [HttpGet("{id:guid}")]
+    [Authorize(DimesClaims.SiteAdminPolicy)]
     public async Task<ActionResult<ActorDetailDto>> Get(Guid id, CancellationToken ct)
         => Ok(await projects.GetActorAsync(id, ct));
 
