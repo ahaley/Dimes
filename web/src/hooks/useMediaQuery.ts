@@ -1,5 +1,17 @@
 import { useSyncExternalStore } from 'react'
 
+// Cache one MediaQueryList per query so getSnapshot — called on every render of every consumer — reads
+// .matches from a shared instance instead of allocating (and discarding) a new MediaQueryList each time.
+const mqlCache = new Map<string, MediaQueryList>()
+function mediaQueryList(query: string): MediaQueryList {
+  let mql = mqlCache.get(query)
+  if (!mql) {
+    mql = window.matchMedia(query)
+    mqlCache.set(query, mql)
+  }
+  return mql
+}
+
 /**
  * Subscribe to a CSS media query, re-rendering when it starts/stops matching. Uses
  * useSyncExternalStore so the value stays consistent with React's render. This is a client-only
@@ -8,11 +20,11 @@ import { useSyncExternalStore } from 'react'
 export function useMediaQuery(query: string): boolean {
   return useSyncExternalStore(
     (onStoreChange) => {
-      const mql = window.matchMedia(query)
+      const mql = mediaQueryList(query)
       mql.addEventListener('change', onStoreChange)
       return () => mql.removeEventListener('change', onStoreChange)
     },
-    () => window.matchMedia(query).matches,
+    () => mediaQueryList(query).matches,
     () => false,
   )
 }

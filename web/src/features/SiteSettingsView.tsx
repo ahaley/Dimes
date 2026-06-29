@@ -4,6 +4,7 @@ import { api } from '../api/client'
 import { keys, useAuthConfig, useProjects, useSiteBranding, useSiteUsers, useUpdateSiteBranding, useUserMemberships } from '../api/hooks'
 import type { MemberRole, SiteUser } from '../api/types'
 import { Badge, Button, Card, cx, ErrorText, Field, Modal, Select, TextInput } from '../components/ui'
+import { OverflowMenu, type MenuAction } from '../components/OverflowMenu'
 import { useToast } from '../components/Toast'
 import { initials } from '../lifecycle'
 
@@ -222,7 +223,7 @@ function UserRow({ user, isLocal, onManageProjects }: { user: SiteUser; isLocal:
 
   const lockReason = 'Referenced by changes, comments, or audit history — archive instead of deleting.'
   // Single source of truth for row actions — rendered inline on desktop, folded into a ⋯ menu on phones.
-  const actions: RowAction[] = [
+  const actions: MenuAction[] = [
     { label: 'Edit', onClick: () => setEditing(true) },
     { label: 'Projects', onClick: onManageProjects },
     ...(isLocal
@@ -276,47 +277,17 @@ function UserRow({ user, isLocal, onManageProjects }: { user: SiteUser; isLocal:
       {/* Actions: inline buttons on desktop; folded into a ⋯ menu on phones to keep the row compact. */}
       <td className="px-3 py-3">
         <div className="hidden flex-wrap justify-end gap-1 sm:flex">
-          {actions.map((a) => (
-            <Button key={a.label} variant="subtle" disabled={a.disabled} title={a.title} onClick={a.onClick}>
+          {actions.map((a, i) => (
+            <Button key={i} variant="subtle" disabled={a.disabled} title={a.title} onClick={a.onClick}>
               {a.label}
             </Button>
           ))}
         </div>
         <div className="flex justify-end sm:hidden">
-          <RowActionsMenu actions={actions} />
+          <OverflowMenu actions={actions} label="User actions" variant="subtle" />
         </div>
       </td>
     </tr>
-  )
-}
-
-type RowAction = { label: string; onClick: () => void; disabled?: boolean; title?: string }
-
-/** Mobile overflow menu for a user row's actions — collapses the action set to a single ⋯ button. */
-function RowActionsMenu({ actions }: { actions: RowAction[] }) {
-  const [open, setOpen] = useState(false)
-  return (
-    <div className="relative">
-      <Button variant="subtle" aria-label="User actions" aria-haspopup="menu" onClick={() => setOpen((v) => !v)}>⋯</Button>
-      {open && (
-        <>
-          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 top-full z-20 mt-1 w-44 overflow-hidden rounded-md border border-slate-200 bg-white py-1 shadow-lg dark:border-slate-700 dark:bg-slate-800">
-            {actions.map((a) => (
-              <button
-                key={a.label}
-                disabled={a.disabled}
-                title={a.title}
-                onClick={() => { setOpen(false); a.onClick() }}
-                className="block w-full px-3 py-2.5 text-left text-sm text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 dark:text-slate-200 dark:hover:bg-slate-700"
-              >
-                {a.label}
-              </button>
-            ))}
-          </div>
-        </>
-      )}
-    </div>
   )
 }
 

@@ -79,10 +79,12 @@ export function ChangeBoard({
       .sort((a, b) => a.sortOrder - b.sortOrder || b.updatedAt.localeCompare(a.updatedAt))
   const terminal = visible.filter((c) => c.status === 'Rejected' || c.status === 'Duplicate')
 
-  // Count for a column header / mobile switcher chip — mirrors what the column actually shows (Done
-  // displays only recently-accepted items; older ones are collapsed below a disclosure).
-  const countFor = (status: ChangeStatus) =>
-    status === 'Done' ? byStatus('Done').filter(isRecentlyAccepted).length : byStatus(status).length
+  // Count for a column header / mobile switcher chip. Chips only need totals, so filter without the
+  // byStatus sort (the rendered column still sorts). Done mirrors its column: only recently-accepted.
+  const countFor = (status: ChangeStatus) => {
+    const inStatus = visible.filter((c) => c.status === status)
+    return status === 'Done' ? inStatus.filter(isRecentlyAccepted).length : inStatus.length
+  }
 
   const requestTransition = (change: ChangeRequest, target: ChangeStatus) => {
     if (target === change.status) return
@@ -155,6 +157,13 @@ export function ChangeBoard({
   // A quick horizontal swipe on the mobile column body steps to the adjacent stage. We require a clear
   // horizontal intent (>50px and dominant over vertical) so vertical scrolls and long-press card drags
   // don't trigger a stage change.
+  // Step the visible mobile stage by ±1 (bounds-checked) — shared by the swipe handler and the switcher
+  // chevrons so both honor the same next-stage rule.
+  const stepStage = (delta: number) => {
+    const next = LIFECYCLE_COLUMNS.indexOf(activeStatus) + delta
+    if (next >= 0 && next < LIFECYCLE_COLUMNS.length) setActiveStatus(LIFECYCLE_COLUMNS[next])
+  }
+
   // A long-press card drag also ends in a touchend on this wrapper (dnd-kit's TouchSensor preventDefaults
   // but doesn't stopPropagation), so without this flag a horizontal-ish drag would also step the stage.
   // onDragStart sets it; each fresh touch clears it, so only a genuine swipe (no drag) switches stages.
@@ -173,9 +182,7 @@ export function ChangeBoard({
     const dx = t.clientX - start.x
     const dy = t.clientY - start.y
     if (Math.abs(dx) < 50 || Math.abs(dx) < Math.abs(dy) * 1.5) return
-    const idx = LIFECYCLE_COLUMNS.indexOf(activeStatus)
-    const next = dx < 0 ? idx + 1 : idx - 1
-    if (next >= 0 && next < LIFECYCLE_COLUMNS.length) setActiveStatus(LIFECYCLE_COLUMNS[next])
+    stepStage(dx < 0 ? 1 : -1)
   }
 
   return (
@@ -191,7 +198,7 @@ export function ChangeBoard({
         </div>
       ) : (
         <div className="space-y-3">
-          <MobileStageSwitcher active={activeStatus} onSelect={setActiveStatus} countFor={countFor} />
+          <MobileStageSwitcher active={activeStatus} onSelect={setActiveStatus} onStep={stepStage} countFor={countFor} />
           <div onTouchStart={onColumnTouchStart} onTouchEnd={onColumnTouchEnd}>
             {renderColumn(activeStatus, true)}
           </div>
@@ -345,32 +352,35 @@ const stageLabel = (status: ChangeStatus) => STAGE_SHORT_LABEL[status] ?? status
  * (e.g. via a swipe or chevron), so it stays visible in the strip.
  */
 function MobileStageSwitcher({
-  active, onSelect, countFor,
+  active, onSelect, onStep, countFor,
 }: {
   active: ChangeStatus
   onSelect: (status: ChangeStatus) => void
+  onStep: (delta: number) => void
   countFor: (status: ChangeStatus) => number
 }) {
   const idx = LIFECYCLE_COLUMNS.indexOf(active)
+  const stripRef = useRef<HTMLDivElement>(null)
   const activeRef = useRef<HTMLButtonElement>(null)
   useEffect(() => {
-    activeRef.current?.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' })
+    const strip = stripRef.current, chip = activeRef.current
+    if (!strip || !chip) return
+    // Center the active chip within the strip's own horizontal scroll, without disturbing ancestor
+    // scroll containers (which scrollIntoView would also move).
+    const s = strip.getBoundingClientRect(), c = chip.getBoundingClientRect()
+    strip.scrollBy({ left: (c.left + c.width / 2) - (s.left + s.width / 2), behavior: 'smooth' })
   }, [active])
-  const step = (delta: number) => {
-    const next = idx + delta
-    if (next >= 0 && next < LIFECYCLE_COLUMNS.length) onSelect(LIFECYCLE_COLUMNS[next])
-  }
   return (
     <div className="flex items-center gap-1">
       <button
-        onClick={() => step(-1)}
+        onClick={() => onStep(-1)}
         disabled={idx <= 0}
         aria-label="Previous stage"
         className="shrink-0 rounded-md px-2 py-1.5 text-lg leading-none text-slate-500 hover:bg-slate-100 disabled:opacity-30 dark:text-slate-400 dark:hover:bg-slate-800"
       >
         ‹
       </button>
-      <div className="flex flex-1 items-center gap-1 overflow-x-auto">
+      <div ref={stripRef} className="flex flex-1 items-center gap-1 overflow-x-auto">
         {LIFECYCLE_COLUMNS.map((status) => {
           const isActive = status === active
           return (
@@ -402,7 +412,7 @@ function MobileStageSwitcher({
         })}
       </div>
       <button
-        onClick={() => step(1)}
+        onClick={() => onStep(1)}
         disabled={idx >= LIFECYCLE_COLUMNS.length - 1}
         aria-label="Next stage"
         className="shrink-0 rounded-md px-2 py-1.5 text-lg leading-none text-slate-500 hover:bg-slate-100 disabled:opacity-30 dark:text-slate-400 dark:hover:bg-slate-800"
