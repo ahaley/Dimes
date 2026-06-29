@@ -44,6 +44,15 @@ export function ChangeBoard({
   const toast = useToast()
   const navigate = useNavigate()
   const [closedOpen, setClosedOpen] = useState(false)
+  // Which Epic cards are expanded to reveal their composed children (board-local UI state).
+  const [expanded, setExpanded] = useState<Set<string>>(new Set())
+  const toggleExpand = (id: string) =>
+    setExpanded((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
 
   // Resolve an author's name from members plus all actors (incl. archived/removed) so authors who
   // are no longer members still show.
@@ -58,19 +67,40 @@ export function ChangeBoard({
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }))
 
-  // Apply the board filters before splitting into columns so every column (and the Closed section)
-  // reflects them: the text query AND, when the "assigned to me" toggle is on, the current actor.
-  const visible = (changes ?? []).filter(
-    (c) => matchesQuery(c, query) && (!mineOnly || c.assigneeActorId === actingActorId),
-  )
+  // Apply the board filters: the text query AND, when the "assigned to me" toggle is on, the current actor.
+  const allChanges = changes ?? []
+  const matches = (c: ChangeRequest) =>
+    matchesQuery(c, query) && (!mineOnly || c.assigneeActorId === actingActorId)
+
+  // Composed children render nested inside their Epic card, never as their own column cards. Group every
+  // child under its parent so the Epic card can show them.
+  const childrenByEpic = new Map<string, ChangeRequest[]>()
+  for (const c of allChanges) {
+    if (c.parentChangeRequestId) {
+      const arr = childrenByEpic.get(c.parentChangeRequestId) ?? []
+      arr.push(c)
+      childrenByEpic.set(c.parentChangeRequestId, arr)
+    }
+  }
+  // The children of an Epic that pass the current board filters, ordered the way a column would order them.
+  const shownChildren = (epicId: string) =>
+    (childrenByEpic.get(epicId) ?? [])
+      .filter(matches)
+      .sort((a, b) => a.sortOrder - b.sortOrder || b.updatedAt.localeCompare(a.updatedAt))
+
+  // Top-level cards = everything that isn't itself a composed child. An Epic stays visible if it matches
+  // OR any of its children match, so a child hit isn't hidden behind a non-matching Epic.
+  const isVisible = (c: ChangeRequest) =>
+    c.kind === 'Epic' ? matches(c) || shownChildren(c.id).length > 0 : matches(c)
+  const visibleTop = allChanges.filter((c) => !c.parentChangeRequestId && isVisible(c))
 
   // Mirror the server order (OrderBy SortOrder, then UpdatedAt desc) so an optimistic SortOrder change
   // from a drag reorders the column immediately — otherwise the card snaps back until the refetch lands.
   const byStatus = (status: ChangeStatus) =>
-    visible
+    visibleTop
       .filter((c) => c.status === status)
       .sort((a, b) => a.sortOrder - b.sortOrder || b.updatedAt.localeCompare(a.updatedAt))
-  const terminal = visible.filter((c) => c.status === 'Rejected' || c.status === 'Duplicate')
+  const terminal = visibleTop.filter((c) => c.status === 'Rejected' || c.status === 'Duplicate')
 
   const requestTransition = (change: ChangeRequest, target: ChangeStatus) => {
     if (target === change.status) return
@@ -138,6 +168,9 @@ export function ChangeBoard({
                 authorOf={authorOf}
                 onSelect={onSelect}
                 onTransition={requestTransition}
+                childrenOf={shownChildren}
+                expandedIds={expanded}
+                onToggleExpand={toggleExpand}
                 onFocus={() => navigate(`/projects/${projectId}/focus/${status}`)}
               />
             </div>
@@ -172,7 +205,7 @@ export function ChangeBoard({
 }
 
 function Column({
-  status, changes, olderItems, members, authorOf, onSelect, onTransition, onFocus,
+  status, changes, olderItems, members, authorOf, onSelect, onTransition, childrenOf, expandedIds, onToggleExpand, onFocus,
 }: {
   status: ChangeStatus
   changes: ChangeRequest[]
@@ -181,6 +214,9 @@ function Column({
   authorOf: (change: ChangeRequest) => string
   onSelect: (id: string) => void
   onTransition: (change: ChangeRequest, target: ChangeStatus) => void
+  childrenOf: (epicId: string) => ChangeRequest[]
+  expandedIds: Set<string>
+  onToggleExpand: (id: string) => void
   onFocus: () => void
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: status })
@@ -220,6 +256,11 @@ function Column({
               author={authorOf(c)}
               onSelect={() => onSelect(c.id)}
               onTransition={(target) => onTransition(c, target)}
+              epicChildren={c.kind === 'Epic' ? childrenOf(c.id) : undefined}
+              expanded={expandedIds.has(c.id)}
+              onToggleExpand={() => onToggleExpand(c.id)}
+              onSelectChild={onSelect}
+              onTransitionChild={onTransition}
             />
           ))}
         </SortableContext>
