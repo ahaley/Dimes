@@ -191,7 +191,7 @@ function NestedChild({
         </div>
 
         {child.description && (
-          <p className="line-clamp-2 text-[11px] leading-snug text-slate-500 dark:text-slate-400">{child.description}</p>
+          <p className="line-clamp-3 text-[11px] leading-snug text-slate-500 dark:text-slate-400">{child.description}</p>
         )}
 
         <div className="flex flex-wrap items-center gap-1.5">
