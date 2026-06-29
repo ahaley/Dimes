@@ -16,7 +16,7 @@ const TONE_RULE: Record<string, string> = {
 
 export function ChangeCard({
   change, members, author, onSelect, onTransition,
-  epicChildren, expanded, onToggleExpand, onSelectChild, onTransitionChild,
+  epicChildren, expanded, onToggleExpand, onSelectChild, onTransitionChild, isDropTarget,
 }: {
   change: ChangeRequest
   members: Member[]
@@ -29,6 +29,8 @@ export function ChangeCard({
   onToggleExpand?: () => void
   onSelectChild?: (id: string) => void
   onTransitionChild?: (child: ChangeRequest, target: ChangeStatus) => void
+  // True when a dragged request is dwelling on this Epic, armed to be added to its composition.
+  isDropTarget?: boolean
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: change.id,
@@ -52,9 +54,15 @@ export function ChangeCard({
         'group relative cursor-grab overflow-hidden rounded-md border border-slate-200 bg-white active:cursor-grabbing dark:border-slate-700 dark:bg-slate-800',
         'hover:border-indigo-300 hover:shadow-sm',
         isDragging && 'opacity-40',
+        isDropTarget && 'border-indigo-500 ring-2 ring-indigo-400',
       )}
     >
       <div className={cx('h-0.5 w-full', TONE_RULE[STATUS_TONE[change.status]] ?? 'bg-slate-300')} />
+      {isDropTarget && (
+        <div className="bg-indigo-500 px-2 py-1 text-center text-[11px] font-semibold text-white">
+          Release to add to Epic
+        </div>
+      )}
       <div className="p-2.5">
         <div className="flex items-start justify-between gap-1">
           <p className="text-sm font-medium leading-snug text-slate-800 dark:text-slate-100">{change.title}</p>
