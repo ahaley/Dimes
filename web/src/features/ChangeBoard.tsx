@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { DndContext, PointerSensor, pointerWithin, rectIntersection, useDroppable, useSensor, useSensors, type CollisionDetection, type DragEndEvent, type DragOverEvent } from '@dnd-kit/core'
 import { SortableContext, arrayMove, verticalListSortingStrategy } from '@dnd-kit/sortable'
-import { useActors, useAddEpicChild, useChanges, useReorderChanges, useTransition } from '../api/hooks'
+import { useActors, useAddEpicChild, useChanges, useRemoveEpicChild, useReorderChanges, useTransition } from '../api/hooks'
 import { LIFECYCLE_COLUMNS, type ChangeRequest, type ChangeStatus, type Member } from '../api/types'
 import { STATUS_TONE, relativeTime } from '../lifecycle'
 import { Badge, cx } from '../components/ui'
@@ -46,6 +46,7 @@ export function ChangeBoard({
   const transition = useTransition(projectId)
   const reorder = useReorderChanges(projectId)
   const addChild = useAddEpicChild(projectId)
+  const removeChild = useRemoveEpicChild(projectId)
   const toast = useToast()
   const navigate = useNavigate()
   const [closedOpen, setClosedOpen] = useState(false)
@@ -130,6 +131,19 @@ export function ChangeBoard({
       {
         onSuccess: () => toast.success(`Moved “${change.title}” to ${target}`),
         onError: (e) => toast.error(e instanceof Error ? e.message : 'Transition failed'),
+      },
+    )
+  }
+
+  // Break a composed child out of its Epic (from the board's long-press affordance). The child keeps its
+  // status and reappears as a standalone card in its column after the invalidation refresh.
+  const requestRemoveChild = (child: ChangeRequest) => {
+    if (!child.parentChangeRequestId) return
+    removeChild.mutate(
+      { epicId: child.parentChangeRequestId, childId: child.id },
+      {
+        onSuccess: () => toast.success(`Removed “${child.title}” from the Epic`),
+        onError: (e) => toast.error(e instanceof Error ? e.message : 'Could not remove from Epic'),
       },
     )
   }
@@ -235,6 +249,7 @@ export function ChangeBoard({
                 childrenOf={shownChildren}
                 expandedIds={expanded}
                 onToggleExpand={toggleExpand}
+                onRemoveChild={requestRemoveChild}
                 armedEpicId={armedEpicId}
                 onFocus={() => navigate(`/projects/${projectId}/focus/${status}`)}
               />
@@ -270,7 +285,7 @@ export function ChangeBoard({
 }
 
 function Column({
-  status, changes, olderItems, members, authorOf, onSelect, onTransition, childrenOf, expandedIds, onToggleExpand, armedEpicId, onFocus,
+  status, changes, olderItems, members, authorOf, onSelect, onTransition, childrenOf, expandedIds, onToggleExpand, onRemoveChild, armedEpicId, onFocus,
 }: {
   status: ChangeStatus
   changes: ChangeRequest[]
@@ -282,6 +297,7 @@ function Column({
   childrenOf: (epicId: string) => ChangeRequest[]
   expandedIds: Set<string>
   onToggleExpand: (id: string) => void
+  onRemoveChild: (child: ChangeRequest) => void
   armedEpicId: string | null
   onFocus: () => void
 }) {
@@ -327,6 +343,7 @@ function Column({
               onToggleExpand={() => onToggleExpand(c.id)}
               onSelectChild={onSelect}
               onTransitionChild={onTransition}
+              onRemoveChild={onRemoveChild}
               isDropTarget={c.id === armedEpicId}
             />
           ))}
