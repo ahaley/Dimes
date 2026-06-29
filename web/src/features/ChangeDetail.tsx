@@ -48,7 +48,11 @@ export function ChangeDetailBody({
 
   // Epic composition: candidates to add are same-project, non-Epic changes that aren't already composed.
   const isEpic = detail?.change.kind === 'Epic'
-  const { data: allChanges } = useChanges(isEpic ? projectId : undefined)
+  const parentId = detail?.change.parentChangeRequestId ?? null
+  // Fetch the project's changes when composing an Epic (to pick children) or when this change is itself a
+  // child (to resolve its parent Epic's display key for the "Part of" cue).
+  const { data: allChanges } = useChanges(isEpic || parentId ? projectId : undefined)
+  const parent = parentId ? allChanges?.find((c) => c.id === parentId) : undefined
   const addChild = useAddEpicChild(projectId)
   const removeChild = useRemoveEpicChild(projectId)
   const bulkTransition = useBulkTransition(projectId)
@@ -116,6 +120,11 @@ export function ChangeDetailBody({
             <Badge tone={STATUS_TONE[detail.change.status]}>{detail.change.status}</Badge>
             <Badge tone={kindTone(detail.change.kind)}>{detail.change.kind}</Badge>
             {detail.change.priority !== 'None' && <Badge tone="amber">{detail.change.priority}</Badge>}
+            {parentId && (
+              <span className="text-xs text-slate-500 dark:text-slate-400" title="Composed in an Epic">
+                ↳ Part of <span className="font-mono text-slate-600 dark:text-slate-300">{parent?.displayKey ?? parent?.title ?? 'an Epic'}</span>
+              </span>
+            )}
             <span className="ml-auto" />
             {canEdit && !editing && <Button variant="subtle" onClick={startEdit}>Edit</Button>}
             {ALLOWED_TRANSITIONS[detail.change.status]
