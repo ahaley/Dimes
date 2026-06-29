@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import type { ChangeRequest, ChangeStatus, Member } from '../api/types'
@@ -16,7 +16,7 @@ const TONE_RULE: Record<string, string> = {
 
 export function ChangeCard({
   change, members, author, onSelect, onTransition,
-  epicChildren, expanded, onToggleExpand, onSelectChild, onTransitionChild, isDropTarget,
+  epicChildren, expanded, onToggleExpand, onSelectChild, onTransitionChild, onRemoveChild, isDropTarget,
 }: {
   change: ChangeRequest
   members: Member[]
@@ -29,6 +29,7 @@ export function ChangeCard({
   onToggleExpand?: () => void
   onSelectChild?: (id: string) => void
   onTransitionChild?: (child: ChangeRequest, target: ChangeStatus) => void
+  onRemoveChild?: (child: ChangeRequest) => void
   // True when a dragged request is dwelling on this Epic, armed to be added to its composition.
   isDropTarget?: boolean
 }) {
@@ -128,6 +129,7 @@ export function ChangeCard({
                     members={members}
                     onSelect={() => onSelectChild?.(child.id)}
                     onTransition={(target) => onTransitionChild?.(child, target)}
+                    onRemove={() => onRemoveChild?.(child)}
                   />
                 ))}
               </div>
@@ -166,22 +168,54 @@ export function ChangeCard({
  * description preview, and a meta footer (status / priority / assignee / age) plus a transition menu.
  * Children are moved here or in the detail — they don't have their own board column. */
 function NestedChild({
-  child, members, onSelect, onTransition,
+  child, members, onSelect, onTransition, onRemove,
 }: {
   child: ChangeRequest
   members: Member[]
   onSelect: () => void
   onTransition: (target: ChangeStatus) => void
+  onRemove: () => void
 }) {
   const [menuOpen, setMenuOpen] = useState(false)
+  // Press-and-hold reveals the "Remove from Epic" action. A quick click still opens the child detail;
+  // only a ~500ms hold arms removal. The timer is cancelled if the pointer moves (a scroll, not a hold).
+  const [armed, setArmed] = useState(false)
+  const pressTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const startPos = useRef<{ x: number; y: number } | null>(null)
+  const suppressClick = useRef(false)
+  const clearPress = () => { if (pressTimer.current) clearTimeout(pressTimer.current); pressTimer.current = undefined }
+  const onPointerDown = (e: React.PointerEvent) => {
+    e.stopPropagation() // never start the Epic card's drag
+    if (armed) return
+    startPos.current = { x: e.clientX, y: e.clientY }
+    clearPress()
+    pressTimer.current = setTimeout(() => { suppressClick.current = true; setMenuOpen(false); setArmed(true) }, 500)
+  }
+  const onPointerMove = (e: React.PointerEvent) => {
+    if (!pressTimer.current || !startPos.current) return
+    if (Math.hypot(e.clientX - startPos.current.x, e.clientY - startPos.current.y) > 8) clearPress()
+  }
+  const onClick = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (suppressClick.current) { suppressClick.current = false; return } // the hold just opened the action
+    if (armed) { setArmed(false); return } // a click cancels the armed state
+    onSelect()
+  }
   const menuTargets = ALLOWED_TRANSITIONS[child.status].filter((t) => t !== 'Duplicate')
   const assignee = members.find((m) => m.actorId === child.assigneeActorId)
   return (
     <div className="relative">
+      {armed && <div className="fixed inset-0 z-10" onClick={(e) => { e.stopPropagation(); setArmed(false) }} />}
       <div
-        onPointerDown={(e) => e.stopPropagation()}
-        onClick={(e) => { e.stopPropagation(); onSelect() }}
-        className="cursor-pointer space-y-1 rounded border border-slate-200 bg-slate-50 p-2 hover:border-indigo-300 dark:border-slate-700 dark:bg-slate-900/40"
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={clearPress}
+        onPointerLeave={clearPress}
+        onClick={onClick}
+        className={cx(
+          'cursor-pointer space-y-1 rounded border border-slate-200 bg-slate-50 p-2 hover:border-indigo-300 dark:border-slate-700 dark:bg-slate-900/40',
+          armed && 'relative z-20 border-indigo-400 ring-2 ring-indigo-400',
+        )}
       >
         <div className="flex items-start gap-1.5">
           {child.displayKey && <span className="shrink-0 font-mono text-[10px] leading-snug text-slate-400">{child.displayKey}</span>}
@@ -190,7 +224,7 @@ function NestedChild({
             <button
               aria-label="Change status"
               onPointerDown={(e) => e.stopPropagation()}
-              onClick={(e) => { e.stopPropagation(); setMenuOpen((v) => !v) }}
+              onClick={(e) => { e.stopPropagation(); setArmed(false); setMenuOpen((v) => !v) }}
               className="-mt-0.5 shrink-0 rounded px-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-200"
             >
               ⋯
@@ -217,6 +251,16 @@ function NestedChild({
             )}
           </span>
         </div>
+
+        {armed && (
+          <button
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => { e.stopPropagation(); setArmed(false); onRemove() }}
+            className="mt-1 flex w-full items-center justify-center gap-1 rounded bg-red-600 px-2 py-1 text-[11px] font-semibold text-white hover:bg-red-500"
+          >
+            ✕ Remove from Epic
+          </button>
+        )}
       </div>
       {menuOpen && (
         <>
