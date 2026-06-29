@@ -152,13 +152,17 @@ public record ChangeRequestDto(
     int SortOrder,
     int? Number,
     string? DisplayKey,
-    DateTimeOffset? CompletedAt);
+    DateTimeOffset? CompletedAt,
+    // When set, this change is a composed child of the referenced Epic (null for standalone / an Epic).
+    Guid? ParentChangeRequestId);
 
 public record ChangeRequestDetailDto(
     ChangeRequestDto Change,
     IReadOnlyList<CommentDto> Comments,
     IReadOnlyList<ObservationDto> Evidence,
-    IReadOnlyList<ScmLinkDto> ScmLinks);
+    IReadOnlyList<ScmLinkDto> ScmLinks,
+    // The change requests composed under this one (only non-empty for an Epic).
+    IReadOnlyList<ChangeRequestDto> Children);
 
 // Per-project count of the current actor's open (non-terminal) assigned change requests — drives the
 // sidebar "assigned to you" indicator. Only projects with a non-zero count are returned.

@@ -223,6 +223,9 @@ namespace Dimes.Infrastructure.Postgres.Migrations
                     b.Property<int?>("Number")
                         .HasColumnType("integer");
 
+                    b.Property<Guid?>("ParentChangeRequestId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("Priority")
                         .IsRequired()
                         .HasColumnType("text");
@@ -252,8 +255,12 @@ namespace Dimes.Infrastructure.Postgres.Migrations
 
                     b.HasIndex("DuplicateOfId");
 
+                    b.HasIndex("ParentChangeRequestId");
+
                     b.HasIndex("ProjectId", "Number")
                         .IsUnique();
+
+                    b.HasIndex("ProjectId", "ParentChangeRequestId");
 
                     b.HasIndex("ProjectId", "Status");
 
@@ -762,6 +769,11 @@ namespace Dimes.Infrastructure.Postgres.Migrations
                         .HasForeignKey("DuplicateOfId")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.HasOne("Dimes.Domain.Entities.ChangeRequest", "Parent")
+                        .WithMany("Children")
+                        .HasForeignKey("ParentChangeRequestId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("Dimes.Domain.Entities.Project", "Project")
                         .WithMany("ChangeRequests")
                         .HasForeignKey("ProjectId")
@@ -773,6 +785,8 @@ namespace Dimes.Infrastructure.Postgres.Migrations
                     b.Navigation("CreatedBy");
 
                     b.Navigation("DuplicateOf");
+
+                    b.Navigation("Parent");
 
                     b.Navigation("Project");
                 });
@@ -925,6 +939,8 @@ namespace Dimes.Infrastructure.Postgres.Migrations
 
             modelBuilder.Entity("Dimes.Domain.Entities.ChangeRequest", b =>
                 {
+                    b.Navigation("Children");
+
                     b.Navigation("Comments");
 
                     b.Navigation("Evidence");

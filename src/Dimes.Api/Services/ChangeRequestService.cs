@@ -364,11 +364,20 @@ public class ChangeRequestService(
             .FirstOrDefaultAsync(c => c.Id == id, ct)
             ?? throw new NotFoundException($"Change request '{id}' not found.");
 
+        var projectKey = await ProjectKeyAsync(change.ProjectId, ct);
+
+        // Composed children (only meaningful for an Epic, but harmless to query for any change).
+        var children = await db.ChangeRequests
+            .Where(c => c.ParentChangeRequestId == id)
+            .OrderBy(c => c.Number)
+            .ToListAsync(ct);
+
         return new ChangeRequestDetailDto(
-            change.ToDto(await ProjectKeyAsync(change.ProjectId, ct)),
+            change.ToDto(projectKey),
             change.Comments.OrderBy(c => c.CreatedAt).Select(c => c.ToDto()).ToList(),
             change.Evidence.OrderByDescending(o => o.LastSeen).Select(o => o.ToDto()).ToList(),
-            change.ScmLinks.OrderBy(l => l.CreatedAt).Select(l => l.ToDto()).ToList());
+            change.ScmLinks.OrderBy(l => l.CreatedAt).Select(l => l.ToDto()).ToList(),
+            children.Select(c => c.ToDto(projectKey)).ToList());
     }
 
     public async Task<ChangeRequestDto> TransitionAsync(

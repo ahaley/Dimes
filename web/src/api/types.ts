@@ -8,7 +8,7 @@ export type ObservationKind = 'ExplicitFeedback' | 'SolicitedFeedback' | 'Behavi
 export type ObservationStatus = 'New' | 'Clustered' | 'Promoted' | 'Dismissed'
 export type AssistConversationStatus = 'AwaitingAssistant' | 'AwaitingRequester' | 'Closed'
 export type AssistMessageSender = 'Requester' | 'Assistant'
-export type ChangeKind = 'Problem' | 'Feature' | 'ObservationDriven'
+export type ChangeKind = 'Problem' | 'Feature' | 'ObservationDriven' | 'Epic'
 export type ChangeStatus =
   | 'Captured' | 'Triaged' | 'Approved' | 'InDevelopment' | 'InReview' | 'Done' | 'Rejected' | 'Duplicate'
 export type Priority = 'None' | 'Low' | 'Medium' | 'High' | 'Critical'
@@ -37,6 +37,8 @@ export interface ChangeRequest {
   createdByActorId: string; assigneeActorId?: string | null; duplicateOfId?: string | null
   createdAt: string; updatedAt: string; sortOrder: number; number?: number | null; displayKey?: string | null
   completedAt?: string | null
+  // When set, this change is a composed child of the referenced Epic (null for standalone / an Epic).
+  parentChangeRequestId?: string | null
 }
 export interface Comment {
   id: string; changeRequestId: string; authorActorId: string; body: string; kind: CommentKind; createdAt: string
@@ -50,6 +52,8 @@ export interface AuditEvent {
 }
 export interface ChangeRequestDetail {
   change: ChangeRequest; comments: Comment[]; evidence: Observation[]; scmLinks: ScmLink[]
+  // The change requests composed under this one (only non-empty for an Epic).
+  children: ChangeRequest[]
 }
 // Per-project count of open change requests assigned to the current user (sidebar indicator).
 export interface ProjectAssignmentCount {
