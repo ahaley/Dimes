@@ -117,6 +117,7 @@ export function ChangeCard({
                   <NestedChild
                     key={child.id}
                     child={child}
+                    members={members}
                     onSelect={() => onSelectChild?.(child.id)}
                     onTransition={(target) => onTransitionChild?.(child, target)}
                   />
@@ -153,37 +154,61 @@ export function ChangeCard({
   )
 }
 
-/** A composed child rendered nested inside its Epic card: a compact row showing its own status and a
- * transition menu (children are moved here or in the detail — they don't have their own board column). */
+/** A composed child rendered nested inside its Epic card: a compact mini-card showing its title, a short
+ * description preview, and a meta footer (status / priority / assignee / age) plus a transition menu.
+ * Children are moved here or in the detail — they don't have their own board column. */
 function NestedChild({
-  child, onSelect, onTransition,
+  child, members, onSelect, onTransition,
 }: {
   child: ChangeRequest
+  members: Member[]
   onSelect: () => void
   onTransition: (target: ChangeStatus) => void
 }) {
   const [menuOpen, setMenuOpen] = useState(false)
   const menuTargets = ALLOWED_TRANSITIONS[child.status].filter((t) => t !== 'Duplicate')
+  const assignee = members.find((m) => m.actorId === child.assigneeActorId)
   return (
     <div className="relative">
       <div
         onPointerDown={(e) => e.stopPropagation()}
         onClick={(e) => { e.stopPropagation(); onSelect() }}
-        className="flex cursor-pointer items-center gap-1.5 rounded border border-slate-200 bg-slate-50 px-1.5 py-1 hover:border-indigo-300 dark:border-slate-700 dark:bg-slate-900/40"
+        className="cursor-pointer space-y-1 rounded border border-slate-200 bg-slate-50 p-2 hover:border-indigo-300 dark:border-slate-700 dark:bg-slate-900/40"
       >
-        {child.displayKey && <span className="shrink-0 font-mono text-[10px] text-slate-400">{child.displayKey}</span>}
-        <span className="min-w-0 flex-1 truncate text-xs text-slate-700 dark:text-slate-200">{child.title}</span>
-        <Badge tone={STATUS_TONE[child.status]}>{child.status}</Badge>
-        {menuTargets.length > 0 && (
-          <button
-            aria-label="Change status"
-            onPointerDown={(e) => e.stopPropagation()}
-            onClick={(e) => { e.stopPropagation(); setMenuOpen((v) => !v) }}
-            className="shrink-0 rounded px-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-200"
-          >
-            ⋯
-          </button>
+        <div className="flex items-start gap-1.5">
+          {child.displayKey && <span className="shrink-0 font-mono text-[10px] leading-snug text-slate-400">{child.displayKey}</span>}
+          <span className="min-w-0 flex-1 text-xs font-medium leading-snug text-slate-700 dark:text-slate-200">{child.title}</span>
+          {menuTargets.length > 0 && (
+            <button
+              aria-label="Change status"
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => { e.stopPropagation(); setMenuOpen((v) => !v) }}
+              className="-mt-0.5 shrink-0 rounded px-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-200"
+            >
+              ⋯
+            </button>
+          )}
+        </div>
+
+        {child.description && (
+          <p className="line-clamp-2 text-[11px] leading-snug text-slate-500 dark:text-slate-400">{child.description}</p>
         )}
+
+        <div className="flex flex-wrap items-center gap-1.5">
+          <Badge tone={STATUS_TONE[child.status]}>{child.status}</Badge>
+          {child.priority !== 'None' && <Badge tone="amber">{child.priority}</Badge>}
+          <span className="ml-auto flex items-center gap-1.5 text-[10px] text-slate-400">
+            <span>{relativeTime(child.updatedAt)}</span>
+            {assignee && (
+              <span
+                title={assignee.displayName}
+                className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-slate-200 text-[9px] font-semibold text-slate-600 dark:bg-slate-700 dark:text-slate-200"
+              >
+                {initials(assignee.displayName)}
+              </span>
+            )}
+          </span>
+        </div>
       </div>
       {menuOpen && (
         <>
