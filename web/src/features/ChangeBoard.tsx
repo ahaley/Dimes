@@ -1,8 +1,8 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { DndContext, PointerSensor, pointerWithin, rectIntersection, useDroppable, useSensor, useSensors, type CollisionDetection, type DragEndEvent } from '@dnd-kit/core'
+import { DndContext, PointerSensor, pointerWithin, rectIntersection, useDroppable, useSensor, useSensors, type CollisionDetection, type DragEndEvent, type DragOverEvent } from '@dnd-kit/core'
 import { SortableContext, arrayMove, verticalListSortingStrategy } from '@dnd-kit/sortable'
-import { useActors, useChanges, useReorderChanges, useTransition } from '../api/hooks'
+import { useActors, useAddEpicChild, useChanges, useReorderChanges, useTransition } from '../api/hooks'
 import { LIFECYCLE_COLUMNS, type ChangeRequest, type ChangeStatus, type Member } from '../api/types'
 import { STATUS_TONE, relativeTime } from '../lifecycle'
 import { Badge, cx } from '../components/ui'
@@ -16,6 +16,10 @@ const DONE_RECENT_DAYS = 14
 function isRecentlyAccepted(c: ChangeRequest): boolean {
   return c.completedAt != null && Date.now() - new Date(c.completedAt).getTime() < DONE_RECENT_DAYS * 864e5
 }
+
+// Dragging a request onto an Epic in the same column adds it to the Epic's composition — but only after
+// the cursor dwells on the Epic this long, so a quick pass-over still reads as an ordinary reorder.
+const COMPOSE_DWELL_MS = 600
 
 // Real-time board search. An empty query matches everything; otherwise match the change's title or
 // description (case-insensitive).
@@ -41,9 +45,26 @@ export function ChangeBoard({
   const { data: changes } = useChanges(projectId)
   const transition = useTransition(projectId)
   const reorder = useReorderChanges(projectId)
+  const addChild = useAddEpicChild(projectId)
   const toast = useToast()
   const navigate = useNavigate()
   const [closedOpen, setClosedOpen] = useState(false)
+  // Drag-to-compose: the Epic currently armed as a composition drop target (cursor has dwelled on it).
+  // `armedRef` mirrors the state so onDragEnd can read it synchronously; `overRef` tracks the current
+  // hovered droppable so the dwell timer only restarts when the target actually changes; `timerRef`
+  // holds the pending arm timeout.
+  const [armedEpicId, setArmedEpicId] = useState<string | null>(null)
+  const armedRef = useRef<string | null>(null)
+  const overRef = useRef<string | undefined>(undefined)
+  const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const setArmed = (id: string | null) => { armedRef.current = id; setArmedEpicId(id) }
+  const clearArm = () => {
+    if (timerRef.current) clearTimeout(timerRef.current)
+    timerRef.current = undefined
+    overRef.current = undefined
+    setArmed(null)
+  }
+  useEffect(() => () => { if (timerRef.current) clearTimeout(timerRef.current) }, [])
   // Which Epic cards are expanded to reveal their composed children (board-local UI state).
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const toggleExpand = (id: string) =>
@@ -116,11 +137,54 @@ export function ChangeBoard({
   const isStatusId = (id: string): id is ChangeStatus =>
     (LIFECYCLE_COLUMNS as string[]).includes(id)
 
+  // A request can be composed into an Epic by drag only when it's a same-column, non-Epic, not-already-
+  // composed card and the target is a (different) Epic. Mirrors the server's add-child guards.
+  const canCompose = (active?: ChangeRequest, over?: ChangeRequest) =>
+    !!active && !!over && over.id !== active.id &&
+    over.kind === 'Epic' && active.kind !== 'Epic' &&
+    active.parentChangeRequestId == null && over.status === active.status
+
+  // Arm the hovered Epic for composition once the cursor has dwelled on it. Only (re)start the timer when
+  // the hovered target changes, so holding still over an Epic lets the dwell complete.
+  const onDragOver = (e: DragOverEvent) => {
+    const overId = e.over?.id as string | undefined
+    if (overRef.current === overId) return
+    overRef.current = overId
+    if (timerRef.current) clearTimeout(timerRef.current)
+    setArmed(null)
+    const active = (changes ?? []).find((c) => c.id === e.active.id)
+    const over = overId ? (changes ?? []).find((c) => c.id === overId) : undefined
+    if (canCompose(active, over)) {
+      timerRef.current = setTimeout(() => setArmed(over!.id), COMPOSE_DWELL_MS)
+    }
+  }
+
+  const onDragCancel = () => clearArm()
+
   const onDragEnd = (e: DragEndEvent) => {
+    const armed = armedRef.current
+    clearArm()
+
     const overId = e.over?.id as string | undefined
     if (!overId) return
     const change = (changes ?? []).find((c) => c.id === e.active.id)
     if (!change) return
+
+    // Drag-to-compose: released while an Epic was armed (the cursor dwelled on it) → add to its composition
+    // instead of reordering past it.
+    if (armed && overId === armed) {
+      const epic = (changes ?? []).find((c) => c.id === armed)
+      if (epic && canCompose(change, epic)) {
+        addChild.mutate(
+          { epicId: epic.id, childId: change.id },
+          {
+            onSuccess: () => toast.success(`Added “${change.title}” to ${epic.displayKey ?? 'the Epic'}`),
+            onError: (err) => toast.error(err instanceof Error ? err.message : 'Could not add to Epic'),
+          },
+        )
+        return
+      }
+    }
 
     // Dropped on a column (its empty area) → cross-column move to that status.
     if (isStatusId(overId)) {
@@ -150,7 +214,7 @@ export function ChangeBoard({
   }
 
   return (
-    <DndContext sensors={sensors} collisionDetection={boardCollisionDetection} onDragEnd={onDragEnd}>
+    <DndContext sensors={sensors} collisionDetection={boardCollisionDetection} onDragOver={onDragOver} onDragEnd={onDragEnd} onDragCancel={onDragCancel}>
       <div className="flex gap-3 overflow-x-auto pb-3">
         {LIFECYCLE_COLUMNS.map((status) => {
           // Done is split into recently-accepted (shown) and older (collapsed) Change Requests.
@@ -171,6 +235,7 @@ export function ChangeBoard({
                 childrenOf={shownChildren}
                 expandedIds={expanded}
                 onToggleExpand={toggleExpand}
+                armedEpicId={armedEpicId}
                 onFocus={() => navigate(`/projects/${projectId}/focus/${status}`)}
               />
             </div>
@@ -205,7 +270,7 @@ export function ChangeBoard({
 }
 
 function Column({
-  status, changes, olderItems, members, authorOf, onSelect, onTransition, childrenOf, expandedIds, onToggleExpand, onFocus,
+  status, changes, olderItems, members, authorOf, onSelect, onTransition, childrenOf, expandedIds, onToggleExpand, armedEpicId, onFocus,
 }: {
   status: ChangeStatus
   changes: ChangeRequest[]
@@ -217,6 +282,7 @@ function Column({
   childrenOf: (epicId: string) => ChangeRequest[]
   expandedIds: Set<string>
   onToggleExpand: (id: string) => void
+  armedEpicId: string | null
   onFocus: () => void
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: status })
@@ -261,6 +327,7 @@ function Column({
               onToggleExpand={() => onToggleExpand(c.id)}
               onSelectChild={onSelect}
               onTransitionChild={onTransition}
+              isDropTarget={c.id === armedEpicId}
             />
           ))}
         </SortableContext>
