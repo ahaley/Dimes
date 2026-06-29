@@ -71,6 +71,16 @@ public class ChangeRequestsController(
     public async Task<ActionResult<ChangeRequestDto>> Transition(Guid id, TransitionChangeRequest req, CancellationToken ct)
         => Ok(await changes.TransitionAsync(id, currentActor.ActorId, req, ct));
 
+    /// <summary>Compose an existing change request into this Epic (Contributor+).</summary>
+    [HttpPost("api/changes/{epicId:guid}/children")]
+    public async Task<ActionResult<ChangeRequestDto>> AddChild(Guid epicId, AddEpicChildRequest req, CancellationToken ct)
+        => Ok(await changes.AddChildAsync(epicId, currentActor.ActorId, req.ChildId, ct));
+
+    /// <summary>Break a composed change out of this Epic (Contributor+).</summary>
+    [HttpDelete("api/changes/{epicId:guid}/children/{childId:guid}")]
+    public async Task<ActionResult<ChangeRequestDto>> RemoveChild(Guid epicId, Guid childId, CancellationToken ct)
+        => Ok(await changes.RemoveChildAsync(epicId, currentActor.ActorId, childId, ct));
+
     [HttpPost("api/changes/{id:guid}/comments")]
     public async Task<ActionResult<CommentDto>> AddComment(Guid id, AddCommentRequest req, CancellationToken ct)
         => Ok(await changes.AddCommentAsync(id, currentActor.ActorId, req, ct));

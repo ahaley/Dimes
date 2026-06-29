@@ -170,6 +170,9 @@ public record ProjectAssignmentCountDto(Guid ProjectId, int Count);
 
 public record TransitionChangeRequest(ChangeStatus Target, string? Reason, Guid? DuplicateOfId);
 
+/// <summary>Compose an existing change request (by id) into an Epic.</summary>
+public record AddEpicChildRequest(Guid ChildId);
+
 /// <summary>Post-hoc edit of a change's free-form details (author or Maintainer only). Recipient
 /// assignment is a separate action — see <see cref="AssignChangeRequest"/>.</summary>
 public record UpdateChangeDetailsRequest(string Title, string? Description, Priority Priority);

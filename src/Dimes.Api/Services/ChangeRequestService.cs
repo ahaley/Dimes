@@ -191,6 +191,98 @@ public class ChangeRequestService(
         return change.ToDto(await ProjectKeyAsync(change.ProjectId, ct));
     }
 
+    /// <summary>Compose an existing change into an Epic: set its parent to <paramref name="epicId"/>.
+    /// Requires Contributor+ (composition is a working-the-project edit, like assignment). The parent must
+    /// be an Epic and the child a same-project, non-Epic change that isn't already composed elsewhere
+    /// (re-parent by removing first). Records an "AddedToEpic" audit event on the child.</summary>
+    public async Task<ChangeRequestDto> AddChildAsync(
+        Guid epicId, Guid actorId, Guid childId, CancellationToken ct = default)
+    {
+        var epic = await db.ChangeRequests.FindAsync([epicId], ct)
+            ?? throw new NotFoundException($"Change request '{epicId}' not found.");
+
+        var (actor, role) = await members.ResolveAsync(epic.ProjectId, actorId, ct);
+        if (role < MemberRole.Contributor)
+        {
+            throw new ForbiddenException("Composing an Epic requires at least the Contributor role.");
+        }
+
+        if (epic.Kind != ChangeKind.Epic)
+        {
+            throw new BadRequestException("Only an Epic can compose child change requests.");
+        }
+
+        if (childId == epicId)
+        {
+            throw new BadRequestException("A change cannot be composed into itself.");
+        }
+
+        var child = await db.ChangeRequests.FindAsync([childId], ct)
+            ?? throw new NotFoundException($"Change request '{childId}' not found.");
+
+        if (child.ProjectId != epic.ProjectId)
+        {
+            throw new BadRequestException("A child must belong to the same project as the Epic.");
+        }
+        if (child.Kind == ChangeKind.Epic)
+        {
+            throw new BadRequestException("An Epic cannot be composed into another Epic.");
+        }
+        if (child.ParentChangeRequestId is Guid existing)
+        {
+            throw new BadRequestException(existing == epicId
+                ? "This change is already composed in this Epic."
+                : "This change is already composed in another Epic; remove it from that one first.");
+        }
+
+        child.ParentChangeRequestId = epicId;
+        child.UpdatedAt = DateTimeOffset.UtcNow;
+        db.AuditEvents.Add(new AuditEvent
+        {
+            EntityType = AuditEntityType.ChangeRequest,
+            EntityId = child.Id,
+            ActorId = actor.Id,
+            Action = "AddedToEpic",
+        });
+        await db.SaveChangesAsync(ct);
+        await notifier.ChangedAsync(child.ProjectId, child.Id, "updated", ct);
+        return child.ToDto(await ProjectKeyAsync(child.ProjectId, ct));
+    }
+
+    /// <summary>Break a composed change out of its Epic: clear its parent. Requires Contributor+; the
+    /// child must currently be composed in <paramref name="epicId"/>. Records a "RemovedFromEpic" audit
+    /// event on the child.</summary>
+    public async Task<ChangeRequestDto> RemoveChildAsync(
+        Guid epicId, Guid actorId, Guid childId, CancellationToken ct = default)
+    {
+        var child = await db.ChangeRequests.FindAsync([childId], ct)
+            ?? throw new NotFoundException($"Change request '{childId}' not found.");
+
+        var (actor, role) = await members.ResolveAsync(child.ProjectId, actorId, ct);
+        if (role < MemberRole.Contributor)
+        {
+            throw new ForbiddenException("Composing an Epic requires at least the Contributor role.");
+        }
+
+        if (child.ParentChangeRequestId != epicId)
+        {
+            throw new BadRequestException("This change is not composed in that Epic.");
+        }
+
+        child.ParentChangeRequestId = null;
+        child.UpdatedAt = DateTimeOffset.UtcNow;
+        db.AuditEvents.Add(new AuditEvent
+        {
+            EntityType = AuditEntityType.ChangeRequest,
+            EntityId = child.Id,
+            ActorId = actor.Id,
+            Action = "RemovedFromEpic",
+        });
+        await db.SaveChangesAsync(ct);
+        await notifier.ChangedAsync(child.ProjectId, child.Id, "updated", ct);
+        return child.ToDto(await ProjectKeyAsync(child.ProjectId, ct));
+    }
+
     /// <summary>Generate a single Claude Code "work order" markdown for a project's In-Development
     /// change requests: an instruction header plus a numbered, checkboxed section per change.</summary>
     public async Task<MarkdownExport> ExportInDevelopmentAsync(Guid projectId, CancellationToken ct = default)

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { api } from '../api/client'
-import { useAudit, useChangeDetail, useProjectInvalidator, useProjects, useTransition } from '../api/hooks'
+import { useAddEpicChild, useAudit, useChangeDetail, useChanges, useProjectInvalidator, useProjects, useRemoveEpicChild, useTransition } from '../api/hooks'
 import type { ChangeStatus, Member, Priority } from '../api/types'
 import { ALLOWED_TRANSITIONS, STATUS_TONE, kindTone } from '../lifecycle'
 import { Badge, Button, ErrorText, Field, Modal, Select, TextInput, Textarea } from '../components/ui'
@@ -44,6 +44,16 @@ export function ChangeDetailBody({
   const [commentBody, setCommentBody] = useState('')
   const [agentId, setAgentId] = useState('')
   const [scmUrl, setScmUrl] = useState('')
+  const [childToAdd, setChildToAdd] = useState('')
+
+  // Epic composition: candidates to add are same-project, non-Epic changes that aren't already composed.
+  const isEpic = detail?.change.kind === 'Epic'
+  const { data: allChanges } = useChanges(isEpic ? projectId : undefined)
+  const addChild = useAddEpicChild(projectId)
+  const removeChild = useRemoveEpicChild(projectId)
+  const candidates = (allChanges ?? []).filter(
+    (c) => c.kind !== 'Epic' && !c.parentChangeRequestId && c.id !== changeId,
+  )
 
   const canEdit = !!detail && (
     detail.change.createdByActorId === actingActorId ||
@@ -181,6 +191,54 @@ export function ChangeDetailBody({
                 </span>
               )}
             </div>
+          )}
+
+          {/* Composed changes — only on an Epic. The children are managed here; on the board they
+              render nested inside the Epic card. */}
+          {isEpic && (
+            <Section title="Composed changes">
+              <ul className="space-y-1">
+                {detail.children.map((c) => (
+                  <li key={c.id} className="flex items-center gap-2 text-sm">
+                    {c.displayKey && <span className="font-mono text-xs text-slate-400">{c.displayKey}</span>}
+                    <span className="truncate text-slate-700 dark:text-slate-200">{c.title}</span>
+                    <Badge tone={STATUS_TONE[c.status]}>{c.status}</Badge>
+                    {canAssign && (
+                      <Button
+                        variant="subtle"
+                        className="ml-auto"
+                        disabled={removeChild.isPending}
+                        onClick={() => removeChild.mutate({ epicId: changeId, childId: c.id })}
+                      >
+                        Remove
+                      </Button>
+                    )}
+                  </li>
+                ))}
+                {detail.children.length === 0 && <li className="text-sm text-slate-400">No composed changes yet.</li>}
+              </ul>
+              {canAssign && (
+                <div className="mt-2 flex gap-2">
+                  <Select value={childToAdd} onChange={(e) => setChildToAdd(e.target.value)} className="flex-1">
+                    <option value="">Add a change…</option>
+                    {candidates.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.displayKey ? `${c.displayKey} · ` : ''}{c.title}
+                      </option>
+                    ))}
+                  </Select>
+                  <Button
+                    variant="default"
+                    disabled={!childToAdd || addChild.isPending}
+                    onClick={() => addChild.mutate({ epicId: changeId, childId: childToAdd }, { onSuccess: () => setChildToAdd('') })}
+                  >
+                    Add
+                  </Button>
+                </div>
+              )}
+              <ErrorText error={addChild.error} />
+              <ErrorText error={removeChild.error} />
+            </Section>
           )}
 
           {/* Evidence */}
