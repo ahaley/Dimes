@@ -8,7 +8,7 @@ export type ObservationKind = 'ExplicitFeedback' | 'SolicitedFeedback' | 'Behavi
 export type ObservationStatus = 'New' | 'Clustered' | 'Promoted' | 'Dismissed'
 export type AssistConversationStatus = 'AwaitingAssistant' | 'AwaitingRequester' | 'Closed'
 export type AssistMessageSender = 'Requester' | 'Assistant'
-export type ChangeKind = 'Problem' | 'Feature' | 'ObservationDriven' | 'Epic'
+export type ChangeKind = 'Problem' | 'Feature' | 'ObservationDriven' | 'Epic' | 'Chore'
 export type ChangeStatus =
   | 'Captured' | 'Triaged' | 'Approved' | 'InDevelopment' | 'InReview' | 'Done' | 'Rejected' | 'Duplicate'
 export type Priority = 'None' | 'Low' | 'Medium' | 'High' | 'Critical'
