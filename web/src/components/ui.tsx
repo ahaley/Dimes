@@ -18,7 +18,7 @@ export function Button({ variant = 'default', className, ...props }: ButtonProps
     <button
       {...props}
       className={cx(
-        'inline-flex items-center justify-center rounded-md border px-3 py-1.5 text-sm font-medium',
+        'inline-flex items-center justify-center rounded-md border px-3 py-2 text-sm font-medium sm:py-1.5',
         'disabled:opacity-50 disabled:cursor-not-allowed transition-colors',
         styles[variant],
         className,
@@ -56,7 +56,9 @@ export function Field({ label, children }: { label: string; children: ReactNode 
   )
 }
 
-const inputCx = 'w-full rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-sm outline-none focus:border-indigo-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100'
+// text-base on phones keeps inputs at 16px so iOS Safari doesn't zoom the page on focus; the smaller
+// desktop size returns at sm+. Vertical padding matches Button so inline input+button rows align.
+const inputCx = 'w-full rounded-md border border-slate-300 bg-white px-2.5 py-2 text-base outline-none focus:border-indigo-500 sm:py-1.5 sm:text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100'
 
 export function TextInput(props: InputHTMLAttributes<HTMLInputElement>) {
   return <input {...props} className={cx(inputCx, props.className)} />
@@ -72,21 +74,26 @@ export function Select(props: SelectHTMLAttributes<HTMLSelectElement>) {
 
 export function Modal({ title, onClose, children, wide }: { title: string; onClose: () => void; children: ReactNode; wide?: boolean }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/50 p-4 dark:bg-black/70" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-50 flex justify-center overflow-y-auto bg-slate-900/50 sm:items-start sm:p-4 dark:bg-black/70"
+      onClick={onClose}
+    >
       <div
         className={cx(
-          // A border + ring lift the dialog off the dimmed backdrop — in dark mode a borderless
-          // slate-900 panel blends into the darkened page, so the visible edge matters most there.
-          'mt-4 w-full rounded-xl border border-slate-200 bg-white shadow-2xl ring-1 ring-black/5 sm:mt-10 dark:border-slate-700 dark:bg-slate-900 dark:ring-white/10',
-          wide ? 'max-w-3xl' : 'max-w-lg',
+          // Full-screen sheet on phones (edge-to-edge, fills the viewport); a centered, bounded card
+          // from sm up. The border + ring lift that card off the dimmed backdrop — in dark mode a
+          // borderless slate-900 panel blends into the darkened page, so the edge matters most there.
+          'flex min-h-full w-full flex-col bg-white shadow-2xl dark:bg-slate-900',
+          'sm:mt-10 sm:mb-10 sm:max-h-[calc(100vh-5rem)] sm:min-h-0 sm:rounded-xl sm:border sm:border-slate-200 sm:ring-1 sm:ring-black/5 dark:sm:border-slate-700 dark:sm:ring-white/10',
+          wide ? 'sm:max-w-3xl' : 'sm:max-w-lg',
         )}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between border-b border-slate-200 px-5 py-3 dark:border-slate-800">
+        <div className="flex shrink-0 items-center justify-between border-b border-slate-200 px-5 py-3 dark:border-slate-800">
           <h2 className="text-base font-semibold text-slate-800 dark:text-slate-100">{title}</h2>
           <Button variant="subtle" onClick={onClose}>✕</Button>
         </div>
-        <div className="px-5 py-4">{children}</div>
+        <div className="flex-1 overflow-y-auto px-5 py-4">{children}</div>
       </div>
     </div>
   )

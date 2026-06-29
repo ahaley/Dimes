@@ -1,10 +1,11 @@
 import { useState } from 'react'
-import { DndContext, PointerSensor, pointerWithin, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core'
+import { DndContext, pointerWithin, type DragEndEvent } from '@dnd-kit/core'
 import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import type { Project } from '../api/types'
 import { useReorderProjects } from '../api/hooks'
 import { Badge, cx } from '../components/ui'
+import { useBoardSensors } from '../lib/dndSensors'
 import { initials, projectColor } from '../lifecycle'
 
 export function Sidebar({
@@ -34,9 +35,10 @@ export function Sidebar({
   const [showArchived, setShowArchived] = useState(false)
 
   // Personal project ordering via drag (expanded mode only). The grip handle carries the drag; the row
-  // itself stays click-to-navigate. A 5px activation distance keeps a quick click from starting a drag.
+  // itself stays click-to-navigate. A 5px move (mouse) or 250ms long-press (touch) starts the drag, so
+  // a tap/quick click navigates and a swipe scrolls the list instead of grabbing a row.
   const reorder = useReorderProjects()
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }))
+  const sensors = useBoardSensors()
   const onProjectDragEnd = (e: DragEndEvent) => {
     const overId = e.over?.id as string | undefined
     if (!overId || overId === e.active.id) return
@@ -255,7 +257,7 @@ function SortableProjectRow({
         {...listeners}
         aria-label={`Reorder ${p.name}`}
         title="Drag to reorder"
-        className="cursor-grab touch-none px-1 py-1.5 text-slate-300 opacity-0 transition-opacity hover:text-slate-500 focus:opacity-100 group-hover/proj:opacity-100 active:cursor-grabbing dark:text-slate-600 dark:hover:text-slate-400"
+        className="cursor-grab touch-none px-1 py-1.5 text-slate-300 opacity-100 transition-opacity hover:text-slate-500 focus:opacity-100 active:cursor-grabbing md:opacity-0 md:group-hover/proj:opacity-100 dark:text-slate-600 dark:hover:text-slate-400"
       >
         ∷
       </button>

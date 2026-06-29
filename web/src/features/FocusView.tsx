@@ -4,6 +4,7 @@ import { useChanges } from '../api/hooks'
 import type { ChangeStatus, Member } from '../api/types'
 import { STATUS_TONE, initials, relativeTime } from '../lifecycle'
 import { Badge, Button, Card, cx } from '../components/ui'
+import { useIsDesktop } from '../hooks/useMediaQuery'
 import { ChangeDetailBody } from './ChangeDetail'
 
 // Local YYYY-MM-DD (matches <input type="date"> values and avoids UTC off-by-one).
@@ -23,6 +24,7 @@ export function FocusView({ actingActorId, members }: { actingActorId: string; m
   const focusStatus = status as ChangeStatus
   const navigate = useNavigate()
   const { data: changes } = useChanges(projectId)
+  const isDesktop = useIsDesktop()
 
   const [railOpen, setRailOpen] = useState(true)
   const [selectedId, setSelectedId] = useState<string>()
@@ -91,7 +93,7 @@ export function FocusView({ actingActorId, members }: { actingActorId: string; m
   return (
     <div className="flex h-full min-h-0 flex-col gap-3">
       {/* Header */}
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <Badge tone={STATUS_TONE[focusStatus] ?? 'slate'}>{focusStatus}</Badge>
         <span className="text-sm font-semibold uppercase tracking-wide text-slate-500">Focus</span>
         {queue.length > 0 && (
@@ -105,7 +107,7 @@ export function FocusView({ actingActorId, members }: { actingActorId: string; m
               value={from}
               max={to}
               onChange={(e) => setFrom(e.target.value)}
-              className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+              className="rounded-md border border-slate-300 bg-white px-2 py-1 text-base sm:text-xs dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
             />
             <span>–</span>
             <input
@@ -113,7 +115,7 @@ export function FocusView({ actingActorId, members }: { actingActorId: string; m
               value={to}
               min={from}
               onChange={(e) => setTo(e.target.value)}
-              className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+              className="rounded-md border border-slate-300 bg-white px-2 py-1 text-base sm:text-xs dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
             />
           </span>
         )}
@@ -131,17 +133,17 @@ export function FocusView({ actingActorId, members }: { actingActorId: string; m
           <Button variant="default" onClick={exit}>Back to board</Button>
         </Card>
       ) : (
-        <div className="flex min-h-0 flex-1 gap-3">
-          {/* Queue rail */}
+        <div className="flex min-h-0 flex-1 flex-col gap-3 md:flex-row">
+          {/* Queue rail — on mobile it fills the view and selecting an item drops you into the detail. */}
           {railOpen && (
-            <Card className="w-80 shrink-0 overflow-auto p-1.5">
+            <Card className="min-h-0 w-full flex-1 overflow-auto p-1.5 md:w-80 md:flex-none md:shrink-0">
               <ul className="space-y-1">
                 {queue.map((c, i) => {
                   const assignee = members.find((m) => m.actorId === c.assigneeActorId)
                   return (
                     <li key={c.id}>
                       <button
-                        onClick={() => setSelectedId(c.id)}
+                        onClick={() => { setSelectedId(c.id); if (!isDesktop) setRailOpen(false) }}
                         className={cx(
                           'w-full rounded-md px-2 py-2 text-left',
                           c.id === selectedId
@@ -174,7 +176,8 @@ export function FocusView({ actingActorId, members }: { actingActorId: string; m
             </Card>
           )}
 
-          {/* Detail pane */}
+          {/* Detail pane — on mobile it replaces the queue (mutually exclusive); at md+ both show. */}
+          {(isDesktop || !railOpen) && (
           <Card className="flex min-h-0 flex-1 flex-col overflow-hidden">
             <div className="flex shrink-0 items-center gap-2 border-b border-slate-200 px-4 py-2 dark:border-slate-800">
               <Button variant="subtle" disabled={currentIndex <= 0} onClick={() => goTo(currentIndex - 1)}>← Prev</Button>
@@ -201,6 +204,7 @@ export function FocusView({ actingActorId, members }: { actingActorId: string; m
               )}
             </div>
           </Card>
+          )}
         </div>
       )}
     </div>

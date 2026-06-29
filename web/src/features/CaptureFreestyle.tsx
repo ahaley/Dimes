@@ -185,7 +185,7 @@ export function CaptureFreestyle({ projectId, agents }: { projectId: string; age
                 <Field label="Description">
                   <Textarea value={p.description} onChange={(e) => update(p.id, { description: e.target.value })} />
                 </Field>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                   <Field label="Kind">
                     <Select value={p.kind} onChange={(e) => update(p.id, { kind: e.target.value as ChangeKind })}>
                       {KINDS.map((k) => <option key={k} value={k}>{k}</option>)}

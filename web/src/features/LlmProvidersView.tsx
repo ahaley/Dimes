@@ -64,7 +64,7 @@ function AddProviderForm({ projectId }: { projectId: string }) {
   return (
     <Card className="space-y-2 p-4">
       <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Add provider</h2>
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
         <Field label="Type">
           <Select value={type} onChange={(e) => setType(e.target.value as LlmProviderType)}>
             <option value="Anthropic">Anthropic</option>
@@ -119,7 +119,7 @@ function ProviderRow({ provider }: { provider: LlmProviderConfig }) {
 
   if (!editing) {
     return (
-      <div className="flex items-center gap-2 p-3 text-sm text-slate-700 dark:text-slate-200">
+      <div className="flex flex-wrap items-center gap-2 p-3 text-sm text-slate-700 dark:text-slate-200">
         <span>{provider.name} · <span className="text-slate-400">{provider.type} / {provider.model}</span></span>
         {provider.projectId === null && <Badge tone="indigo">website-wide</Badge>}
         {!provider.enabled && <Badge tone="red">disabled</Badge>}
@@ -140,7 +140,7 @@ function ProviderRow({ provider }: { provider: LlmProviderConfig }) {
 
   return (
     <div className="space-y-2 p-3">
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
         <Field label="Type">
           <Select value={type} onChange={(e) => setType(e.target.value as LlmProviderType)}>
             <option value="Anthropic">Anthropic</option>

@@ -312,7 +312,7 @@ function MembersSection({ projectId }: { projectId: string }) {
             {candidates.length === 0 ? (
               <p className="text-sm text-slate-400">No users available — create users in Site settings.</p>
             ) : (
-              <div className="flex items-end gap-2">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
                 <Field label="User">
                   <Select value={userId} onChange={(e) => setUserId(e.target.value)}>
                     <option value="">Select…</option>
@@ -341,7 +341,7 @@ function MembersSection({ projectId }: { projectId: string }) {
               <Field label="Display name">
                 <TextInput value={agentName} onChange={(e) => setAgentName(e.target.value)} placeholder="Aria" />
               </Field>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 <Field label="Role">
                   <Select value={agentRole} onChange={(e) => setAgentRole(e.target.value as MemberRole)}>
                     {AGENT_ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
@@ -507,7 +507,7 @@ function SourcesSection({ projectId }: { projectId: string }) {
         ))}
         {sources?.length === 0 && <p className="px-3 py-4 text-sm text-slate-400">None configured.</p>}
       </div>
-      <div className="flex items-end gap-2 rounded-md border border-slate-200 p-3 dark:border-slate-700">
+      <div className="flex flex-col gap-2 rounded-md border border-slate-200 p-3 sm:flex-row sm:items-end dark:border-slate-700">
         <Field label="Type">
           <Select value={type} onChange={(e) => setType(e.target.value as CreatableSourceType)}>
             <option value="Sdk">SDK</option>

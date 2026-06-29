@@ -19,6 +19,7 @@ export function Workspace({
   const navigate = useNavigate()
   const [inboxOpen, setInboxOpen] = useState(false)
   const [creating, setCreating] = useState(false)
+  const [moreOpen, setMoreOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [mineOnly, setMineOnly] = useState(false)
   const toast = useToast()
@@ -51,10 +52,10 @@ export function Workspace({
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Change board</h1>
-        <div className="flex items-center gap-2">
-          <div className="relative w-44 sm:w-60">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <h1 className="hidden text-sm font-semibold uppercase tracking-wide text-slate-500 sm:block">Change board</h1>
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative w-full sm:w-60">
             <TextInput
               type="search"
               value={query}
@@ -84,24 +85,54 @@ export function Workspace({
           <Button variant="default" onClick={() => setInboxOpen(true)}>
             Inbox{inboxCount > 0 && <span className="ml-1.5"><Badge tone="amber">{inboxCount}</Badge></span>}
           </Button>
-          <Button
-            variant="default"
-            disabled={inDevCount === 0 || exportInDev.isPending}
-            title={inDevCount === 0 ? 'No in-development changes to export' : 'Download a Claude Code work order'}
-            onClick={() => exportInDev.mutate()}
-          >
-            Export
-          </Button>
-          {!humanOnly && (
+
+          {/* Secondary actions: inline on desktop, folded into a ⋯ overflow menu on phones. */}
+          <div className="hidden items-center gap-2 sm:flex">
             <Button
               variant="default"
-              onClick={() => navigate(`/projects/${projectId}/capture`)}
-              title={myTurnCount > 0 ? `${myTurnCount} conversation${myTurnCount === 1 ? '' : 's'} awaiting your reply` : undefined}
+              disabled={inDevCount === 0 || exportInDev.isPending}
+              title={inDevCount === 0 ? 'No in-development changes to export' : 'Download a Claude Code work order'}
+              onClick={() => exportInDev.mutate()}
             >
-              Capture Assist{myTurnCount > 0 && <span className="ml-1.5"><Badge tone="indigo">{myTurnCount}</Badge></span>}
+              Export
             </Button>
-          )}
-          <Button variant="primary" onClick={() => setCreating(true)}>+ New change</Button>
+            {!humanOnly && (
+              <Button
+                variant="default"
+                onClick={() => navigate(`/projects/${projectId}/capture`)}
+                title={myTurnCount > 0 ? `${myTurnCount} conversation${myTurnCount === 1 ? '' : 's'} awaiting your reply` : undefined}
+              >
+                Capture Assist{myTurnCount > 0 && <span className="ml-1.5"><Badge tone="indigo">{myTurnCount}</Badge></span>}
+              </Button>
+            )}
+          </div>
+          <div className="relative sm:hidden">
+            <Button variant="default" aria-label="More actions" aria-haspopup="menu" onClick={() => setMoreOpen((v) => !v)}>⋯</Button>
+            {moreOpen && (
+              <>
+                <div className="fixed inset-0 z-10" onClick={() => setMoreOpen(false)} />
+                <div className="absolute left-0 top-full z-20 mt-1 w-48 max-w-[calc(100vw-2rem)] overflow-hidden rounded-md border border-slate-200 bg-white py-1 shadow-lg dark:border-slate-700 dark:bg-slate-800">
+                  <button
+                    disabled={inDevCount === 0 || exportInDev.isPending}
+                    onClick={() => { setMoreOpen(false); exportInDev.mutate() }}
+                    className="block w-full px-3 py-2.5 text-left text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50 dark:text-slate-200 dark:hover:bg-slate-700"
+                  >
+                    Export work order
+                  </button>
+                  {!humanOnly && (
+                    <button
+                      onClick={() => { setMoreOpen(false); navigate(`/projects/${projectId}/capture`) }}
+                      className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left text-sm text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-700"
+                    >
+                      <span>Capture Assist</span>
+                      {myTurnCount > 0 && <Badge tone="indigo">{myTurnCount}</Badge>}
+                    </button>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+          <Button variant="primary" onClick={() => setCreating(true)}>+ New<span className="hidden sm:inline"> change</span></Button>
         </div>
       </div>
 

@@ -39,7 +39,7 @@ export function InboxDrawer({
                   {o.status === 'Clustered' && <Badge tone="slate">clustered</Badge>}
                 </div>
                 <p className="mt-2 line-clamp-3 break-words font-mono text-xs text-slate-600 dark:text-slate-300">{o.payload}</p>
-                <div className="mt-3 flex gap-2">
+                <div className="mt-3 flex flex-wrap gap-2">
                   <Button variant="primary" onClick={() => setPromote(o)}>Promote</Button>
                   <DismissButton id={o.id} projectId={projectId} />
                 </div>
