@@ -238,22 +238,33 @@ export function ChangeDetailBody({
                     ))}
                 </div>
               )}
-              <ul className="space-y-1">
+              <ul className="space-y-2">
                 {detail.children.map((c) => (
-                  <li key={c.id} className="flex items-center gap-2 text-sm">
-                    {c.displayKey && <span className="font-mono text-xs text-slate-400">{c.displayKey}</span>}
-                    <span className="truncate text-slate-700 dark:text-slate-200">{c.title}</span>
-                    <Badge tone={STATUS_TONE[c.status]}>{c.status}</Badge>
-                    {canAssign && (
-                      <Button
-                        variant="subtle"
-                        className="ml-auto"
-                        disabled={removeChild.isPending}
-                        onClick={() => removeChild.mutate({ epicId: changeId, childId: c.id })}
-                      >
-                        Remove
-                      </Button>
-                    )}
+                  <li key={c.id} className="rounded-md border border-slate-200 p-3 dark:border-slate-700">
+                    <div className="flex items-start gap-2">
+                      <div className="min-w-0 flex-1 space-y-1">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          {c.displayKey && <span className="font-mono text-xs text-slate-400">{c.displayKey}</span>}
+                          <Badge tone={STATUS_TONE[c.status]}>{c.status}</Badge>
+                          <Badge tone={kindTone(c.kind)}>{c.kind}</Badge>
+                          {c.priority !== 'None' && <Badge tone="amber">{c.priority}</Badge>}
+                        </div>
+                        <p className="text-sm font-medium text-slate-800 dark:text-slate-100">{c.title}</p>
+                        {c.description && (
+                          <p className="line-clamp-3 whitespace-pre-wrap text-xs text-slate-500 dark:text-slate-400">{c.description}</p>
+                        )}
+                      </div>
+                      {canAssign && (
+                        <Button
+                          variant="subtle"
+                          className="shrink-0"
+                          disabled={removeChild.isPending}
+                          onClick={() => removeChild.mutate({ epicId: changeId, childId: c.id })}
+                        >
+                          Remove
+                        </Button>
+                      )}
+                    </div>
                   </li>
                 ))}
                 {detail.children.length === 0 && <li className="text-sm text-slate-400">No composed changes yet.</li>}
