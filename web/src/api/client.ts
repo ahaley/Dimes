@@ -1,6 +1,5 @@
 import type {
   ActorDetail, ActorSummary, AssistConversation, AssistConversationStatus, AssistConversationSummary, AuthConfig, AuditEvent, CaptureProposal, ChangeKind, ChangeRequest, ChangeRequestDetail, ChangeStatus, ChatTurn, CaptureAssistReply, Comment, ExportInstruction, GenerateProposalsReply,
-  BulkTransitionResult,
   LlmProviderConfig, Me, Member, Observation, ObservationSource, ObservationStatus, Priority, Project, ProjectAssignmentCount, ScmLink, SiteBranding, SiteUser, UserMembership,
 } from './types'
 
@@ -161,8 +160,6 @@ export const api = {
     request<ChangeRequest>('POST', `/api/changes/${epicId}/children`, { childId }),
   removeEpicChild: (epicId: string, childId: string) =>
     request<ChangeRequest>('DELETE', `/api/changes/${epicId}/children/${childId}`),
-  bulkTransition: (epicId: string, body: { target: ChangeStatus; reason?: string | null }) =>
-    request<BulkTransitionResult>('POST', `/api/changes/${epicId}/bulk-transition`, body),
   addComment: (id: string, body: { body: string }) =>
     request<Comment>('POST', `/api/changes/${id}/comments`, body),
   addScmLink: (id: string, body: { url: string; contextSnapshot?: string | null }) =>

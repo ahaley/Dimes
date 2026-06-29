@@ -173,16 +173,6 @@ public record TransitionChangeRequest(ChangeStatus Target, string? Reason, Guid?
 /// <summary>Compose an existing change request (by id) into an Epic.</summary>
 public record AddEpicChildRequest(Guid ChildId);
 
-/// <summary>Move an Epic and all its composed children toward <paramref name="Target"/> in one action.</summary>
-public record BulkTransitionRequest(ChangeStatus Target, string? Reason);
-
-/// <summary>A member skipped by a best-effort bulk transition (the move was illegal from its current
-/// status or the actor lacked the role), with the reason.</summary>
-public record BulkSkipDto(Guid Id, string Reason);
-
-/// <summary>Outcome of a bulk Epic transition: which members actually moved and which were skipped.</summary>
-public record BulkTransitionResultDto(IReadOnlyList<Guid> Transitioned, IReadOnlyList<BulkSkipDto> Skipped);
-
 /// <summary>Post-hoc edit of a change's free-form details (author or Maintainer only). Recipient
 /// assignment is a separate action — see <see cref="AssignChangeRequest"/>.</summary>
 public record UpdateChangeDetailsRequest(string Title, string? Description, Priority Priority);
