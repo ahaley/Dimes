@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import type { ChangeRequest, ChangeStatus, Member } from '../api/types'
-import { ALLOWED_TRANSITIONS, STATUS_TONE, initials, relativeTime } from '../lifecycle'
+import { ALLOWED_TRANSITIONS, STATUS_TONE, initials, kindTone, relativeTime } from '../lifecycle'
 import { Badge, cx } from '../components/ui'
 
 const TONE_RULE: Record<string, string> = {
@@ -70,7 +70,7 @@ export function ChangeCard({
           {change.kind === 'ObservationDriven' && (
             <span title="Promoted from an observation" className="inline-block h-1.5 w-1.5 rounded-full bg-amber-400" />
           )}
-          <Badge tone="slate">{change.kind}</Badge>
+          <Badge tone={kindTone(change.kind)}>{change.kind}</Badge>
           {change.priority !== 'None' && <Badge tone="amber">{change.priority}</Badge>}
           <span className="ml-auto flex items-center gap-1.5 text-[11px] text-slate-400">
             <span>{relativeTime(change.updatedAt)}</span>

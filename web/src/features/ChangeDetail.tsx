@@ -3,7 +3,7 @@ import { useMutation } from '@tanstack/react-query'
 import { api } from '../api/client'
 import { useAudit, useChangeDetail, useProjectInvalidator, useProjects, useTransition } from '../api/hooks'
 import type { ChangeStatus, Member, Priority } from '../api/types'
-import { ALLOWED_TRANSITIONS, STATUS_TONE } from '../lifecycle'
+import { ALLOWED_TRANSITIONS, STATUS_TONE, kindTone } from '../lifecycle'
 import { Badge, Button, ErrorText, Field, Modal, Select, TextInput, Textarea } from '../components/ui'
 import { useToast } from '../components/Toast'
 
@@ -103,7 +103,7 @@ export function ChangeDetailBody({
           {/* Status + transitions — the display key isn't repeated here; the title/heading already shows it. */}
           <div className="flex flex-wrap items-center gap-2">
             <Badge tone={STATUS_TONE[detail.change.status]}>{detail.change.status}</Badge>
-            <Badge tone="slate">{detail.change.kind}</Badge>
+            <Badge tone={kindTone(detail.change.kind)}>{detail.change.kind}</Badge>
             {detail.change.priority !== 'None' && <Badge tone="amber">{detail.change.priority}</Badge>}
             <span className="ml-auto" />
             {canEdit && !editing && <Button variant="subtle" onClick={startEdit}>Edit</Button>}

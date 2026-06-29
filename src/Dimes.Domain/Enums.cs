@@ -70,6 +70,9 @@ public enum ChangeKind
     Problem,
     Feature,
     ObservationDriven,
+    /// <summary>A composite change that groups other change requests as composed children (see
+    /// <see cref="Entities.ChangeRequest.ParentChangeRequestId"/>). Flows through the same lifecycle.</summary>
+    Epic,
 }
 
 /// <summary>The change-request lifecycle (the spine). Order matters for the happy path.</summary>

@@ -24,6 +24,15 @@ public class ChangeRequest : Entity
     public Guid? DuplicateOfId { get; set; }
     public ChangeRequest? DuplicateOf { get; set; }
 
+    /// <summary>Self-reference for Epic composition: when set, this change is a composed child of the
+    /// referenced Epic (a change whose <see cref="Kind"/> is <see cref="ChangeKind.Epic"/>). Null for a
+    /// standalone change or an Epic itself. Composition is independent of the Duplicate self-reference.</summary>
+    public Guid? ParentChangeRequestId { get; set; }
+    public ChangeRequest? Parent { get; set; }
+
+    /// <summary>The change requests composed under this one (only populated for an Epic).</summary>
+    public ICollection<ChangeRequest> Children { get; set; } = new List<ChangeRequest>();
+
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
 
     /// <summary>Manual within-column order set by board drag-and-drop. 0 = unordered (the default),

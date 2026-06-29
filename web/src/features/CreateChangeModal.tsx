@@ -53,6 +53,7 @@ export function CreateChangeModal({
               <option value="Feature">Feature</option>
               <option value="Problem">Problem</option>
               <option value="ObservationDriven">Observation-driven</option>
+              <option value="Epic">Epic</option>
             </Select>
           </Field>
           <Field label="Priority">

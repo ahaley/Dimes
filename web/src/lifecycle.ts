@@ -1,4 +1,4 @@
-import type { ChangeStatus } from './api/types'
+import type { ChangeKind, ChangeStatus } from './api/types'
 
 // Mirror of the server's transition map — for rendering action affordances only. The API remains the
 // source of truth and will reject anything illegal (the UI surfaces its 403/409 error).
@@ -22,6 +22,12 @@ export const STATUS_TONE: Record<ChangeStatus, string> = {
   Done: 'green',
   Rejected: 'red',
   Duplicate: 'red',
+}
+
+/** Badge tone for a change Kind. Epics get a distinct tone so the composite stands out on the board;
+ * every other kind keeps the neutral slate badge. */
+export function kindTone(kind: ChangeKind): string {
+  return kind === 'Epic' ? 'indigo' : 'slate'
 }
 
 /** Compact relative age, e.g. "just now", "5m", "3h", "2d", "4w". */

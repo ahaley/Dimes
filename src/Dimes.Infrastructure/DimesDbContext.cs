@@ -110,6 +110,8 @@ public class DimesDbContext(DbContextOptions<DimesDbContext> options) : DbContex
             b.HasIndex(c => new { c.ProjectId, c.Status });
             // Per-project display number is unique (NULLs distinct, so pre-backfill rows don't collide).
             b.HasIndex(c => new { c.ProjectId, c.Number }).IsUnique();
+            // Listing an Epic's composed children filters by parent within the project.
+            b.HasIndex(c => new { c.ProjectId, c.ParentChangeRequestId });
             b.HasOne(c => c.Project).WithMany(p => p.ChangeRequests)
                 .HasForeignKey(c => c.ProjectId).OnDelete(DeleteBehavior.Cascade);
             b.HasOne(c => c.CreatedBy).WithMany()
@@ -118,6 +120,10 @@ public class DimesDbContext(DbContextOptions<DimesDbContext> options) : DbContex
                 .HasForeignKey(c => c.AssigneeActorId).OnDelete(DeleteBehavior.Restrict);
             b.HasOne(c => c.DuplicateOf).WithMany()
                 .HasForeignKey(c => c.DuplicateOfId).OnDelete(DeleteBehavior.Restrict);
+            // Epic composition (self-ref). Restrict mirrors DuplicateOf — avoids multiple-cascade-path
+            // conflicts on stricter providers; there is no delete path that would orphan a parent.
+            b.HasOne(c => c.Parent).WithMany(c => c.Children)
+                .HasForeignKey(c => c.ParentChangeRequestId).OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<Comment>(b =>

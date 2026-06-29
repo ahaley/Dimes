@@ -7,7 +7,7 @@ import type { ChangeKind, Member, Priority } from '../api/types'
 import { Button, ErrorText, Field, Select, TextInput, Textarea } from '../components/ui'
 import { useToast } from '../components/Toast'
 
-const KINDS: ChangeKind[] = ['Feature', 'Problem', 'ObservationDriven']
+const KINDS: ChangeKind[] = ['Feature', 'Problem', 'ObservationDriven', 'Epic']
 const PRIORITIES: Priority[] = ['None', 'Low', 'Medium', 'High', 'Critical']
 const DEBOUNCE_MS = 1200
 const MIN_MARKDOWN = 8 // skip generation until the brief has some substance
