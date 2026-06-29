@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import type { ChangeRequest, ChangeStatus, Member } from '../api/types'
@@ -184,6 +184,9 @@ function NestedChild({
   const startPos = useRef<{ x: number; y: number } | null>(null)
   const suppressClick = useRef(false)
   const clearPress = () => { if (pressTimer.current) clearTimeout(pressTimer.current); pressTimer.current = undefined }
+  // Cancel a pending long-press if the child unmounts mid-hold (e.g. a board refetch), so the timer can't
+  // fire setState on an unmounted component.
+  useEffect(() => () => { if (pressTimer.current) clearTimeout(pressTimer.current) }, [])
   const onPointerDown = (e: React.PointerEvent) => {
     e.stopPropagation() // never start the Epic card's drag
     if (armed) return

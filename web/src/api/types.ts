@@ -59,9 +59,6 @@ export interface ChangeRequestDetail {
 export interface ProjectAssignmentCount {
   projectId: string; count: number
 }
-// Outcome of a best-effort bulk Epic transition: which members moved and which were skipped (with reason).
-export interface BulkSkip { id: string; reason: string }
-export interface BulkTransitionResult { transitioned: string[]; skipped: BulkSkip[] }
 export interface LlmProviderConfig {
   id: string; projectId?: string | null; type: LlmProviderType; name: string
   baseUrl?: string | null; model: string; apiKeySecretRef?: string | null; enabled: boolean
