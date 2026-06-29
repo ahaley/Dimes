@@ -81,6 +81,13 @@ public class ChangeRequestsController(
     public async Task<ActionResult<ChangeRequestDto>> RemoveChild(Guid epicId, Guid childId, CancellationToken ct)
         => Ok(await changes.RemoveChildAsync(epicId, currentActor.ActorId, childId, ct));
 
+    /// <summary>Move this Epic and all its composed children toward a target status (best-effort; skips
+    /// members for which the move is illegal or unauthorized). Returns which moved and which were skipped.</summary>
+    [HttpPost("api/changes/{epicId:guid}/bulk-transition")]
+    public async Task<ActionResult<BulkTransitionResultDto>> BulkTransition(
+        Guid epicId, BulkTransitionRequest req, CancellationToken ct)
+        => Ok(await changes.BulkTransitionAsync(epicId, currentActor.ActorId, req.Target, req.Reason, ct));
+
     [HttpPost("api/changes/{id:guid}/comments")]
     public async Task<ActionResult<CommentDto>> AddComment(Guid id, AddCommentRequest req, CancellationToken ct)
         => Ok(await changes.AddCommentAsync(id, currentActor.ActorId, req, ct));

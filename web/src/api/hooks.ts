@@ -299,6 +299,17 @@ export function useRemoveEpicChild(projectId: string | undefined) {
   })
 }
 
+/** Move an Epic + all its children toward a target status in one best-effort action. Invalidates the
+ * board and the Epic's detail; the caller inspects the returned summary (moved vs skipped). */
+export function useBulkTransition(projectId: string | undefined) {
+  const invalidate = useProjectInvalidator(projectId)
+  return useMutation({
+    mutationFn: (vars: { epicId: string; target: ChangeStatus; reason?: string | null }) =>
+      api.bulkTransition(vars.epicId, { target: vars.target, reason: vars.reason }),
+    onSuccess: (_data, vars) => invalidate(vars.epicId),
+  })
+}
+
 type ReorderVars = { status: ChangeStatus; orderedIds: string[] }
 
 /** Persists a manual within-column board order. Optimistically applies the new SortOrder to the
