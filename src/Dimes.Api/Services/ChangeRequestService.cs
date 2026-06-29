@@ -283,6 +283,55 @@ public class ChangeRequestService(
         return child.ToDto(await ProjectKeyAsync(child.ProjectId, ct));
     }
 
+    /// <summary>Move an Epic and all its composed children toward <paramref name="target"/> in one action.
+    /// Best-effort: each member (the Epic, then each child) is transitioned independently through the
+    /// lifecycle engine; a member for which the move is illegal from its current status or for which the
+    /// actor lacks the role is skipped and reported, rather than failing the whole batch (children
+    /// routinely sit at different stages). One audit event per member that actually moves.</summary>
+    public async Task<BulkTransitionResultDto> BulkTransitionAsync(
+        Guid epicId, Guid actorId, ChangeStatus target, string? reason, CancellationToken ct = default)
+    {
+        var epic = await db.ChangeRequests.FindAsync([epicId], ct)
+            ?? throw new NotFoundException($"Change request '{epicId}' not found.");
+        if (epic.Kind != ChangeKind.Epic)
+        {
+            throw new BadRequestException("Bulk transition applies to an Epic and its composed changes.");
+        }
+
+        var (actor, role) = await members.ResolveAsync(epic.ProjectId, actorId, ct);
+
+        // The Epic first, then its children — each evaluated independently against its own current status.
+        var batch = new List<ChangeRequest> { epic };
+        batch.AddRange(await db.ChangeRequests.Where(c => c.ParentChangeRequestId == epicId).OrderBy(c => c.Number).ToListAsync(ct));
+
+        var transitioned = new List<Guid>();
+        var skipped = new List<BulkSkipDto>();
+        foreach (var member in batch)
+        {
+            try
+            {
+                var audit = lifecycle.TransitionChange(member, target, actor, role, reason);
+                db.AuditEvents.Add(audit);
+                transitioned.Add(member.Id);
+            }
+            catch (LifecycleException ex)
+            {
+                skipped.Add(new BulkSkipDto(member.Id, ex.Message));
+            }
+        }
+
+        if (transitioned.Count > 0)
+        {
+            await db.SaveChangesAsync(ct);
+            foreach (var id in transitioned)
+            {
+                await notifier.ChangedAsync(epic.ProjectId, id, "transitioned", ct);
+            }
+        }
+
+        return new BulkTransitionResultDto(transitioned, skipped);
+    }
+
     /// <summary>Generate a single Claude Code "work order" markdown for a project's In-Development
     /// change requests: an instruction header plus a numbered, checkboxed section per change.</summary>
     public async Task<MarkdownExport> ExportInDevelopmentAsync(Guid projectId, CancellationToken ct = default)
