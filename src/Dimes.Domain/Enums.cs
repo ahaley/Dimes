@@ -73,6 +73,9 @@ public enum ChangeKind
     /// <summary>A composite change that groups other change requests as composed children (see
     /// <see cref="Entities.ChangeRequest.ParentChangeRequestId"/>). Flows through the same lifecycle.</summary>
     Epic,
+    /// <summary>Operational/maintenance work that is neither a problem nor a feature — e.g. purging a
+    /// suspended service or removing a stale DNS entry.</summary>
+    Chore,
 }
 
 /// <summary>The change-request lifecycle (the spine). Order matters for the happy path.</summary>
