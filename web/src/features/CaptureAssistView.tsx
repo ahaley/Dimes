@@ -295,7 +295,7 @@ export function CaptureAssistView() {
           <Field label="Description">
             <Textarea value={description} onChange={(e) => setDescription(e.target.value)} className="min-h-28" />
           </Field>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             <Field label="Kind">
               <Select value={kind} onChange={(e) => setKind(e.target.value as ChangeKind)}>
                 <option value="Feature">Feature</option>

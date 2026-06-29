@@ -6,6 +6,7 @@ import { useChanges, useInbox, useMyAssistConversations, useProjects } from '../
 import { useBoardLiveUpdates } from '../api/realtime'
 import { api } from '../api/client'
 import { Badge, Button, TextInput, cx } from '../components/ui'
+import { OverflowMenu } from '../components/OverflowMenu'
 import { useToast } from '../components/Toast'
 import { ChangeBoard } from './ChangeBoard'
 import { ChangeDetail } from './ChangeDetail'
@@ -49,12 +50,29 @@ export function Workspace({
     onError: (e) => toast.error(e instanceof Error ? e.message : 'Export failed'),
   })
 
+  // Secondary toolbar actions, single-sourced so the desktop buttons and the mobile ⋯ menu can't drift.
+  type ToolbarAction = { label: string; title?: string; disabled?: boolean; badge?: number; onClick: () => void }
+  const secondaryActions: ToolbarAction[] = [{
+    label: 'Export',
+    title: inDevCount === 0 ? 'No in-development changes to export' : 'Download a Claude Code work order',
+    disabled: inDevCount === 0 || exportInDev.isPending,
+    onClick: () => exportInDev.mutate(),
+  }]
+  if (!humanOnly) {
+    secondaryActions.push({
+      label: 'Capture Assist',
+      title: myTurnCount > 0 ? `${myTurnCount} conversation${myTurnCount === 1 ? '' : 's'} awaiting your reply` : undefined,
+      badge: myTurnCount > 0 ? myTurnCount : undefined,
+      onClick: () => navigate(`/projects/${projectId}/capture`),
+    })
+  }
+
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Change board</h1>
-        <div className="flex items-center gap-2">
-          <div className="relative w-44 sm:w-60">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <h1 className="hidden text-sm font-semibold uppercase tracking-wide text-slate-500 sm:block">Change board</h1>
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative w-full sm:w-60">
             <TextInput
               type="search"
               value={query}
@@ -84,24 +102,29 @@ export function Workspace({
           <Button variant="default" onClick={() => setInboxOpen(true)}>
             Inbox{inboxCount > 0 && <span className="ml-1.5"><Badge tone="amber">{inboxCount}</Badge></span>}
           </Button>
-          <Button
-            variant="default"
-            disabled={inDevCount === 0 || exportInDev.isPending}
-            title={inDevCount === 0 ? 'No in-development changes to export' : 'Download a Claude Code work order'}
-            onClick={() => exportInDev.mutate()}
-          >
-            Export
-          </Button>
-          {!humanOnly && (
-            <Button
-              variant="default"
-              onClick={() => navigate(`/projects/${projectId}/capture`)}
-              title={myTurnCount > 0 ? `${myTurnCount} conversation${myTurnCount === 1 ? '' : 's'} awaiting your reply` : undefined}
-            >
-              Capture Assist{myTurnCount > 0 && <span className="ml-1.5"><Badge tone="indigo">{myTurnCount}</Badge></span>}
-            </Button>
-          )}
-          <Button variant="primary" onClick={() => setCreating(true)}>+ New change</Button>
+
+          {/* Secondary actions: inline buttons on desktop, folded into a ⋯ overflow menu on phones. */}
+          <div className="hidden items-center gap-2 sm:flex">
+            {secondaryActions.map((a, i) => (
+              <Button key={i} variant="default" disabled={a.disabled} title={a.title} onClick={a.onClick}>
+                {a.label}{a.badge ? <span className="ml-1.5"><Badge tone="indigo">{a.badge}</Badge></span> : null}
+              </Button>
+            ))}
+          </div>
+          <div className="sm:hidden">
+            <OverflowMenu
+              label="More actions"
+              align="left"
+              actions={secondaryActions.map((a) => ({
+                label: a.label,
+                title: a.title,
+                disabled: a.disabled,
+                onClick: a.onClick,
+                trailing: a.badge ? <Badge tone="indigo">{a.badge}</Badge> : undefined,
+              }))}
+            />
+          </div>
+          <Button variant="primary" onClick={() => setCreating(true)}>+ New<span className="hidden sm:inline"> change</span></Button>
         </div>
       </div>
 

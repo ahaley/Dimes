@@ -105,7 +105,7 @@ function ActorRow({ actor }: { actor: ActorSummary }) {
 
   return (
     <div className="p-3 text-sm text-slate-700 dark:text-slate-200">
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <button
           className="font-medium text-slate-800 hover:text-indigo-600 hover:underline dark:text-slate-100 dark:hover:text-indigo-400"
           onClick={() => navigate(`/actors/${actor.id}`)}

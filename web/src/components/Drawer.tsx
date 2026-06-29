@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { Button, cx } from './ui'
 
-/** Right-anchored slide-over panel. Full-width on small screens, ~440px on sm+. Esc and
+/** Right-anchored slide-over panel. Full-width on phones and small tablets, ~440px on md+. Esc and
  * overlay-click dismiss. Slide animation respects prefers-reduced-motion. */
 export function Drawer({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
   const [shown, setShown] = useState(false)
@@ -22,7 +22,7 @@ export function Drawer({ title, onClose, children }: { title: string; onClose: (
         aria-label={title}
         onClick={(e) => e.stopPropagation()}
         className={cx(
-          'flex h-full w-full flex-col bg-white shadow-xl sm:w-[440px] dark:bg-slate-900',
+          'flex h-full w-full flex-col bg-white shadow-xl md:w-[440px] dark:bg-slate-900',
           'transition-transform duration-200 ease-out motion-reduce:transition-none',
           shown ? 'translate-x-0' : 'translate-x-full',
         )}

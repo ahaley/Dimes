@@ -4,6 +4,7 @@ import { api } from '../api/client'
 import { keys, useAuthConfig, useProjects, useSiteBranding, useSiteUsers, useUpdateSiteBranding, useUserMemberships } from '../api/hooks'
 import type { MemberRole, SiteUser } from '../api/types'
 import { Badge, Button, Card, cx, ErrorText, Field, Modal, Select, TextInput } from '../components/ui'
+import { OverflowMenu, type MenuAction } from '../components/OverflowMenu'
 import { useToast } from '../components/Toast'
 import { initials } from '../lifecycle'
 
@@ -92,7 +93,7 @@ export function SiteSettingsView() {
           </span>
         )}
       </div>
-      <Card className="max-h-[60vh] overflow-auto">
+      <Card className="sm:max-h-[60vh] sm:overflow-auto">
         <table className="min-w-full text-sm">
           <thead>
             <tr className="border-b border-slate-200 text-left text-xs font-semibold uppercase tracking-wide text-slate-400 dark:border-slate-800">
@@ -200,7 +201,7 @@ function UserRow({ user, isLocal, onManageProjects }: { user: SiteUser; isLocal:
       <tr>
         <td colSpan={3} className="px-3 py-3">
           <div className="space-y-2">
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               <Field label="Display name"><TextInput value={displayName} onChange={(e) => setDisplayName(e.target.value)} autoFocus /></Field>
               <Field label="Email"><TextInput type="email" value={email} onChange={(e) => setEmail(e.target.value)} /></Field>
             </div>
@@ -221,6 +222,31 @@ function UserRow({ user, isLocal, onManageProjects }: { user: SiteUser; isLocal:
   }
 
   const lockReason = 'Referenced by changes, comments, or audit history — archive instead of deleting.'
+  // Single source of truth for row actions — rendered inline on desktop, folded into a ⋯ menu on phones.
+  const actions: MenuAction[] = [
+    { label: 'Edit', onClick: () => setEditing(true) },
+    { label: 'Projects', onClick: onManageProjects },
+    ...(isLocal
+      ? [{
+          label: 'Reset password',
+          disabled: resetPassword.isPending,
+          onClick: () => { const pw = window.prompt(`New password for ${user.displayName}:`); if (pw) resetPassword.mutate(pw) },
+        }]
+      : []),
+    { label: user.isSiteAdmin ? 'Revoke admin' : 'Make admin', disabled: toggleAdmin.isPending, onClick: () => toggleAdmin.mutate() },
+    {
+      label: user.isArchived ? 'Unarchive' : 'Archive',
+      disabled: archive.isPending,
+      title: user.isArchived ? 'Restore sign-in access' : 'Block sign-in; keep history',
+      onClick: () => archive.mutate(),
+    },
+    {
+      label: 'Delete',
+      disabled: !user.deletable || remove.isPending,
+      title: user.deletable ? 'Delete user' : lockReason,
+      onClick: () => { if (window.confirm(`Delete user "${user.displayName}"?`)) remove.mutate() },
+    },
+  ]
   return (
     <tr className={cx('align-top', user.isArchived && 'opacity-70')}>
       {/* Identity: avatar + name, email beneath. */}
@@ -248,42 +274,17 @@ function UserRow({ user, isLocal, onManageProjects }: { user: SiteUser; isLocal:
         </div>
       </td>
 
-      {/* Actions: right-aligned, wrap onto a second line on narrow widths instead of overflowing. */}
+      {/* Actions: inline buttons on desktop; folded into a ⋯ menu on phones to keep the row compact. */}
       <td className="px-3 py-3">
-        <div className="flex flex-wrap justify-end gap-1">
-          <Button variant="subtle" onClick={() => setEditing(true)}>Edit</Button>
-          <Button variant="subtle" onClick={onManageProjects}>Projects</Button>
-          {isLocal && (
-            <Button
-              variant="subtle"
-              disabled={resetPassword.isPending}
-              onClick={() => {
-                const pw = window.prompt(`New password for ${user.displayName}:`)
-                if (pw) resetPassword.mutate(pw)
-              }}
-            >
-              Reset password
+        <div className="hidden flex-wrap justify-end gap-1 sm:flex">
+          {actions.map((a, i) => (
+            <Button key={i} variant="subtle" disabled={a.disabled} title={a.title} onClick={a.onClick}>
+              {a.label}
             </Button>
-          )}
-          <Button variant="subtle" disabled={toggleAdmin.isPending} onClick={() => toggleAdmin.mutate()}>
-            {user.isSiteAdmin ? 'Revoke admin' : 'Make admin'}
-          </Button>
-          <Button
-            variant="subtle"
-            disabled={archive.isPending}
-            title={user.isArchived ? 'Restore sign-in access' : 'Block sign-in; keep history'}
-            onClick={() => archive.mutate()}
-          >
-            {user.isArchived ? 'Unarchive' : 'Archive'}
-          </Button>
-          <Button
-            variant="subtle"
-            disabled={!user.deletable || remove.isPending}
-            title={user.deletable ? 'Delete user' : lockReason}
-            onClick={() => { if (window.confirm(`Delete user "${user.displayName}"?`)) remove.mutate() }}
-          >
-            Delete
-          </Button>
+          ))}
+        </div>
+        <div className="flex justify-end sm:hidden">
+          <OverflowMenu actions={actions} label="User actions" variant="subtle" />
         </div>
       </td>
     </tr>
@@ -310,7 +311,7 @@ function CreateUserForm({ isLocal }: { isLocal: boolean }) {
   return (
     <Card className="space-y-2 p-4">
       <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Add user</h2>
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
         <Field label="Display name"><TextInput value={displayName} onChange={(e) => setDisplayName(e.target.value)} /></Field>
         <Field label="Email"><TextInput type="email" value={email} onChange={(e) => setEmail(e.target.value)} /></Field>
       </div>
@@ -391,7 +392,7 @@ function ManageProjectsModal({ user, onClose }: { user: SiteUser; onClose: () =>
           {available.length === 0 ? (
             <p className="text-sm text-slate-400">Already in every project.</p>
           ) : (
-            <div className="flex items-end gap-2">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
               <Field label="Project">
                 <Select value={projectId} onChange={(e) => setProjectId(e.target.value)}>
                   <option value="">Select…</option>

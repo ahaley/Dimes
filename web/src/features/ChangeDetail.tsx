@@ -174,11 +174,11 @@ export function ChangeDetailBody({
             <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
               <span className="font-medium uppercase tracking-wide">Recipient</span>
               {canAssign ? (
-                <>
+                <div className="flex w-full items-center gap-2 sm:w-auto">
                   <Select
                     value={detail.change.assigneeActorId ?? ''}
                     disabled={assign.isPending}
-                    className="max-w-48"
+                    className="min-w-0 flex-1 sm:w-48 sm:flex-none"
                     onChange={(e) => assign.mutate(e.target.value || null)}
                   >
                     <option value="">Unassigned</option>
@@ -191,7 +191,7 @@ export function ChangeDetailBody({
                   >
                     Assign to me
                   </Button>
-                </>
+                </div>
               ) : (
                 <span className="font-medium text-slate-700 dark:text-slate-200">
                   {detail.change.assigneeActorId
@@ -299,10 +299,10 @@ export function ChangeDetailBody({
                   Comment
                 </Button>
                 {/* AI-agent commentary — hidden for Human-Only projects. */}
-                {!humanOnly && <span className="mx-1 h-5 w-px bg-slate-200 dark:bg-slate-700" />}
+                {!humanOnly && <span className="mx-1 hidden h-5 w-px bg-slate-200 sm:block dark:bg-slate-700" />}
                 {!humanOnly && (agents.length > 0 ? (
                   <>
-                    <Select value={agentId || agents[0].actorId} onChange={(e) => setAgentId(e.target.value)} className="max-w-40">
+                    <Select value={agentId || agents[0].actorId} onChange={(e) => setAgentId(e.target.value)} className="w-full sm:w-40">
                       {agents.map((a) => <option key={a.actorId} value={a.actorId}>{a.displayName}</option>)}
                     </Select>
                     <Button variant="primary" disabled={askAgent.isPending} onClick={() => askAgent.mutate()}>

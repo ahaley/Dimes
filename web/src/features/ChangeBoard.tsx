@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { DndContext, PointerSensor, pointerWithin, rectIntersection, useDroppable, useSensor, useSensors, type CollisionDetection, type DragEndEvent, type DragOverEvent } from '@dnd-kit/core'
+import { DndContext, pointerWithin, rectIntersection, useDroppable, type CollisionDetection, type DragEndEvent, type DragOverEvent } from '@dnd-kit/core'
 import { SortableContext, arrayMove, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { useActors, useAddEpicChild, useChanges, useRemoveEpicChild, useReorderChanges, useTransition } from '../api/hooks'
 import { LIFECYCLE_COLUMNS, type ChangeRequest, type ChangeStatus, type Member } from '../api/types'
 import { STATUS_TONE, relativeTime } from '../lifecycle'
 import { Badge, cx } from '../components/ui'
 import { useToast } from '../components/Toast'
+import { useBoardSensors } from '../lib/dndSensors'
+import { useIsDesktop } from '../hooks/useMediaQuery'
 import { ChangeCard } from './ChangeCard'
 
 // The Done column keeps recently-accepted Change Requests visible and collapses older ones so it can't
@@ -76,6 +78,11 @@ export function ChangeBoard({
       return next
     })
 
+  // Below md the board shows one stage at a time (a switcher picks which); at md+ it's the full
+  // horizontal column row. `activeStatus` is the stage shown on mobile.
+  const isDesktop = useIsDesktop()
+  const [activeStatus, setActiveStatus] = useState<ChangeStatus>(LIFECYCLE_COLUMNS[0])
+
   // Resolve an author's name from members plus all actors (incl. archived/removed) so authors who
   // are no longer members still show.
   const { data: actors } = useActors(false, true)
@@ -87,7 +94,7 @@ export function ChangeBoard({
   }, [actors, members])
   const authorOf = (c: ChangeRequest) => nameById.get(c.createdByActorId) ?? 'Unknown'
 
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }))
+  const sensors = useBoardSensors()
 
   // Apply the board filters: the text query AND, when the "assigned to me" toggle is on, the current actor.
   const allChanges = changes ?? []
@@ -123,6 +130,13 @@ export function ChangeBoard({
       .filter((c) => c.status === status)
       .sort((a, b) => a.sortOrder - b.sortOrder || b.updatedAt.localeCompare(a.updatedAt))
   const terminal = visibleTop.filter((c) => c.status === 'Rejected' || c.status === 'Duplicate')
+
+  // Count for a column header / mobile switcher chip. Chips only need totals, so filter without the
+  // byStatus sort (the rendered column still sorts). Done mirrors its column: only recently-accepted.
+  const countFor = (status: ChangeStatus) => {
+    const inStatus = visibleTop.filter((c) => c.status === status)
+    return status === 'Done' ? inStatus.filter(isRecentlyAccepted).length : inStatus.length
+  }
 
   const requestTransition = (change: ChangeRequest, target: ChangeStatus) => {
     if (target === change.status) return
@@ -227,36 +241,82 @@ export function ChangeBoard({
     )
   }
 
+  // Build a column for a given stage, deriving the Done recent/older split. `mobile` switches the
+  // column to full width (it's the only one on screen) and surfaces normally-hover-only affordances.
+  const renderColumn = (status: ChangeStatus, mobile: boolean) => {
+    const inColumn = byStatus(status)
+    const recent = status === 'Done' ? inColumn.filter(isRecentlyAccepted) : inColumn
+    const older = status === 'Done' ? inColumn.filter((c) => !isRecentlyAccepted(c)) : undefined
+    return (
+      <Column
+        status={status}
+        changes={recent}
+        olderItems={older}
+        members={members}
+        authorOf={authorOf}
+        onSelect={onSelect}
+        onTransition={requestTransition}
+        childrenOf={shownChildren}
+        expandedIds={expanded}
+        onToggleExpand={toggleExpand}
+        onRemoveChild={requestRemoveChild}
+        armedEpicId={armedEpicId}
+        onFocus={() => navigate(`/projects/${projectId}/focus/${status}`)}
+        mobile={mobile}
+      />
+    )
+  }
+
+  // A quick horizontal swipe on the mobile column body steps to the adjacent stage. We require a clear
+  // horizontal intent (>50px and dominant over vertical) so vertical scrolls and long-press card drags
+  // don't trigger a stage change.
+  // Step the visible mobile stage by ±1 (bounds-checked) — shared by the swipe handler and the switcher
+  // chevrons so both honor the same next-stage rule.
+  const stepStage = (delta: number) => {
+    const next = LIFECYCLE_COLUMNS.indexOf(activeStatus) + delta
+    if (next >= 0 && next < LIFECYCLE_COLUMNS.length) setActiveStatus(LIFECYCLE_COLUMNS[next])
+  }
+
+  // A long-press card drag also ends in a touchend on this wrapper (dnd-kit's TouchSensor preventDefaults
+  // but doesn't stopPropagation), so without this flag a horizontal-ish drag would also step the stage.
+  // onDragStart sets it; each fresh touch clears it, so only a genuine swipe (no drag) switches stages.
+  const swipeStart = useRef<{ x: number; y: number } | null>(null)
+  const draggingRef = useRef(false)
+  const onColumnTouchStart = (e: React.TouchEvent) => {
+    const t = e.touches[0]
+    draggingRef.current = false
+    swipeStart.current = { x: t.clientX, y: t.clientY }
+  }
+  const onColumnTouchEnd = (e: React.TouchEvent) => {
+    const start = swipeStart.current
+    swipeStart.current = null
+    if (!start || draggingRef.current) return
+    const t = e.changedTouches[0]
+    const dx = t.clientX - start.x
+    const dy = t.clientY - start.y
+    if (Math.abs(dx) < 50 || Math.abs(dx) < Math.abs(dy) * 1.5) return
+    stepStage(dx < 0 ? 1 : -1)
+  }
+
   return (
-    <DndContext sensors={sensors} collisionDetection={boardCollisionDetection} onDragOver={onDragOver} onDragEnd={onDragEnd} onDragCancel={onDragCancel}>
-      <div className="flex gap-3 overflow-x-auto pb-3">
-        {LIFECYCLE_COLUMNS.map((status) => {
-          // Done is split into recently-accepted (shown) and older (collapsed) Change Requests.
-          const inColumn = byStatus(status)
-          const recent = status === 'Done' ? inColumn.filter(isRecentlyAccepted) : inColumn
-          const older = status === 'Done' ? inColumn.filter((c) => !isRecentlyAccepted(c)) : undefined
-          return (
+    <DndContext sensors={sensors} collisionDetection={boardCollisionDetection} onDragStart={() => { draggingRef.current = true }} onDragOver={onDragOver} onDragEnd={onDragEnd} onDragCancel={onDragCancel}>
+      {isDesktop ? (
+        <div className="flex gap-3 overflow-x-auto pb-3">
+          {LIFECYCLE_COLUMNS.map((status) => (
             <div key={status} className="flex">
               {status === 'Approved' && <Gate />}
-              <Column
-                status={status}
-                changes={recent}
-                olderItems={older}
-                members={members}
-                authorOf={authorOf}
-                onSelect={onSelect}
-                onTransition={requestTransition}
-                childrenOf={shownChildren}
-                expandedIds={expanded}
-                onToggleExpand={toggleExpand}
-                onRemoveChild={requestRemoveChild}
-                armedEpicId={armedEpicId}
-                onFocus={() => navigate(`/projects/${projectId}/focus/${status}`)}
-              />
+              {renderColumn(status, false)}
             </div>
-          )
-        })}
-      </div>
+          ))}
+        </div>
+      ) : (
+        <div className="space-y-3">
+          <MobileStageSwitcher active={activeStatus} onSelect={setActiveStatus} onStep={stepStage} countFor={countFor} />
+          <div onTouchStart={onColumnTouchStart} onTouchEnd={onColumnTouchEnd}>
+            {renderColumn(activeStatus, true)}
+          </div>
+        </div>
+      )}
 
       {terminal.length > 0 && (
         <div className="mt-3 rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
@@ -285,7 +345,7 @@ export function ChangeBoard({
 }
 
 function Column({
-  status, changes, olderItems, members, authorOf, onSelect, onTransition, childrenOf, expandedIds, onToggleExpand, onRemoveChild, armedEpicId, onFocus,
+  status, changes, olderItems, members, authorOf, onSelect, onTransition, childrenOf, expandedIds, onToggleExpand, onRemoveChild, armedEpicId, onFocus, mobile,
 }: {
   status: ChangeStatus
   changes: ChangeRequest[]
@@ -300,6 +360,7 @@ function Column({
   onRemoveChild: (child: ChangeRequest) => void
   armedEpicId: string | null
   onFocus: () => void
+  mobile?: boolean
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: status })
   const [showOlder, setShowOlder] = useState(false)
@@ -310,7 +371,8 @@ function Column({
     <div
       ref={setNodeRef}
       className={cx(
-        'group/col flex w-64 shrink-0 flex-col rounded-lg border bg-slate-50/70 p-2 transition-colors dark:bg-slate-800/40',
+        'group/col flex flex-col rounded-lg border bg-slate-50/70 p-2 transition-colors dark:bg-slate-800/40',
+        mobile ? 'w-full' : 'w-64 shrink-0',
         isOver ? 'border-indigo-400 bg-indigo-50/60' : 'border-transparent',
       )}
     >
@@ -322,7 +384,10 @@ function Column({
             onClick={onFocus}
             title={`Focus ${status} — work through one by one`}
             aria-label={`Focus ${status}`}
-            className="ml-auto rounded p-0.5 text-slate-400 opacity-0 transition-opacity hover:bg-slate-200 hover:text-slate-600 focus:opacity-100 group-hover/col:opacity-100 dark:hover:bg-slate-700 dark:hover:text-slate-200"
+            className={cx(
+              'ml-auto rounded text-slate-400 transition-opacity hover:bg-slate-200 hover:text-slate-600 focus:opacity-100 dark:hover:bg-slate-700 dark:hover:text-slate-200',
+              mobile ? 'p-1.5 opacity-100' : 'p-0.5 opacity-0 group-hover/col:opacity-100',
+            )}
           >
             ⤢
           </button>
@@ -350,7 +415,7 @@ function Column({
         </SortableContext>
         {changes.length === 0 && !olderItems?.length && (
           <p className="rounded-md border border-dashed border-slate-200 px-2 py-6 text-center text-xs text-slate-300 dark:border-slate-700 dark:text-slate-600">
-            Drop here
+            {mobile ? 'Nothing here yet.' : 'Drop here'}
           </p>
         )}
 
@@ -394,6 +459,91 @@ function Gate() {
       <div className="flex-1 border-l border-dashed border-violet-300" />
       <span className="my-2 select-none rounded bg-violet-100 px-1 py-0.5 text-[10px] font-semibold text-violet-700">🔒</span>
       <div className="flex-1 border-l border-dashed border-violet-300" />
+    </div>
+  )
+}
+
+// Compact chip labels — the two camel-case stages would otherwise crowd the strip.
+const STAGE_SHORT_LABEL: Partial<Record<ChangeStatus, string>> = {
+  InDevelopment: 'In Dev',
+  InReview: 'In Review',
+}
+const stageLabel = (status: ChangeStatus) => STAGE_SHORT_LABEL[status] ?? status
+
+/**
+ * Mobile-only stage picker. Chevrons step to the adjacent stage; the horizontally scrollable chip
+ * strip jumps to any stage and shows each stage's count. The 🔒 gate marker sits between Triaged and
+ * Approved, mirroring the desktop divider. The active chip scrolls into view when the stage changes
+ * (e.g. via a swipe or chevron), so it stays visible in the strip.
+ */
+function MobileStageSwitcher({
+  active, onSelect, onStep, countFor,
+}: {
+  active: ChangeStatus
+  onSelect: (status: ChangeStatus) => void
+  onStep: (delta: number) => void
+  countFor: (status: ChangeStatus) => number
+}) {
+  const idx = LIFECYCLE_COLUMNS.indexOf(active)
+  const stripRef = useRef<HTMLDivElement>(null)
+  const activeRef = useRef<HTMLButtonElement>(null)
+  useEffect(() => {
+    const strip = stripRef.current, chip = activeRef.current
+    if (!strip || !chip) return
+    // Center the active chip within the strip's own horizontal scroll, without disturbing ancestor
+    // scroll containers (which scrollIntoView would also move).
+    const s = strip.getBoundingClientRect(), c = chip.getBoundingClientRect()
+    strip.scrollBy({ left: (c.left + c.width / 2) - (s.left + s.width / 2), behavior: 'smooth' })
+  }, [active])
+  return (
+    <div className="flex items-center gap-1">
+      <button
+        onClick={() => onStep(-1)}
+        disabled={idx <= 0}
+        aria-label="Previous stage"
+        className="shrink-0 rounded-md px-2 py-1.5 text-lg leading-none text-slate-500 hover:bg-slate-100 disabled:opacity-30 dark:text-slate-400 dark:hover:bg-slate-800"
+      >
+        ‹
+      </button>
+      <div ref={stripRef} className="flex flex-1 items-center gap-1 overflow-x-auto">
+        {LIFECYCLE_COLUMNS.map((status) => {
+          const isActive = status === active
+          return (
+            <div key={status} className="flex shrink-0 items-center">
+              {status === 'Approved' && (
+                <span
+                  title="Whitelist gate — Maintainer approval required"
+                  className="mr-1 select-none rounded bg-violet-100 px-1 py-0.5 text-[10px] font-semibold text-violet-700 dark:bg-violet-500/20 dark:text-violet-300"
+                >
+                  🔒
+                </span>
+              )}
+              <button
+                ref={isActive ? activeRef : undefined}
+                onClick={() => onSelect(status)}
+                aria-current={isActive ? 'true' : undefined}
+                className={cx(
+                  'flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm font-medium transition-colors',
+                  isActive
+                    ? 'border-indigo-300 bg-indigo-50 text-indigo-700 dark:border-indigo-500/40 dark:bg-indigo-500/15 dark:text-indigo-200'
+                    : 'border-transparent text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800',
+                )}
+              >
+                <span>{stageLabel(status)}</span>
+                <Badge tone={isActive ? STATUS_TONE[status] : 'slate'}>{countFor(status)}</Badge>
+              </button>
+            </div>
+          )
+        })}
+      </div>
+      <button
+        onClick={() => onStep(1)}
+        disabled={idx >= LIFECYCLE_COLUMNS.length - 1}
+        aria-label="Next stage"
+        className="shrink-0 rounded-md px-2 py-1.5 text-lg leading-none text-slate-500 hover:bg-slate-100 disabled:opacity-30 dark:text-slate-400 dark:hover:bg-slate-800"
+      >
+        ›
+      </button>
     </div>
   )
 }

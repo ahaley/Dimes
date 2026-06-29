@@ -50,7 +50,13 @@ export function ChangeCard({
       style={style}
       {...attributes}
       {...listeners}
-      onClick={onSelect}
+      onClick={(e) => {
+        // A press on the ⋯ menu (button, dropdown, or its backdrop) must never open the card. Guarding
+        // on the target here means navigation can't slip through if event propagation is reordered by
+        // the drag sensors during a touch/synthetic input sequence.
+        if ((e.target as HTMLElement).closest('[data-card-menu]')) return
+        onSelect()
+      }}
       className={cx(
         'group relative cursor-grab overflow-hidden rounded-md border border-slate-200 bg-white active:cursor-grabbing dark:border-slate-700 dark:bg-slate-800',
         'hover:border-indigo-300 hover:shadow-sm',
@@ -70,9 +76,13 @@ export function ChangeCard({
           {menuTargets.length > 0 && (
             <button
               aria-label="Change status"
-              onPointerDown={(e) => e.stopPropagation()}
+              data-card-menu
+              // Stop the drag sensors (mouse + touch) from treating a press on the menu as the start of
+              // a card drag — listeners live on the card root, so the event must not bubble there.
+              onMouseDown={(e) => e.stopPropagation()}
+              onTouchStart={(e) => e.stopPropagation()}
               onClick={(e) => { e.stopPropagation(); setMenuOpen((v) => !v) }}
-              className="shrink-0 rounded px-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-200"
+              className="-my-1 -mr-1 shrink-0 rounded p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-200"
             >
               ⋯
             </button>
@@ -140,17 +150,26 @@ export function ChangeCard({
 
       {menuOpen && (
         <>
-          <div className="fixed inset-0 z-10" onClick={(e) => { e.stopPropagation(); setMenuOpen(false) }} />
           <div
-            className="absolute right-2 top-8 z-20 w-40 overflow-hidden rounded-md border border-slate-200 bg-white py-1 shadow-lg dark:border-slate-700 dark:bg-slate-800"
+            data-card-menu
+            className="fixed inset-0 z-10"
+            onClick={(e) => { e.stopPropagation(); setMenuOpen(false) }}
+            onMouseDown={(e) => e.stopPropagation()}
+            onTouchStart={(e) => e.stopPropagation()}
+          />
+          <div
+            data-card-menu
+            className="absolute right-2 top-8 z-20 w-44 max-w-[calc(100vw-2rem)] overflow-hidden rounded-md border border-slate-200 bg-white py-1 shadow-lg dark:border-slate-700 dark:bg-slate-800"
             onClick={(e) => e.stopPropagation()}
+            onMouseDown={(e) => e.stopPropagation()}
+            onTouchStart={(e) => e.stopPropagation()}
           >
             {menuTargets.map((t) => (
               <button
                 key={t}
                 onClick={() => { setMenuOpen(false); onTransition(t) }}
                 className={cx(
-                  'block w-full px-3 py-1.5 text-left text-sm hover:bg-slate-50 dark:hover:bg-slate-700',
+                  'block w-full px-3 py-2.5 text-left text-sm hover:bg-slate-50 dark:hover:bg-slate-700',
                   t === 'Rejected' ? 'text-red-600 dark:text-red-400' : 'text-slate-700 dark:text-slate-200',
                 )}
               >

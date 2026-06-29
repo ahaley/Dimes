@@ -47,7 +47,7 @@ export function CreateChangeModal({
         <Field label="Description">
           <Textarea value={description} onChange={(e) => setDescription(e.target.value)} />
         </Field>
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
           <Field label="Kind">
             <Select value={kind} onChange={(e) => setKind(e.target.value as ChangeKind)}>
               <option value="Feature">Feature</option>
@@ -65,7 +65,7 @@ export function CreateChangeModal({
         </div>
         {canAssign && (
           <Field label="Recipient">
-            <div className="flex items-center gap-2">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
               <Select value={recipient} onChange={(e) => setRecipient(e.target.value)} className="flex-1">
                 <option value="">Unassigned</option>
                 {members.map((m) => <option key={m.actorId} value={m.actorId}>{m.displayName}</option>)}

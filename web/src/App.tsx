@@ -228,7 +228,7 @@ export default function App() {
       />
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-14 shrink-0 items-center gap-3 border-b border-slate-200 bg-white px-4 dark:border-slate-800 dark:bg-slate-900">
+        <header className="flex h-14 shrink-0 items-center gap-2 border-b border-slate-200 bg-white px-3 sm:gap-3 sm:px-4 dark:border-slate-800 dark:bg-slate-900">
           <button
             onClick={() => setMobileOpen(true)}
             aria-label="Open menu"
@@ -258,7 +258,7 @@ export default function App() {
           </div>
         </header>
 
-        <main className="min-h-0 flex-1 overflow-auto p-6">
+        <main className="min-h-0 flex-1 overflow-auto p-4 sm:p-6">
           <Routes>
             <Route path="/" element={<IndexRedirect projects={activeProjects} canCreate={me.isSiteAdmin} onNewProject={() => setShowCreateProject(true)} />} />
             <Route
