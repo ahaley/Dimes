@@ -547,8 +547,32 @@ public class ChangeRequestService(
 
         var audit = lifecycle.TransitionChange(change, req.Target, actor, role, req.Reason);
         db.AuditEvents.Add(audit);
+
+        // Epic composition: a child must always match its Epic's state exactly, so cascade this transition
+        // to every composed child — forcing the same target regardless of step-by-step legality (the role
+        // guard above already authorized the move). Children inherit the Epic's Duplicate target too.
+        var cascaded = new List<Guid>();
+        if (change.Kind == ChangeKind.Epic)
+        {
+            var children = await db.ChangeRequests.Where(c => c.ParentChangeRequestId == change.Id).ToListAsync(ct);
+            foreach (var child in children)
+            {
+                child.DuplicateOfId = req.Target == ChangeStatus.Duplicate ? req.DuplicateOfId : null;
+                var childAudit = lifecycle.SyncChildStatus(child, req.Target, actor);
+                if (childAudit is not null)
+                {
+                    db.AuditEvents.Add(childAudit);
+                    cascaded.Add(child.Id);
+                }
+            }
+        }
+
         await db.SaveChangesAsync(ct);
         await notifier.ChangedAsync(change.ProjectId, change.Id, "transitioned", ct);
+        foreach (var childId in cascaded)
+        {
+            await notifier.ChangedAsync(change.ProjectId, childId, "transitioned", ct);
+        }
         return change.ToDto(await ProjectKeyAsync(change.ProjectId, ct));
     }
 

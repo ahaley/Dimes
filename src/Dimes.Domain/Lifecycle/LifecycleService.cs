@@ -13,6 +13,7 @@ public class LifecycleService
 {
     private const string ChangeTransitionAction = "ChangeTransition";
     private const string ObservationTransitionAction = "ObservationTransition";
+    private const string EpicCascadeAction = "EpicCascade";
 
     /// <summary>Legal change-request transitions. Any status not listed as a value is unreachable
     /// from that key. Rejected/Duplicate are terminal; Done can only be reopened to InDevelopment.</summary>
@@ -114,6 +115,49 @@ public class LifecycleService
             ToStatus = target.ToString(),
             Action = ChangeTransitionAction,
             Reason = reason,
+        };
+    }
+
+    /// <summary>
+    /// Force a composed child to mirror its Epic's status exactly. This is the deliberate exception to the
+    /// guarded <see cref="TransitionChange"/> path: when an Epic moves, every child is set to the same
+    /// target regardless of step-by-step legality (and even backward), because the requirement is an exact
+    /// match. The authority check still happens once — on the Epic's own guarded transition that triggers
+    /// this — so a child is only force-synced by an actor who was allowed to move the Epic there. Mutates
+    /// the child and returns the audit event to persist; returns null when the child is already at the
+    /// target (nothing to record).
+    /// </summary>
+    public AuditEvent? SyncChildStatus(ChangeRequest child, ChangeStatus target, Actor actor)
+    {
+        ArgumentNullException.ThrowIfNull(child);
+        ArgumentNullException.ThrowIfNull(actor);
+
+        var from = child.Status;
+        if (from == target)
+        {
+            return null;
+        }
+
+        child.Status = target;
+        child.UpdatedAt = DateTimeOffset.UtcNow;
+        // Mirror TransitionChange's acceptance-time bookkeeping so a child's Done split behaves identically.
+        if (target == ChangeStatus.Done)
+        {
+            child.CompletedAt = DateTimeOffset.UtcNow;
+        }
+        else if (from == ChangeStatus.Done)
+        {
+            child.CompletedAt = null;
+        }
+
+        return new AuditEvent
+        {
+            EntityType = AuditEntityType.ChangeRequest,
+            EntityId = child.Id,
+            ActorId = actor.Id,
+            FromStatus = from.ToString(),
+            ToStatus = target.ToString(),
+            Action = EpicCascadeAction,
         };
     }
 

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { api } from '../api/client'
-import { useAddEpicChild, useAudit, useBulkTransition, useChangeDetail, useChanges, useProjectInvalidator, useProjects, useRemoveEpicChild, useTransition } from '../api/hooks'
+import { useAddEpicChild, useAudit, useChangeDetail, useChanges, useProjectInvalidator, useProjects, useRemoveEpicChild, useTransition } from '../api/hooks'
 import type { ChangeStatus, Member, Priority } from '../api/types'
 import { ALLOWED_TRANSITIONS, STATUS_TONE, kindTone } from '../lifecycle'
 import { Badge, Button, ErrorText, Field, Modal, Select, TextInput, Textarea } from '../components/ui'
@@ -55,7 +55,6 @@ export function ChangeDetailBody({
   const parent = parentId ? allChanges?.find((c) => c.id === parentId) : undefined
   const addChild = useAddEpicChild(projectId)
   const removeChild = useRemoveEpicChild(projectId)
-  const bulkTransition = useBulkTransition(projectId)
   const candidates = (allChanges ?? []).filter(
     (c) => c.kind !== 'Epic' && !c.parentChangeRequestId && c.id !== changeId,
   )
@@ -207,37 +206,8 @@ export function ChangeDetailBody({
               render nested inside the Epic card. */}
           {isEpic && (
             <Section title="Composed changes">
-              {/* Move the whole composition (Epic + children) at once — best-effort; the toast reports
-                  how many actually moved vs. were skipped (illegal from their state / unauthorized). */}
-              {ALLOWED_TRANSITIONS[detail.change.status].filter((t) => t !== 'Duplicate').length > 0 && (
-                <div className="mb-2 flex flex-wrap items-center gap-2">
-                  <span className="text-xs font-medium uppercase tracking-wide text-slate-500">Move all to</span>
-                  {ALLOWED_TRANSITIONS[detail.change.status]
-                    .filter((t) => t !== 'Duplicate')
-                    .map((target) => (
-                      <Button
-                        key={target}
-                        variant={target === 'Rejected' ? 'danger' : 'default'}
-                        disabled={bulkTransition.isPending}
-                        onClick={() =>
-                          bulkTransition.mutate(
-                            { epicId: changeId, target: target as ChangeStatus },
-                            {
-                              onSuccess: (r) =>
-                                toast.success(
-                                  `Moved ${r.transitioned.length} to ${target}` +
-                                    (r.skipped.length ? `, skipped ${r.skipped.length}` : ''),
-                                ),
-                              onError: (e) => toast.error(e instanceof Error ? e.message : 'Bulk move failed'),
-                            },
-                          )
-                        }
-                      >
-                        {target}
-                      </Button>
-                    ))}
-                </div>
-              )}
+              {/* Transitioning the Epic (its → buttons above, the board card menu, or dragging it between
+                  columns) cascades the exact state to every child, so there's no separate "move all". */}
               <ul className="space-y-2">
                 {detail.children.map((c) => (
                   <li key={c.id} className="rounded-md border border-slate-200 p-3 dark:border-slate-700">
