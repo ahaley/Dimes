@@ -273,6 +273,32 @@ export function useTransition(projectId: string | undefined) {
   })
 }
 
+/** Compose an existing change into an Epic / break it out. Invalidates the board and both the Epic's
+ * and the child's detail so the "Composed changes" section and nesting refresh. */
+export function useAddEpicChild(projectId: string | undefined) {
+  const qc = useQueryClient()
+  const invalidate = useProjectInvalidator(projectId)
+  return useMutation({
+    mutationFn: (vars: { epicId: string; childId: string }) => api.addEpicChild(vars.epicId, vars.childId),
+    onSuccess: (_data, vars) => {
+      invalidate(vars.epicId)
+      qc.invalidateQueries({ queryKey: keys.change(vars.childId) })
+    },
+  })
+}
+
+export function useRemoveEpicChild(projectId: string | undefined) {
+  const qc = useQueryClient()
+  const invalidate = useProjectInvalidator(projectId)
+  return useMutation({
+    mutationFn: (vars: { epicId: string; childId: string }) => api.removeEpicChild(vars.epicId, vars.childId),
+    onSuccess: (_data, vars) => {
+      invalidate(vars.epicId)
+      qc.invalidateQueries({ queryKey: keys.change(vars.childId) })
+    },
+  })
+}
+
 type ReorderVars = { status: ChangeStatus; orderedIds: string[] }
 
 /** Persists a manual within-column board order. Optimistically applies the new SortOrder to the

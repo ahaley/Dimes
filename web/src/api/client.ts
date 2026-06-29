@@ -156,6 +156,10 @@ export const api = {
     request<ChangeRequest>('PATCH', `/api/changes/${id}/assignee`, body),
   transition: (id: string, body: { target: ChangeStatus; reason?: string | null; duplicateOfId?: string | null }) =>
     request<ChangeRequest>('POST', `/api/changes/${id}/transition`, body),
+  addEpicChild: (epicId: string, childId: string) =>
+    request<ChangeRequest>('POST', `/api/changes/${epicId}/children`, { childId }),
+  removeEpicChild: (epicId: string, childId: string) =>
+    request<ChangeRequest>('DELETE', `/api/changes/${epicId}/children/${childId}`),
   addComment: (id: string, body: { body: string }) =>
     request<Comment>('POST', `/api/changes/${id}/comments`, body),
   addScmLink: (id: string, body: { url: string; contextSnapshot?: string | null }) =>
