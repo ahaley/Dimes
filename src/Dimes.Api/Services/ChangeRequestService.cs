@@ -508,10 +508,12 @@ public class ChangeRequestService(
             var children = await db.ChangeRequests.Where(c => c.ParentChangeRequestId == change.Id).ToListAsync(ct);
             foreach (var child in children)
             {
-                child.DuplicateOfId = req.Target == ChangeStatus.Duplicate ? req.DuplicateOfId : null;
+                // SyncChildStatus returns null (and mutates nothing) when the child is already at the
+                // target, so only touch the child — including its inherited Duplicate target — when it moves.
                 var childAudit = lifecycle.SyncChildStatus(child, req.Target, actor);
                 if (childAudit is not null)
                 {
+                    child.DuplicateOfId = req.Target == ChangeStatus.Duplicate ? req.DuplicateOfId : null;
                     db.AuditEvents.Add(childAudit);
                     cascaded.Add(child.Id);
                 }
