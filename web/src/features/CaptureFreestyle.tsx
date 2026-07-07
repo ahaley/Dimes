@@ -212,7 +212,7 @@ export function CaptureFreestyle({ projectId, agents, zen = false }: { projectId
           <span className="ml-auto text-xs text-slate-400">{validCount} ready</span>
         </div>
 
-        <div className="min-h-0 flex-1 space-y-3 overflow-auto p-4">
+        <div className="min-h-0 flex-1 space-y-2 overflow-auto p-4">
           {proposals.length === 0 ? (
             <p className="text-sm text-slate-400">
               {generate.isPending
@@ -223,19 +223,15 @@ export function CaptureFreestyle({ projectId, agents, zen = false }: { projectId
             proposals.map((p, i) => {
               const isEditing = editingId === p.id
               return (
-              <div key={p.id} className="space-y-2 rounded-md border border-slate-200 p-3 dark:border-slate-700">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-medium text-slate-400">#{i + 1}</span>
-                  <span className="ml-auto" />
-                  {isEditing ? (
-                    <Button variant="subtle" aria-label="Collapse change order" onClick={() => setEditingId(null)}>Done</Button>
-                  ) : (
-                    <Button variant="subtle" aria-label="Edit change order" onClick={() => setEditingId(p.id)}>Edit</Button>
-                  )}
-                  <Button variant="subtle" onClick={() => removeProposal(p.id)}>Delete</Button>
-                </div>
+              <div key={p.id} className={cx('rounded-md border border-slate-200 dark:border-slate-700', isEditing ? 'space-y-2 p-3' : 'p-2')}>
                 {isEditing ? (
                   <>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-medium text-slate-400">#{i + 1}</span>
+                      <span className="ml-auto" />
+                      <Button variant="subtle" aria-label="Collapse change order" onClick={() => setEditingId(null)}>Done</Button>
+                      <Button variant="subtle" onClick={() => removeProposal(p.id)}>Delete</Button>
+                    </div>
                     <Field label="Title">
                       <TextInput value={p.title} onChange={(e) => update(p.id, { title: e.target.value })} placeholder="Concise, imperative title" />
                     </Field>
@@ -256,20 +252,30 @@ export function CaptureFreestyle({ projectId, agents, zen = false }: { projectId
                     </div>
                   </>
                 ) : (
-                  // Compact read-only view — a clean read of the proposal; click anywhere to expand into
-                  // the edit form. Fields are presented as badges + a preview rather than live inputs.
-                  <button type="button" onClick={() => setEditingId(p.id)} className="block w-full space-y-1.5 text-left">
-                    <p className={cx('text-sm font-medium leading-snug', p.title.trim() ? 'text-slate-800 dark:text-slate-100' : 'italic text-slate-400')}>
-                      {p.title.trim() || 'Untitled change order'}
-                    </p>
-                    {p.description.trim() && (
-                      <p className="line-clamp-2 whitespace-pre-wrap text-xs text-slate-500 dark:text-slate-400">{p.description}</p>
-                    )}
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      <Badge tone={kindTone(p.kind)}>{p.kind}</Badge>
-                      {p.priority !== 'None' && <Badge tone="amber">{p.priority}</Badge>}
-                    </div>
-                  </button>
+                  // Compact read-only view — dense enough to fit many at once. The read area expands into the
+                  // edit form on click; a small delete sits outside that click target (no nested buttons).
+                  <div className="flex items-start gap-2">
+                    <button type="button" onClick={() => setEditingId(p.id)} className="min-w-0 flex-1 space-y-1 text-left">
+                      <p className={cx('text-[13px] font-medium leading-snug', p.title.trim() ? 'text-slate-800 dark:text-slate-100' : 'italic text-slate-400')}>
+                        {p.title.trim() || 'Untitled change order'}
+                      </p>
+                      {p.description.trim() && (
+                        <p className="line-clamp-2 whitespace-pre-wrap text-[11px] leading-snug text-slate-500 dark:text-slate-400">{p.description}</p>
+                      )}
+                      <div className="flex flex-wrap items-center gap-1">
+                        <Badge tone={kindTone(p.kind)}>{p.kind}</Badge>
+                        {p.priority !== 'None' && <Badge tone="amber">{p.priority}</Badge>}
+                      </div>
+                    </button>
+                    <button
+                      type="button"
+                      aria-label="Delete change order"
+                      onClick={() => removeProposal(p.id)}
+                      className="shrink-0 rounded px-1.5 py-0.5 text-xs text-slate-400 hover:bg-slate-100 hover:text-red-600 dark:hover:bg-slate-800 dark:hover:text-red-400"
+                    >
+                      ✕
+                    </button>
+                  </div>
                 )}
               </div>
               )
