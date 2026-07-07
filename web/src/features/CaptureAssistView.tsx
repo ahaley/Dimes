@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useParams } from 'react-router-dom'
 import { api } from '../api/client'
@@ -37,6 +37,15 @@ const RESUME_TONE: Record<AssistConversationStatus, string> = {
 
 // Remember the requester's last guided/freestyle choice so re-entering capture restores it.
 const MODE_KEY = 'dimes.captureAssist.mode'
+
+/** Inline keycap for shortcut hints — keeps "." legible as a key rather than sentence punctuation. */
+function Kbd({ children }: { children: ReactNode }) {
+  return (
+    <kbd className="rounded border border-slate-300 bg-slate-100 px-1 py-px font-mono text-[11px] text-slate-600 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300">
+      {children}
+    </kbd>
+  )
+}
 
 /**
  * Capture Assist Mode — a full-page (zen) space to grow a loose idea into a change request with the
@@ -251,9 +260,14 @@ export function CaptureAssistView() {
         <div>
           <h1 className="text-lg font-semibold text-slate-800 dark:text-slate-100">Capture Assist</h1>
           <p className="mt-1 text-sm text-slate-500">
-            {effectiveMode === 'freestyle'
-              ? 'Write a freeform markdown brief and turn it into a batch of change requests you can edit before creating.'
-              : 'Talk an idea through with an AI agent or a teammate, then confirm a title and description to capture it as a change request.'}
+            {effectiveMode === 'freestyle' ? (
+              <>
+                Write a freeform markdown brief and turn it into a batch of change requests you can edit before creating.
+                {' '}Press <Kbd>⌘/Ctrl</Kbd> + <Kbd>.</Kbd> for focus mode.
+              </>
+            ) : (
+              'Talk an idea through with an AI agent or a teammate, then confirm a title and description to capture it as a change request.'
+            )}
           </p>
         </div>
         <div className="flex items-center gap-2">
