@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { api } from '../api/client'
 import { useAddEpicChild, useAudit, useChangeDetail, useChanges, useProjectInvalidator, useProjects, useRemoveEpicChild, useTransition } from '../api/hooks'
-import type { ChangeStatus, Member, Priority } from '../api/types'
+import type { ChangeKind, ChangeStatus, Member, Priority } from '../api/types'
 import { ALLOWED_TRANSITIONS, STATUS_TONE, kindTone } from '../lifecycle'
 import { Badge, Button, ErrorText, Field, Modal, Select, TextInput, Textarea } from '../components/ui'
 import { useToast } from '../components/Toast'
@@ -69,12 +69,14 @@ export function ChangeDetailBody({
   const [editing, setEditing] = useState(false)
   const [eTitle, setETitle] = useState('')
   const [eDesc, setEDesc] = useState('')
+  const [eKind, setEKind] = useState<ChangeKind>('Feature')
   const [ePriority, setEPriority] = useState<Priority>('None')
 
   const startEdit = () => {
     if (!detail) return
     setETitle(detail.change.title)
     setEDesc(detail.change.description ?? '')
+    setEKind(detail.change.kind)
     setEPriority(detail.change.priority)
     setEditing(true)
   }
@@ -83,6 +85,7 @@ export function ChangeDetailBody({
       api.updateChangeDetails(changeId, {
         title: eTitle,
         description: eDesc || null,
+        kind: eKind,
         priority: ePriority,
       }),
     onSuccess: () => { invalidate(changeId); setEditing(false); toast.success('Change updated') },
@@ -149,11 +152,22 @@ export function ChangeDetailBody({
               <Field label="Description">
                 <Textarea value={eDesc} onChange={(e) => setEDesc(e.target.value)} />
               </Field>
-              <Field label="Priority">
-                <Select value={ePriority} onChange={(e) => setEPriority(e.target.value as Priority)}>
-                  {PRIORITIES.map((p) => <option key={p} value={p}>{p}</option>)}
-                </Select>
-              </Field>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <Field label="Kind">
+                  <Select value={eKind} onChange={(e) => setEKind(e.target.value as ChangeKind)}>
+                    <option value="Feature">Feature</option>
+                    <option value="Problem">Problem</option>
+                    <option value="ObservationDriven">Observation-driven</option>
+                    <option value="Epic">Epic</option>
+                    <option value="Chore">Chore</option>
+                  </Select>
+                </Field>
+                <Field label="Priority">
+                  <Select value={ePriority} onChange={(e) => setEPriority(e.target.value as Priority)}>
+                    {PRIORITIES.map((p) => <option key={p} value={p}>{p}</option>)}
+                  </Select>
+                </Field>
+              </div>
               <ErrorText error={saveDetails.error} />
               <div className="flex justify-end gap-2">
                 <Button variant="subtle" onClick={() => setEditing(false)}>Cancel</Button>

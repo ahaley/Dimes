@@ -175,7 +175,7 @@ public record AddEpicChildRequest(Guid ChildId);
 
 /// <summary>Post-hoc edit of a change's free-form details (author or Maintainer only). Recipient
 /// assignment is a separate action — see <see cref="AssignChangeRequest"/>.</summary>
-public record UpdateChangeDetailsRequest(string Title, string? Description, Priority Priority);
+public record UpdateChangeDetailsRequest(string Title, string? Description, ChangeKind Kind, Priority Priority);
 
 /// <summary>Set or clear a change's recipient (AssigneeActorId). Requires Contributor+; the recipient,
 /// when non-null, must be a project member. Null clears it.</summary>

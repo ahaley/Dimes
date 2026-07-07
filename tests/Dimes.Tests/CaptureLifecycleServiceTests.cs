@@ -240,7 +240,7 @@ public sealed class CaptureLifecycleServiceTests : IDisposable
         var change = await _changes.CreateAsync(seed.ProjectId, seed.ContributorId, new CreateChangeRequest("Original", "old", ChangeKind.Feature));
 
         var updated = await _changes.UpdateDetailsAsync(change.Id, seed.ContributorId,
-            new UpdateChangeDetailsRequest("Renamed", "new body", Priority.High));
+            new UpdateChangeDetailsRequest("Renamed", "new body", ChangeKind.Feature, Priority.High));
 
         Assert.Equal("Renamed", updated.Title);
         Assert.Equal("new body", updated.Description);
@@ -256,7 +256,7 @@ public sealed class CaptureLifecycleServiceTests : IDisposable
         var seed = await SeedAsync();
         var change = await _changes.CreateAsync(seed.ProjectId, seed.ContributorId, new CreateChangeRequest("Original", null, ChangeKind.Feature));
 
-        var updated = await _changes.UpdateDetailsAsync(change.Id, seed.MaintainerId, new UpdateChangeDetailsRequest("Maintainer edit", null, Priority.None));
+        var updated = await _changes.UpdateDetailsAsync(change.Id, seed.MaintainerId, new UpdateChangeDetailsRequest("Maintainer edit", null, ChangeKind.Feature, Priority.None));
 
         Assert.Equal("Maintainer edit", updated.Title);
     }
@@ -270,7 +270,7 @@ public sealed class CaptureLifecycleServiceTests : IDisposable
         var change = await _changes.CreateAsync(seed.ProjectId, seed.ContributorId, new CreateChangeRequest("Original", null, ChangeKind.Feature));
 
         await Assert.ThrowsAsync<ForbiddenException>(() =>
-            _changes.UpdateDetailsAsync(change.Id, other.ActorId, new UpdateChangeDetailsRequest("hijack", null, Priority.None)));
+            _changes.UpdateDetailsAsync(change.Id, other.ActorId, new UpdateChangeDetailsRequest("hijack", null, ChangeKind.Feature, Priority.None)));
     }
 
     [Fact]
@@ -280,7 +280,7 @@ public sealed class CaptureLifecycleServiceTests : IDisposable
         var change = await _changes.CreateAsync(seed.ProjectId, seed.ContributorId, new CreateChangeRequest("Original", null, ChangeKind.Feature));
 
         await Assert.ThrowsAsync<ForbiddenException>(() =>
-            _changes.UpdateDetailsAsync(change.Id, Guid.NewGuid(), new UpdateChangeDetailsRequest("x", null, Priority.None)));
+            _changes.UpdateDetailsAsync(change.Id, Guid.NewGuid(), new UpdateChangeDetailsRequest("x", null, ChangeKind.Feature, Priority.None)));
     }
 
     [Fact]
