@@ -185,9 +185,12 @@ public class CaptureAssistService(
             }
             // ObservationDriven is provenance-only (set by promotion), never a proposable kind — coerce any
             // stray value the model emits to Feature so a Freestyle batch never trips the manual-create guard.
-            var kind = Enum.TryParse<ChangeKind>(p.Kind, ignoreCase: true, out var k) && k != ChangeKind.ObservationDriven
+            // IsDefined matters: Enum.TryParse accepts any numeric string (e.g. "100") as an undefined value.
+            var kind = Enum.TryParse<ChangeKind>(p.Kind, ignoreCase: true, out var k)
+                && Enum.IsDefined(k) && k != ChangeKind.ObservationDriven
                 ? k : ChangeKind.Feature;
-            var priority = Enum.TryParse<Priority>(p.Priority, ignoreCase: true, out var pr) ? pr : Priority.None;
+            var priority = Enum.TryParse<Priority>(p.Priority, ignoreCase: true, out var pr) && Enum.IsDefined(pr)
+                ? pr : Priority.None;
             var description = string.IsNullOrWhiteSpace(p.Description) ? null : p.Description.Trim();
             proposals.Add(new CaptureProposalDto(p.Title.Trim(), description, kind, priority));
         }

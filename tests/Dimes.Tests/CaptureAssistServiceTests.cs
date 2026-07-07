@@ -177,6 +177,23 @@ public sealed class CaptureAssistServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task GenerateProposals_CoercesUndefinedNumericEnums()
+    {
+        // Enum.TryParse accepts any numeric string as an (undefined) enum value — those must fall back
+        // to the defaults, not leak garbage kinds/priorities into proposals.
+        var stub = new StubLlm(LlmProviderType.Anthropic,
+            """[{"title":"Weird enums","kind":"100","priority":"42"}]""");
+        var projectId = await SeedAgentAsync(stub);
+
+        var reply = await Service(stub).GenerateProposalsAsync(projectId,
+            new GenerateProposalsRequest(_lastAgentId, "Some brief."));
+
+        var p = Assert.Single(reply.Proposals);
+        Assert.Equal(ChangeKind.Feature, p.Kind);
+        Assert.Equal(Priority.None, p.Priority);
+    }
+
+    [Fact]
     public async Task GenerateProposals_MalformedJson_ReturnsEmpty()
     {
         var stub = new StubLlm(LlmProviderType.Anthropic, "I couldn't find anything actionable, sorry.");

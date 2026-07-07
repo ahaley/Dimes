@@ -55,10 +55,16 @@ export function CaptureFreestyle({ projectId, projectName, agents, zen = false, 
   const [dirty, setDirty] = useState(false)
   // Markdown text of the last dispatched generation, so we never re-request unchanged input.
   const lastGenerated = useRef('')
+  // Set when the user hand-edits proposals while a generation is in flight. The dirty gate only stops
+  // *dispatching* while dirty; edits made after dispatch would otherwise be clobbered on arrival.
+  const editedSinceDispatch = useRef(false)
 
   const generate = useMutation({
     mutationFn: (md: string) => api.generateProposals(projectId, { agentActorId: activeAgentId, markdown: md }),
     onSuccess: (res) => {
+      // The user edited while this request was in flight — their work wins; drop the stale result.
+      // (dirty is already true, so auto stays frozen until they explicitly Regenerate.)
+      if (editedSinceDispatch.current) return
       setProposals(res.proposals.map((p) => ({
         id: crypto.randomUUID(),
         title: p.title,
@@ -77,6 +83,7 @@ export function CaptureFreestyle({ projectId, projectName, agents, zen = false, 
     if (md.trim().length < MIN_MARKDOWN) return
     if (md === lastGenerated.current) return
     lastGenerated.current = md
+    editedSinceDispatch.current = false
     generate.mutate(md)
   }
 
@@ -109,6 +116,7 @@ export function CaptureFreestyle({ projectId, projectName, agents, zen = false, 
   const update = (id: string, patch: Partial<Proposal>) => {
     setProposals((ps) => ps.map((p) => (p.id === id ? { ...p, ...patch } : p)))
     setDirty(true)
+    editedSinceDispatch.current = true
   }
   const addProposal = () => {
     const id = crypto.randomUUID()
@@ -116,11 +124,13 @@ export function CaptureFreestyle({ projectId, projectName, agents, zen = false, 
     // A brand-new card has nothing to read, so open it straight into edit mode.
     setEditingId(id)
     setDirty(true)
+    editedSinceDispatch.current = true
   }
   const removeProposal = (id: string) => {
     setProposals((ps) => ps.filter((p) => p.id !== id))
     setEditingId((cur) => (cur === id ? null : cur))
     setDirty(true)
+    editedSinceDispatch.current = true
   }
 
   const validCount = useMemo(() => proposals.filter((p) => p.title.trim()).length, [proposals])
@@ -149,6 +159,34 @@ export function CaptureFreestyle({ projectId, projectName, agents, zen = false, 
 
   const noAgent = !activeAgentId
 
+  // Focus-mode dialog behavior. The overlay visually covers the app chrome but the chrome stays in the
+  // DOM and tabbable, so contain Tab inside the workbench (Shift+Tab must not land on the invisible
+  // "Sign out") and move focus to the writing surface on entry.
+  const rootRef = useRef<HTMLDivElement>(null)
+  const briefRef = useRef<HTMLTextAreaElement>(null)
+  useEffect(() => {
+    if (zen) briefRef.current?.focus()
+  }, [zen])
+  const trapTab = (e: React.KeyboardEvent) => {
+    if (!zen || e.key !== 'Tab' || !rootRef.current) return
+    const focusables = Array.from(
+      rootRef.current.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])',
+      ),
+    )
+    if (focusables.length === 0) return
+    const first = focusables[0]
+    const last = focusables[focusables.length - 1]
+    const active = document.activeElement
+    if (e.shiftKey && (active === first || !rootRef.current.contains(active))) {
+      e.preventDefault()
+      last.focus()
+    } else if (!e.shiftKey && (active === last || !rootRef.current.contains(active))) {
+      e.preventDefault()
+      first.focus()
+    }
+  }
+
   return (
     // Focus (zen) turns the workspace into a fullscreen workbench: a fixed overlay that covers the app
     // chrome (sidebar + toolbar — z-40 sits above the mobile drawer scrim, below modals) with the brief
@@ -156,6 +194,11 @@ export function CaptureFreestyle({ projectId, projectName, agents, zen = false, 
     // The overlay classes live on this root (not a conditional wrapper in the parent) so the component
     // never remounts on toggle — the client-only proposals state must survive entering/exiting focus.
     <div
+      ref={rootRef}
+      role={zen ? 'dialog' : undefined}
+      aria-modal={zen ? true : undefined}
+      aria-label={zen ? 'Focus mode — freestyle capture' : undefined}
+      onKeyDown={zen ? trapTab : undefined}
       className={cx(
         'grid grid-cols-1 lg:grid-cols-2',
         zen
@@ -193,6 +236,7 @@ export function CaptureFreestyle({ projectId, projectName, agents, zen = false, 
           </div>
         )}
         <Textarea
+          ref={briefRef}
           value={markdown}
           onChange={(e) => setMarkdown(e.target.value)}
           placeholder={'Write a freeform markdown brief…\n\n## Add CSV export\nLet users download the board as CSV.\n\n## Fix slow inbox\nThe inbox takes seconds to load with many observations.'}
@@ -219,7 +263,11 @@ export function CaptureFreestyle({ projectId, projectName, agents, zen = false, 
         {noAgent && (
           <p className="text-sm text-slate-400">Add an Agent member (with an LLM provider) via Manage project to generate proposals.</p>
         )}
-        <ErrorText error={generate.error} />
+        {/* Cap the error area: in focus mode the panel lives in a fixed overlay with no page scroll,
+            so a verbose provider error must scroll here rather than push content past the viewport. */}
+        <div className="max-h-24 shrink-0 overflow-y-auto">
+          <ErrorText error={generate.error} />
+        </div>
       </div>
 
       {/* Proposed change orders — in focus mode the panel stays (it's half the workbench) but sheds its

@@ -12,6 +12,16 @@ namespace Dimes.Api.Services;
 public class ChangeRequestService(
     DimesDbContext db, LifecycleService lifecycle, MembershipResolver members, IBoardNotifier notifier)
 {
+    /// <summary>JsonStringEnumConverter accepts raw integers, so an undefined numeric value (e.g.
+    /// <c>"kind": 100</c>) deserializes without error and would persist as garbage. Reject it here.</summary>
+    private static void EnsureDefined(ChangeKind kind, Priority priority)
+    {
+        if (!Enum.IsDefined(kind) || !Enum.IsDefined(priority))
+        {
+            throw new BadRequestException("Unknown kind or priority value.");
+        }
+    }
+
     /// <summary>Explicit human submission — enters the lifecycle directly at Captured.</summary>
     public async Task<ChangeRequestDto> CreateAsync(
         Guid projectId, Guid actorId, CreateChangeRequest req, CancellationToken ct = default)
@@ -20,6 +30,8 @@ public class ChangeRequestService(
         {
             throw new BadRequestException("Title is required.");
         }
+
+        EnsureDefined(req.Kind, req.Priority);
 
         // ObservationDriven is a provenance stamp applied only by promotion (ObservationService.PromoteAsync),
         // where it's kept in lockstep with the evidence link. It can't be chosen on a manual create.
@@ -90,6 +102,10 @@ public class ChangeRequestService(
         {
             throw new BadRequestException("Every change must have a title.");
         }
+        foreach (var r in reqs)
+        {
+            EnsureDefined(r.Kind, r.Priority);
+        }
         // ObservationDriven is applied only by promotion; a manual/Freestyle batch can't declare it.
         if (reqs.Any(r => r.Kind == ChangeKind.ObservationDriven))
         {
@@ -153,6 +169,8 @@ public class ChangeRequestService(
         {
             throw new BadRequestException("Title is required.");
         }
+
+        EnsureDefined(req.Kind, req.Priority);
 
         // Kind is editable post-create, but changing it can't be allowed to break Epic composition:
         // an Epic that still composes children can't stop being an Epic, and a change already composed

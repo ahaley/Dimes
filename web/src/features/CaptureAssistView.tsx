@@ -63,8 +63,9 @@ export function CaptureAssistView() {
   const { data: me } = useMe()
 
   const { data: members } = useMembers(projectId)
-  // Cache hit — the app shell already fetches the project list. Used for the focus-workbench label.
-  const { data: projects } = useProjects()
+  // Same args as the app shell's call so this shares its cached query (the key includes
+  // includeArchived) instead of issuing a second /api/projects fetch. Used for the focus label.
+  const { data: projects } = useProjects(true, true)
   const projectName = projects?.find((p) => p.id === projectId)?.name
   // Candidate assistants: everyone but yourself. Agents drive the AI chat; eligible humans (Contributor+)
   // open a persisted conversation.
@@ -120,6 +121,9 @@ export function CaptureAssistView() {
   // without remounting, so keep local state in lockstep.
   useEffect(() => {
     setConversationId(routeConversationId ?? null)
+    // A conversation route forces guided; also drop any lingering focus-mode flag so navigating back
+    // to plain /capture doesn't silently throw the user into the fullscreen workbench.
+    if (routeConversationId) setZen(false)
   }, [routeConversationId])
 
   // Resume hydration: when a persisted conversation loads, lock the picker to its assistant and seed
@@ -230,6 +234,7 @@ export function CaptureAssistView() {
   useEffect(() => {
     if (effectiveMode !== 'freestyle') return
     const onKey = (e: KeyboardEvent) => {
+      if (e.isComposing) return // Esc cancelling an IME composition shouldn't also exit focus
       if (e.key === 'Escape' && zen) setZen(false)
       else if ((e.metaKey || e.ctrlKey) && e.key === '.') { e.preventDefault(); setZen((z) => !z) }
     }
@@ -294,7 +299,6 @@ export function CaptureAssistView() {
           {effectiveMode === 'freestyle' && (
             <Button
               variant="subtle"
-              aria-pressed={zen}
               aria-label="Enter focus mode"
               title="Focus mode — hide distractions (⌘/Ctrl+. or Esc to exit)"
               onClick={() => setZen(true)}
