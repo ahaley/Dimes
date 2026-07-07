@@ -97,16 +97,24 @@ export function CaptureFreestyle({ projectId, agents, zen = false }: { projectId
     return () => window.removeEventListener('beforeunload', onBeforeUnload)
   }, [markdown])
 
+  // Which proposal is expanded into its full edit form; null means every card is compact. Editing one at
+  // a time keeps the list scannable — the compact default is the read-only presentation.
+  const [editingId, setEditingId] = useState<string | null>(null)
+
   const update = (id: string, patch: Partial<Proposal>) => {
     setProposals((ps) => ps.map((p) => (p.id === id ? { ...p, ...patch } : p)))
     setDirty(true)
   }
   const addProposal = () => {
-    setProposals((ps) => [...ps, { id: crypto.randomUUID(), title: '', description: '', kind: 'Feature', priority: 'None' }])
+    const id = crypto.randomUUID()
+    setProposals((ps) => [...ps, { id, title: '', description: '', kind: 'Feature', priority: 'None' }])
+    // A brand-new card has nothing to read, so open it straight into edit mode.
+    setEditingId(id)
     setDirty(true)
   }
   const removeProposal = (id: string) => {
     setProposals((ps) => ps.filter((p) => p.id !== id))
+    setEditingId((cur) => (cur === id ? null : cur))
     setDirty(true)
   }
 
@@ -211,33 +219,51 @@ export function CaptureFreestyle({ projectId, agents, zen = false }: { projectId
                 : 'Write a brief on the left, then press Generate (or enable Auto) — proposals appear here for you to edit.'}
             </p>
           ) : (
-            proposals.map((p, i) => (
+            proposals.map((p, i) => {
+              const isEditing = editingId === p.id
+              return (
               <div key={p.id} className="space-y-2 rounded-md border border-slate-200 p-3 dark:border-slate-700">
                 <div className="flex items-center gap-2">
                   <span className="text-xs font-medium text-slate-400">#{i + 1}</span>
                   <span className="ml-auto" />
+                  {isEditing ? (
+                    <Button variant="subtle" aria-label="Collapse change order" onClick={() => setEditingId(null)}>Done</Button>
+                  ) : (
+                    <Button variant="subtle" aria-label="Edit change order" onClick={() => setEditingId(p.id)}>Edit</Button>
+                  )}
                   <Button variant="subtle" onClick={() => removeProposal(p.id)}>Delete</Button>
                 </div>
-                <Field label="Title">
-                  <TextInput value={p.title} onChange={(e) => update(p.id, { title: e.target.value })} placeholder="Concise, imperative title" />
-                </Field>
-                <Field label="Description">
-                  <Textarea value={p.description} onChange={(e) => update(p.id, { description: e.target.value })} />
-                </Field>
-                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                  <Field label="Kind">
-                    <Select value={p.kind} onChange={(e) => update(p.id, { kind: e.target.value as ChangeKind })}>
-                      {KINDS.map((k) => <option key={k} value={k}>{k}</option>)}
-                    </Select>
-                  </Field>
-                  <Field label="Priority">
-                    <Select value={p.priority} onChange={(e) => update(p.id, { priority: e.target.value as Priority })}>
-                      {PRIORITIES.map((pr) => <option key={pr} value={pr}>{pr}</option>)}
-                    </Select>
-                  </Field>
-                </div>
+                {isEditing ? (
+                  <>
+                    <Field label="Title">
+                      <TextInput value={p.title} onChange={(e) => update(p.id, { title: e.target.value })} placeholder="Concise, imperative title" />
+                    </Field>
+                    <Field label="Description">
+                      <Textarea value={p.description} onChange={(e) => update(p.id, { description: e.target.value })} />
+                    </Field>
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                      <Field label="Kind">
+                        <Select value={p.kind} onChange={(e) => update(p.id, { kind: e.target.value as ChangeKind })}>
+                          {KINDS.map((k) => <option key={k} value={k}>{k}</option>)}
+                        </Select>
+                      </Field>
+                      <Field label="Priority">
+                        <Select value={p.priority} onChange={(e) => update(p.id, { priority: e.target.value as Priority })}>
+                          {PRIORITIES.map((pr) => <option key={pr} value={pr}>{pr}</option>)}
+                        </Select>
+                      </Field>
+                    </div>
+                  </>
+                ) : (
+                  // Compact read-only view — click anywhere to expand into the edit form.
+                  <button type="button" onClick={() => setEditingId(p.id)} className="block w-full text-left">
+                    <p className="text-sm font-medium text-slate-800 dark:text-slate-100">{p.title.trim() || 'Untitled change order'}</p>
+                    <p className="mt-0.5 text-xs text-slate-400">{p.kind} · {p.priority}</p>
+                  </button>
+                )}
               </div>
-            ))
+              )
+            })
           )}
         </div>
 
