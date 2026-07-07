@@ -286,7 +286,7 @@ export function CaptureAssistView() {
       </div>
       )}
 
-      {effectiveMode === 'freestyle' && <CaptureFreestyle projectId={projectId} agents={agents} />}
+      {effectiveMode === 'freestyle' && <CaptureFreestyle projectId={projectId} agents={agents} zen={inZen} />}
 
       {effectiveMode === 'guided' && !conversationId && resumable.length > 0 && (
         <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-900/60">
