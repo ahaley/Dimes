@@ -34,6 +34,9 @@ const RESUME_TONE: Record<AssistConversationStatus, string> = {
   Closed: 'slate',
 }
 
+// Remember the requester's last guided/freestyle choice so re-entering capture restores it.
+const MODE_KEY = 'dimes.captureAssist.mode'
+
 /**
  * Capture Assist Mode — a full-page (zen) space to grow a loose idea into a change request with the
  * help of an assistant. The assistant can be an AI Agent (ephemeral chat, replayed to the stateless
@@ -68,8 +71,13 @@ export function CaptureAssistView() {
   const isHuman = activeAssistant?.type === 'Human'
 
   // Guided (chat) vs Freestyle (markdown brief → batch of proposals). Freestyle has no persisted
-  // conversation, so resuming one forces guided.
-  const [mode, setMode] = useState<'guided' | 'freestyle'>('guided')
+  // conversation, so resuming one forces guided. Seed from the last remembered choice.
+  const [mode, setMode] = useState<'guided' | 'freestyle'>(() => {
+    try {
+      const saved = localStorage.getItem(MODE_KEY)
+      return saved === 'freestyle' || saved === 'guided' ? saved : 'guided'
+    } catch { return 'guided' }
+  })
   // Zen (focus) mode strips the page chrome so the writer can concentrate on the brief. It only
   // applies to freestyle; `inZen` (below) folds in that gate so guided can never get stuck in zen.
   const [zen, setZen] = useState(false)
@@ -257,7 +265,7 @@ export function CaptureAssistView() {
                 <button
                   key={m}
                   type="button"
-                  onClick={() => setMode(m)}
+                  onClick={() => { setMode(m); try { localStorage.setItem(MODE_KEY, m) } catch { /* non-fatal */ } }}
                   className={cx(
                     'rounded px-3 py-1 text-sm font-medium capitalize transition-colors',
                     effectiveMode === m
