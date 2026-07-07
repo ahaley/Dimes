@@ -272,11 +272,13 @@ export default function App() {
             {/* Capture Assist is an AI-agent feature — blocked for Human-Only projects (guards bookmarks). */}
             <Route
               path="/projects/:projectId/capture"
-              element={currentProject?.humanOnly ? <Navigate to={`/projects/${projectId}`} replace /> : <CaptureAssistView />}
+              // key on projectId so switching projects in place (back/forward, edited URL) remounts and
+              // re-reads that project's persisted freestyle draft/mode instead of carrying the old one over.
+              element={currentProject?.humanOnly ? <Navigate to={`/projects/${projectId}`} replace /> : <CaptureAssistView key={projectId} />}
             />
             <Route
               path="/projects/:projectId/capture/:conversationId"
-              element={currentProject?.humanOnly ? <Navigate to={`/projects/${projectId}`} replace /> : <CaptureAssistView />}
+              element={currentProject?.humanOnly ? <Navigate to={`/projects/${projectId}`} replace /> : <CaptureAssistView key={projectId} />}
             />
             <Route path="/projects/:projectId/assist/:conversationId" element={<AssistConversationView />} />
             <Route
