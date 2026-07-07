@@ -81,6 +81,31 @@ public sealed class ChangeRequestBatchServiceTests : IDisposable
         Assert.Equal(0, await _db.ChangeRequests.CountAsync()); // atomic: nothing persisted
     }
 
+    [Fact]
+    public async Task CreateMany_WithObservationDrivenKind_RejectsWholeBatch_AndWritesNothing()
+    {
+        var (projectId, actorId) = await SeedAsync();
+
+        await Assert.ThrowsAsync<BadRequestException>(() => _changes.CreateManyAsync(projectId, actorId,
+        [
+            new CreateChangeRequest("Valid", null, ChangeKind.Feature, Priority.None),
+            new CreateChangeRequest("Sneaky", null, ChangeKind.ObservationDriven, Priority.None),
+        ]));
+
+        Assert.Equal(0, await _db.ChangeRequests.CountAsync()); // manual ObservationDriven is provenance-only
+    }
+
+    [Fact]
+    public async Task Create_WithObservationDrivenKind_IsRejected()
+    {
+        var (projectId, actorId) = await SeedAsync();
+
+        await Assert.ThrowsAsync<BadRequestException>(() => _changes.CreateAsync(projectId, actorId,
+            new CreateChangeRequest("Manual signal", null, ChangeKind.ObservationDriven, Priority.None)));
+
+        Assert.Equal(0, await _db.ChangeRequests.CountAsync());
+    }
+
     public void Dispose()
     {
         _db.Dispose();

@@ -8,7 +8,8 @@ import { Badge, Button, cx, ErrorText, Field, Select, TextInput, Textarea } from
 import { useToast } from '../components/Toast'
 import { kindTone } from '../lifecycle'
 
-const KINDS: ChangeKind[] = ['Feature', 'Problem', 'ObservationDriven', 'Epic', 'Chore']
+// Observation-driven is provenance-only (applied by promotion), so it's not a manually selectable kind.
+const KINDS: ChangeKind[] = ['Feature', 'Problem', 'Epic', 'Chore']
 const PRIORITIES: Priority[] = ['None', 'Low', 'Medium', 'High', 'Critical']
 const DEBOUNCE_MS = 1200
 const MIN_MARKDOWN = 8 // skip generation until the brief has some substance

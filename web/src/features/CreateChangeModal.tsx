@@ -49,10 +49,11 @@ export function CreateChangeModal({
         </Field>
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
           <Field label="Kind">
+            {/* Observation-driven is omitted on purpose: that kind is applied only when promoting an
+                observation, never chosen manually (the API rejects it on create). */}
             <Select value={kind} onChange={(e) => setKind(e.target.value as ChangeKind)}>
               <option value="Feature">Feature</option>
               <option value="Problem">Problem</option>
-              <option value="ObservationDriven">Observation-driven</option>
               <option value="Epic">Epic</option>
               <option value="Chore">Chore</option>
             </Select>

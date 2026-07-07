@@ -21,6 +21,14 @@ public class ChangeRequestService(
             throw new BadRequestException("Title is required.");
         }
 
+        // ObservationDriven is a provenance stamp applied only by promotion (ObservationService.PromoteAsync),
+        // where it's kept in lockstep with the evidence link. It can't be chosen on a manual create.
+        if (req.Kind == ChangeKind.ObservationDriven)
+        {
+            throw new BadRequestException(
+                "Observation-driven is set only when promoting an observation; it can't be chosen manually.");
+        }
+
         var (actor, role) = await members.ResolveAsync(projectId, actorId, ct);
 
         // An optional recipient at creation: only a Contributor+ may direct work, and the target must be
@@ -81,6 +89,12 @@ public class ChangeRequestService(
         if (reqs.Any(r => string.IsNullOrWhiteSpace(r.Title)))
         {
             throw new BadRequestException("Every change must have a title.");
+        }
+        // ObservationDriven is applied only by promotion; a manual/Freestyle batch can't declare it.
+        if (reqs.Any(r => r.Kind == ChangeKind.ObservationDriven))
+        {
+            throw new BadRequestException(
+                "Observation-driven is set only when promoting an observation; it can't be chosen manually.");
         }
 
         var (actor, _) = await members.ResolveAsync(projectId, actorId, ct);

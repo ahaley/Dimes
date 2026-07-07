@@ -161,6 +161,22 @@ public sealed class CaptureAssistServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task GenerateProposals_CoercesObservationDrivenToFeature()
+    {
+        // ObservationDriven is provenance-only (applied by promotion). If the model still emits it, the
+        // proposal must land as Feature so a Freestyle batch-create doesn't trip the manual-create guard.
+        var stub = new StubLlm(LlmProviderType.Anthropic,
+            """[{"title":"From a signal","kind":"ObservationDriven","priority":"Low"}]""");
+        var projectId = await SeedAgentAsync(stub);
+
+        var reply = await Service(stub).GenerateProposalsAsync(projectId,
+            new GenerateProposalsRequest(_lastAgentId, "Some brief."));
+
+        var p = Assert.Single(reply.Proposals);
+        Assert.Equal(ChangeKind.Feature, p.Kind);
+    }
+
+    [Fact]
     public async Task GenerateProposals_MalformedJson_ReturnsEmpty()
     {
         var stub = new StubLlm(LlmProviderType.Anthropic, "I couldn't find anything actionable, sorry.");
