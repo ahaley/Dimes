@@ -125,6 +125,57 @@ public sealed class EpicCompositionServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task UpdateDetails_ChangesKind_Persists()
+    {
+        var (projectId, actorId) = await SeedAsync(MemberRole.Maintainer);
+        var change = await NewChangeAsync(projectId, actorId, ChangeKind.Feature, "Work");
+
+        var updated = await _changes.UpdateDetailsAsync(
+            change.Id, actorId, new UpdateChangeDetailsRequest("Work", null, ChangeKind.Chore, Priority.None));
+
+        Assert.Equal(ChangeKind.Chore, updated.Kind);
+        Assert.Equal(1, await _db.AuditEvents.CountAsync(e => e.Action == "DetailsEdited" && e.EntityId == change.Id));
+    }
+
+    [Fact]
+    public async Task UpdateDetails_EmptyEpic_CanBecomeNonEpic()
+    {
+        var (projectId, actorId) = await SeedAsync(MemberRole.Maintainer);
+        var epic = await NewChangeAsync(projectId, actorId, ChangeKind.Epic, "Empty epic");
+
+        var updated = await _changes.UpdateDetailsAsync(
+            epic.Id, actorId, new UpdateChangeDetailsRequest("Empty epic", null, ChangeKind.Feature, Priority.None));
+
+        Assert.Equal(ChangeKind.Feature, updated.Kind);
+    }
+
+    [Fact]
+    public async Task UpdateDetails_EpicWithChildren_ToNonEpic_IsRejected()
+    {
+        var (projectId, actorId) = await SeedAsync(MemberRole.Maintainer);
+        var epic = await NewChangeAsync(projectId, actorId, ChangeKind.Epic, "Epic");
+        var child = await NewChangeAsync(projectId, actorId, ChangeKind.Feature, "Child");
+        await _changes.AddChildAsync(epic.Id, actorId, child.Id);
+
+        await Assert.ThrowsAsync<BadRequestException>(() => _changes.UpdateDetailsAsync(
+            epic.Id, actorId, new UpdateChangeDetailsRequest("Epic", null, ChangeKind.Feature, Priority.None)));
+        Assert.Equal(ChangeKind.Epic, (await _db.ChangeRequests.FindAsync(epic.Id))!.Kind);
+    }
+
+    [Fact]
+    public async Task UpdateDetails_ComposedChild_ToEpic_IsRejected()
+    {
+        var (projectId, actorId) = await SeedAsync(MemberRole.Maintainer);
+        var epic = await NewChangeAsync(projectId, actorId, ChangeKind.Epic, "Epic");
+        var child = await NewChangeAsync(projectId, actorId, ChangeKind.Feature, "Child");
+        await _changes.AddChildAsync(epic.Id, actorId, child.Id);
+
+        await Assert.ThrowsAsync<BadRequestException>(() => _changes.UpdateDetailsAsync(
+            child.Id, actorId, new UpdateChangeDetailsRequest("Child", null, ChangeKind.Epic, Priority.None)));
+        Assert.Equal(ChangeKind.Feature, (await _db.ChangeRequests.FindAsync(child.Id))!.Kind);
+    }
+
+    [Fact]
     public async Task AddChild_BelowContributor_IsForbidden()
     {
         var (projectId, actorId) = await SeedAsync(MemberRole.Reporter);

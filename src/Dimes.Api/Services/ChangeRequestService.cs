@@ -140,8 +140,27 @@ public class ChangeRequestService(
             throw new BadRequestException("Title is required.");
         }
 
+        // Kind is editable post-create, but changing it can't be allowed to break Epic composition:
+        // an Epic that still composes children can't stop being an Epic, and a change already composed
+        // inside an Epic can't itself become one (an Epic can't nest in an Epic — see AddChildAsync).
+        if (req.Kind != change.Kind)
+        {
+            if (change.Kind == ChangeKind.Epic
+                && await db.ChangeRequests.AnyAsync(c => c.ParentChangeRequestId == change.Id, ct))
+            {
+                throw new BadRequestException(
+                    "This Epic composes child change requests; remove them before changing its kind.");
+            }
+            if (req.Kind == ChangeKind.Epic && change.ParentChangeRequestId is not null)
+            {
+                throw new BadRequestException(
+                    "A change composed in an Epic cannot itself become an Epic; remove it from its Epic first.");
+            }
+        }
+
         change.Title = req.Title.Trim();
         change.Description = req.Description;
+        change.Kind = req.Kind;
         change.Priority = req.Priority;
         change.UpdatedAt = DateTimeOffset.UtcNow;
 

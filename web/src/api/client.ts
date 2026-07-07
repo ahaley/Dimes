@@ -150,7 +150,7 @@ export const api = {
     request<ProjectAssignmentCount[]>('GET', '/api/me/assignment-counts'),
   updateChangeDetails: (
     id: string,
-    body: { title: string; description?: string | null; priority: Priority },
+    body: { title: string; description?: string | null; kind: ChangeKind; priority: Priority },
   ) => request<ChangeRequest>('PATCH', `/api/changes/${id}`, body),
   assignChange: (id: string, body: { assigneeActorId?: string | null }) =>
     request<ChangeRequest>('PATCH', `/api/changes/${id}/assignee`, body),
