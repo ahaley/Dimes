@@ -5,6 +5,7 @@ import { useAddEpicChild, useAudit, useChangeDetail, useChanges, useProjectInval
 import type { ChangeKind, ChangeStatus, Member, Priority } from '../api/types'
 import { ALLOWED_TRANSITIONS, STATUS_TONE, kindTone } from '../lifecycle'
 import { Badge, Button, ErrorText, Field, Modal, Select, TextInput, Textarea } from '../components/ui'
+import { Linkify } from '../components/Linkify'
 import { useToast } from '../components/Toast'
 
 const PRIORITIES: Priority[] = ['None', 'Low', 'Medium', 'High', 'Critical']
@@ -177,7 +178,7 @@ export function ChangeDetailBody({
               </div>
             </div>
           ) : detail.change.description ? (
-            <p className="text-sm text-slate-600 dark:text-slate-300">{detail.change.description}</p>
+            <p className="whitespace-pre-wrap text-sm text-slate-600 dark:text-slate-300"><Linkify text={detail.change.description} /></p>
           ) : (
             canEdit && <p className="text-sm italic text-slate-400">No description — click Edit to add one.</p>
           )}
@@ -235,7 +236,7 @@ export function ChangeDetailBody({
                         </div>
                         <p className="text-sm font-medium text-slate-800 dark:text-slate-100">{c.title}</p>
                         {c.description && (
-                          <p className="line-clamp-3 whitespace-pre-wrap text-xs text-slate-500 dark:text-slate-400">{c.description}</p>
+                          <p className="line-clamp-3 whitespace-pre-wrap text-xs text-slate-500 dark:text-slate-400"><Linkify text={c.description} /></p>
                         )}
                       </div>
                       {canAssign && (
@@ -300,7 +301,7 @@ export function ChangeDetailBody({
                       {c.kind === 'AgentRecommendation' ? 'agent' : 'human'}
                     </Badge>
                   </div>
-                  <p className="whitespace-pre-wrap text-sm text-slate-700 dark:text-slate-200">{c.body}</p>
+                  <p className="whitespace-pre-wrap text-sm text-slate-700 dark:text-slate-200"><Linkify text={c.body} /></p>
                 </li>
               ))}
               {detail.comments.length === 0 && <li className="text-sm text-slate-400">No comments yet.</li>}
