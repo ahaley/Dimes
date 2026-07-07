@@ -155,12 +155,24 @@ export function ChangeDetailBody({
               </Field>
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 <Field label="Kind">
-                  <Select value={eKind} onChange={(e) => setEKind(e.target.value as ChangeKind)}>
-                    <option value="Feature">Feature</option>
-                    <option value="Problem">Problem</option>
-                    <option value="ObservationDriven">Observation-driven</option>
-                    <option value="Epic">Epic</option>
-                    <option value="Chore">Chore</option>
+                  {/* Observation-driven provenance is immutable (backend enforces it): a promoted change
+                      stays observation-driven and no other kind can adopt it, so lock this row for such a
+                      change and omit the option otherwise. */}
+                  <Select
+                    value={eKind}
+                    disabled={detail.change.kind === 'ObservationDriven'}
+                    onChange={(e) => setEKind(e.target.value as ChangeKind)}
+                  >
+                    {detail.change.kind === 'ObservationDriven' ? (
+                      <option value="ObservationDriven">Observation-driven</option>
+                    ) : (
+                      <>
+                        <option value="Feature">Feature</option>
+                        <option value="Problem">Problem</option>
+                        <option value="Epic">Epic</option>
+                        <option value="Chore">Chore</option>
+                      </>
+                    )}
                   </Select>
                 </Field>
                 <Field label="Priority">

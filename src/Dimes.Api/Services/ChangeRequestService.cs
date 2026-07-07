@@ -145,6 +145,14 @@ public class ChangeRequestService(
         // inside an Epic can't itself become one (an Epic can't nest in an Epic — see AddChildAsync).
         if (req.Kind != change.Kind)
         {
+            // ObservationDriven is a provenance stamp set when a change is promoted from an observation
+            // (see ObservationService.PromoteAsync); it must stay in lockstep with the evidence link, so
+            // it can neither be added to nor stripped from a change after creation.
+            if (req.Kind == ChangeKind.ObservationDriven || change.Kind == ChangeKind.ObservationDriven)
+            {
+                throw new BadRequestException(
+                    "A change's observation-driven provenance can't be changed after creation.");
+            }
             if (change.Kind == ChangeKind.Epic
                 && await db.ChangeRequests.AnyAsync(c => c.ParentChangeRequestId == change.Id, ct))
             {

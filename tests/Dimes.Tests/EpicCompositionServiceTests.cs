@@ -176,6 +176,24 @@ public sealed class EpicCompositionServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task UpdateDetails_ObservationDrivenProvenance_IsImmutable()
+    {
+        var (projectId, actorId) = await SeedAsync(MemberRole.Maintainer);
+
+        // Can't strip observation-driven provenance off a promoted change...
+        var promoted = await NewChangeAsync(projectId, actorId, ChangeKind.ObservationDriven, "From signal");
+        await Assert.ThrowsAsync<BadRequestException>(() => _changes.UpdateDetailsAsync(
+            promoted.Id, actorId, new UpdateChangeDetailsRequest("From signal", null, ChangeKind.Feature, Priority.None)));
+        Assert.Equal(ChangeKind.ObservationDriven, (await _db.ChangeRequests.FindAsync(promoted.Id))!.Kind);
+
+        // ...and an ordinary change can't fabricate it.
+        var ordinary = await NewChangeAsync(projectId, actorId, ChangeKind.Feature, "Ordinary");
+        await Assert.ThrowsAsync<BadRequestException>(() => _changes.UpdateDetailsAsync(
+            ordinary.Id, actorId, new UpdateChangeDetailsRequest("Ordinary", null, ChangeKind.ObservationDriven, Priority.None)));
+        Assert.Equal(ChangeKind.Feature, (await _db.ChangeRequests.FindAsync(ordinary.Id))!.Kind);
+    }
+
+    [Fact]
     public async Task AddChild_BelowContributor_IsForbidden()
     {
         var (projectId, actorId) = await SeedAsync(MemberRole.Reporter);
