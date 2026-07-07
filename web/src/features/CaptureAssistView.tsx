@@ -341,10 +341,10 @@ export function CaptureAssistView() {
           </Field>
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             <Field label="Kind">
+              {/* Observation-driven is set only by promoting an observation, never picked manually. */}
               <Select value={kind} onChange={(e) => setKind(e.target.value as ChangeKind)}>
                 <option value="Feature">Feature</option>
                 <option value="Problem">Problem</option>
-                <option value="ObservationDriven">Observation-driven</option>
               </Select>
             </Field>
             <Field label="Priority">

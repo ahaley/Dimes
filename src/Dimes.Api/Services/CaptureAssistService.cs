@@ -111,7 +111,7 @@ public class CaptureAssistService(
         "markdown brief. Decompose it into a list of discrete, well-scoped change requests. Respond with " +
         "ONLY a JSON array — no prose, no markdown code fences. Each element is an object with exactly " +
         "these keys: \"title\" (string, concise and imperative), \"description\" (string, one or two " +
-        "sentences; may be empty), \"kind\" (one of \"Feature\", \"Problem\", \"ObservationDriven\"), " +
+        "sentences; may be empty), \"kind\" (one of \"Feature\", \"Problem\"), " +
         "\"priority\" (one of \"None\", \"Low\", \"Medium\", \"High\", \"Critical\"). If the brief implies " +
         "no actionable changes, return []. Do not include any text before or after the array.";
 
@@ -183,7 +183,10 @@ public class CaptureAssistService(
             {
                 continue; // a proposal with no title isn't actionable
             }
-            var kind = Enum.TryParse<ChangeKind>(p.Kind, ignoreCase: true, out var k) ? k : ChangeKind.Feature;
+            // ObservationDriven is provenance-only (set by promotion), never a proposable kind — coerce any
+            // stray value the model emits to Feature so a Freestyle batch never trips the manual-create guard.
+            var kind = Enum.TryParse<ChangeKind>(p.Kind, ignoreCase: true, out var k) && k != ChangeKind.ObservationDriven
+                ? k : ChangeKind.Feature;
             var priority = Enum.TryParse<Priority>(p.Priority, ignoreCase: true, out var pr) ? pr : Priority.None;
             var description = string.IsNullOrWhiteSpace(p.Description) ? null : p.Description.Trim();
             proposals.Add(new CaptureProposalDto(p.Title.Trim(), description, kind, priority));

@@ -180,8 +180,14 @@ public sealed class EpicCompositionServiceTests : IDisposable
     {
         var (projectId, actorId) = await SeedAsync(MemberRole.Maintainer);
 
+        // Seed the promoted change directly — CreateAsync now refuses a manual ObservationDriven, and
+        // promotion (ObservationService) is the only legitimate producer of this kind.
+        var promoted = new Dimes.Domain.Entities.ChangeRequest
+        { ProjectId = projectId, Title = "From signal", Kind = ChangeKind.ObservationDriven, CreatedByActorId = actorId, Number = 100 };
+        _db.ChangeRequests.Add(promoted);
+        await _db.SaveChangesAsync();
+
         // Can't strip observation-driven provenance off a promoted change...
-        var promoted = await NewChangeAsync(projectId, actorId, ChangeKind.ObservationDriven, "From signal");
         await Assert.ThrowsAsync<BadRequestException>(() => _changes.UpdateDetailsAsync(
             promoted.Id, actorId, new UpdateChangeDetailsRequest("From signal", null, ChangeKind.Feature, Priority.None)));
         Assert.Equal(ChangeKind.ObservationDriven, (await _db.ChangeRequests.FindAsync(promoted.Id))!.Kind);
