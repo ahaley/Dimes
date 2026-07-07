@@ -4,8 +4,9 @@ import { useNavigate } from 'react-router-dom'
 import { api } from '../api/client'
 import { useProjectInvalidator } from '../api/hooks'
 import type { ChangeKind, Member, Priority } from '../api/types'
-import { Button, cx, ErrorText, Field, Select, TextInput, Textarea } from '../components/ui'
+import { Badge, Button, cx, ErrorText, Field, Select, TextInput, Textarea } from '../components/ui'
 import { useToast } from '../components/Toast'
+import { kindTone } from '../lifecycle'
 
 const KINDS: ChangeKind[] = ['Feature', 'Problem', 'ObservationDriven', 'Epic', 'Chore']
 const PRIORITIES: Priority[] = ['None', 'Low', 'Medium', 'High', 'Critical']
@@ -255,10 +256,19 @@ export function CaptureFreestyle({ projectId, agents, zen = false }: { projectId
                     </div>
                   </>
                 ) : (
-                  // Compact read-only view — click anywhere to expand into the edit form.
-                  <button type="button" onClick={() => setEditingId(p.id)} className="block w-full text-left">
-                    <p className="text-sm font-medium text-slate-800 dark:text-slate-100">{p.title.trim() || 'Untitled change order'}</p>
-                    <p className="mt-0.5 text-xs text-slate-400">{p.kind} · {p.priority}</p>
+                  // Compact read-only view — a clean read of the proposal; click anywhere to expand into
+                  // the edit form. Fields are presented as badges + a preview rather than live inputs.
+                  <button type="button" onClick={() => setEditingId(p.id)} className="block w-full space-y-1.5 text-left">
+                    <p className={cx('text-sm font-medium leading-snug', p.title.trim() ? 'text-slate-800 dark:text-slate-100' : 'italic text-slate-400')}>
+                      {p.title.trim() || 'Untitled change order'}
+                    </p>
+                    {p.description.trim() && (
+                      <p className="line-clamp-2 whitespace-pre-wrap text-xs text-slate-500 dark:text-slate-400">{p.description}</p>
+                    )}
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <Badge tone={kindTone(p.kind)}>{p.kind}</Badge>
+                      {p.priority !== 'None' && <Badge tone="amber">{p.priority}</Badge>}
+                    </div>
                   </button>
                 )}
               </div>
