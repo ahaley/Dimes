@@ -12,6 +12,11 @@ const PRIORITIES: Priority[] = ['None', 'Low', 'Medium', 'High', 'Critical']
 const DEBOUNCE_MS = 1200
 const MIN_MARKDOWN = 8 // skip generation until the brief has some substance
 
+// The freestyle brief lives only in local component state and is never persisted server-side until the
+// user confirms the batch. Stash it in localStorage (per project) so navigating away — a route change,
+// a mode switch, or a full reload — and coming back restores the in-progress brief instead of losing it.
+const freestyleDraftKey = (projectId: string) => `dimes.captureAssist.freestyle.${projectId}`
+
 // Client-only editable proposal. `id` is a stable React key; it is never sent to the create endpoint.
 type Proposal = { id: string; title: string; description: string; kind: ChangeKind; priority: Priority }
 
@@ -32,7 +37,10 @@ export function CaptureFreestyle({ projectId, agents }: { projectId: string; age
   const [agentId, setAgentId] = useState('')
   const activeAgentId = agentId || defaultAgentId
 
-  const [markdown, setMarkdown] = useState('')
+  const draftKey = freestyleDraftKey(projectId)
+  const [markdown, setMarkdown] = useState(() => {
+    try { return localStorage.getItem(draftKey) ?? '' } catch { return '' }
+  })
   const [proposals, setProposals] = useState<Proposal[]>([])
   const [auto, setAuto] = useState(false)
   // Once the user hand-edits the proposals, freeze auto-generation so it never clobbers their work —
@@ -72,6 +80,23 @@ export function CaptureFreestyle({ projectId, agents }: { projectId: string; age
     // runGenerate reads refs/mutation state; markdown/auto/dirty are the meaningful triggers.
   }, [markdown, auto, dirty]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Persist the brief so leaving and returning (or reloading) restores it. Empty briefs clear the key.
+  useEffect(() => {
+    try {
+      if (markdown) localStorage.setItem(draftKey, markdown)
+      else localStorage.removeItem(draftKey)
+    } catch { /* storage unavailable — non-fatal */ }
+  }, [markdown, draftKey])
+
+  // Belt-and-suspenders for the one exit we can't restore from cleanly: a hard tab close/reload while
+  // the brief has unsaved substance prompts the browser's leave-confirmation.
+  useEffect(() => {
+    if (!markdown.trim()) return
+    const onBeforeUnload = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = '' }
+    window.addEventListener('beforeunload', onBeforeUnload)
+    return () => window.removeEventListener('beforeunload', onBeforeUnload)
+  }, [markdown])
+
   const update = (id: string, patch: Partial<Proposal>) => {
     setProposals((ps) => ps.map((p) => (p.id === id ? { ...p, ...patch } : p)))
     setDirty(true)
@@ -100,6 +125,8 @@ export function CaptureFreestyle({ projectId, agents }: { projectId: string; age
           })),
       }),
     onSuccess: (created) => {
+      // The brief has done its job — drop the persisted draft so it doesn't resurrect on return.
+      try { localStorage.removeItem(draftKey) } catch { /* non-fatal */ }
       invalidate()
       toast.success(`${created.length} change request${created.length === 1 ? '' : 's'} captured`)
       navigate(`/projects/${projectId}`)
