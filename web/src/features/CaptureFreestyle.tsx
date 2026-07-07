@@ -43,6 +43,9 @@ export function CaptureFreestyle({ projectId, agents, zen = false }: { projectId
     try { return localStorage.getItem(draftKey) ?? '' } catch { return '' }
   })
   const [proposals, setProposals] = useState<Proposal[]>([])
+  // Which proposal is expanded into its full edit form; null means every card is compact. Editing one at
+  // a time keeps the list scannable — the compact default is the read-only presentation.
+  const [editingId, setEditingId] = useState<string | null>(null)
   const [auto, setAuto] = useState(false)
   // Once the user hand-edits the proposals, freeze auto-generation so it never clobbers their work —
   // they must press Regenerate to refresh from the brief.
@@ -60,6 +63,8 @@ export function CaptureFreestyle({ projectId, agents, zen = false }: { projectId
         kind: p.kind,
         priority: p.priority,
       })))
+      // The prior proposals (and any open editor) are gone — collapse so editingId can't dangle.
+      setEditingId(null)
       setDirty(false)
     },
   })
@@ -97,10 +102,6 @@ export function CaptureFreestyle({ projectId, agents, zen = false }: { projectId
     window.addEventListener('beforeunload', onBeforeUnload)
     return () => window.removeEventListener('beforeunload', onBeforeUnload)
   }, [markdown])
-
-  // Which proposal is expanded into its full edit form; null means every card is compact. Editing one at
-  // a time keeps the list scannable — the compact default is the read-only presentation.
-  const [editingId, setEditingId] = useState<string | null>(null)
 
   const update = (id: string, patch: Partial<Proposal>) => {
     setProposals((ps) => ps.map((p) => (p.id === id ? { ...p, ...patch } : p)))
