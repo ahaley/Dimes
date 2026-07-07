@@ -281,7 +281,9 @@ export function CaptureFreestyle({ projectId, projectName, agents, zen = false, 
                         {p.title.trim() || 'Untitled change order'}
                       </p>
                       {p.description.trim() && (
-                        <p className="line-clamp-2 whitespace-pre-wrap text-[11px] leading-snug text-slate-500 dark:text-slate-400">{p.description}</p>
+                        // text-xs + normal leading + one contrast step over the old 11px slate-400 —
+                        // the preview stays compact but reads comfortably, especially in dark mode.
+                        <p className="line-clamp-2 whitespace-pre-wrap text-xs leading-normal text-slate-600 dark:text-slate-300">{p.description}</p>
                       )}
                       <div className="flex flex-wrap items-center gap-1">
                         <Badge tone={kindTone(p.kind)}>{p.kind}</Badge>
