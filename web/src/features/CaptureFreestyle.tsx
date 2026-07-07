@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { api } from '../api/client'
 import { useProjectInvalidator } from '../api/hooks'
 import type { ChangeKind, Member, Priority } from '../api/types'
-import { Button, ErrorText, Field, Select, TextInput, Textarea } from '../components/ui'
+import { Button, cx, ErrorText, Field, Select, TextInput, Textarea } from '../components/ui'
 import { useToast } from '../components/Toast'
 
 const KINDS: ChangeKind[] = ['Feature', 'Problem', 'ObservationDriven', 'Epic', 'Chore']
@@ -27,7 +27,7 @@ type Proposal = { id: string; title: string; description: string; kind: ChangeKi
  * Auto toggle — automatically a short while after they stop typing. Confirming creates them all in the
  * Captured state in one batch. Recommend-only: nothing is created until the user confirms.
  */
-export function CaptureFreestyle({ projectId, agents }: { projectId: string; agents: Member[] }) {
+export function CaptureFreestyle({ projectId, agents, zen = false }: { projectId: string; agents: Member[]; zen?: boolean }) {
   const navigate = useNavigate()
   const toast = useToast()
   const invalidate = useProjectInvalidator(projectId)
@@ -137,29 +137,39 @@ export function CaptureFreestyle({ projectId, agents }: { projectId: string; age
   const noAgent = !activeAgentId
 
   return (
-    <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-2">
+    // Zen collapses to a single, centered writing column — the brief is all that remains; exit focus to
+    // review proposals and create. Non-zen keeps the two-column brief + proposals workspace.
+    <div className={cx('grid min-h-0 flex-1 gap-4', zen ? 'grid-cols-1' : 'lg:grid-cols-2')}>
       {/* Markdown brief */}
-      <div className="flex min-h-0 flex-col gap-3 rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">Brief</span>
-          {agents.length > 1 && (
-            <Select
-              value={activeAgentId}
-              className="ml-auto max-w-56"
-              onChange={(e) => setAgentId(e.target.value)}
-            >
-              {agents.map((a) => (
-                <option key={a.actorId} value={a.actorId}>{a.displayName} · AI</option>
-              ))}
-            </Select>
-          )}
-        </div>
+      <div
+        className={cx(
+          'flex min-h-0 flex-col gap-3 rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900',
+          zen && 'mx-auto w-full max-w-3xl',
+        )}
+      >
+        {!zen && (
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">Brief</span>
+            {agents.length > 1 && (
+              <Select
+                value={activeAgentId}
+                className="ml-auto max-w-56"
+                onChange={(e) => setAgentId(e.target.value)}
+              >
+                {agents.map((a) => (
+                  <option key={a.actorId} value={a.actorId}>{a.displayName} · AI</option>
+                ))}
+              </Select>
+            )}
+          </div>
+        )}
         <Textarea
           value={markdown}
           onChange={(e) => setMarkdown(e.target.value)}
           placeholder={'Write a freeform markdown brief…\n\n## Add CSV export\nLet users download the board as CSV.\n\n## Fix slow inbox\nThe inbox takes seconds to load with many observations.'}
-          className="min-h-0 flex-1 resize-none font-mono text-[13px] leading-relaxed"
+          className={cx('min-h-0 flex-1 resize-none font-mono leading-relaxed', zen ? 'text-sm sm:text-[15px]' : 'text-[13px]')}
         />
+        {!zen && (<>
         <div className="flex items-center gap-3">
           <Button
             variant="default"
@@ -181,9 +191,11 @@ export function CaptureFreestyle({ projectId, agents }: { projectId: string; age
           <p className="text-sm text-slate-400">Add an Agent member (with an LLM provider) via Manage project to generate proposals.</p>
         )}
         <ErrorText error={generate.error} />
+        </>)}
       </div>
 
-      {/* Proposed change orders */}
+      {/* Proposed change orders — hidden in focus mode; exit focus to review and create. */}
+      {!zen && (
       <div className="flex min-h-0 flex-col rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
         <div className="flex items-center gap-2 border-b border-slate-200 px-4 py-2.5 dark:border-slate-800">
           <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">Proposed change orders</span>
@@ -242,6 +254,7 @@ export function CaptureFreestyle({ projectId, agents }: { projectId: string; age
           </Button>
         </div>
       </div>
+      )}
     </div>
   )
 }
