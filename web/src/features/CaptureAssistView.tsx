@@ -9,6 +9,7 @@ import {
   useMembers,
   useMyAssistConversations,
   useProjectInvalidator,
+  useProjects,
 } from '../api/hooks'
 import type { AssistConversationStatus, ChangeKind, ChatTurn, Member, Priority } from '../api/types'
 import { Badge, Button, cx, ErrorText, Field, Select, TextInput, Textarea } from '../components/ui'
@@ -53,6 +54,9 @@ export function CaptureAssistView() {
   const { data: me } = useMe()
 
   const { data: members } = useMembers(projectId)
+  // Cache hit — the app shell already fetches the project list. Used for the focus-workbench label.
+  const { data: projects } = useProjects()
+  const projectName = projects?.find((p) => p.id === projectId)?.name
   // Candidate assistants: everyone but yourself. Agents drive the AI chat; eligible humans (Contributor+)
   // open a persisted conversation.
   const candidates = useMemo(
@@ -290,7 +294,13 @@ export function CaptureAssistView() {
       )}
 
       {effectiveMode === 'freestyle' && (
-        <CaptureFreestyle projectId={projectId} agents={agents} zen={inZen} onExitZen={() => setZen(false)} />
+        <CaptureFreestyle
+          projectId={projectId}
+          projectName={projectName}
+          agents={agents}
+          zen={inZen}
+          onExitZen={() => setZen(false)}
+        />
       )}
 
       {effectiveMode === 'guided' && !conversationId && resumable.length > 0 && (

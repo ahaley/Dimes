@@ -29,8 +29,8 @@ type Proposal = { id: string; title: string; description: string; kind: ChangeKi
  * Auto toggle — automatically a short while after they stop typing. Confirming creates them all in the
  * Captured state in one batch. Recommend-only: nothing is created until the user confirms.
  */
-export function CaptureFreestyle({ projectId, agents, zen = false, onExitZen }: {
-  projectId: string; agents: Member[]; zen?: boolean; onExitZen?: () => void
+export function CaptureFreestyle({ projectId, projectName, agents, zen = false, onExitZen }: {
+  projectId: string; projectName?: string; agents: Member[]; zen?: boolean; onExitZen?: () => void
 }) {
   const navigate = useNavigate()
   const toast = useToast()
@@ -165,7 +165,10 @@ export function CaptureFreestyle({ projectId, agents, zen = false, onExitZen }: 
     >
       {zen && (
         <div className="col-span-full flex items-center justify-between">
-          <span className="text-xs font-medium uppercase tracking-wide text-slate-400">Focus · Capture Assist</span>
+          {/* Name the project so the writer always knows whose backlog they're feeding. */}
+          <span className="text-xs font-medium uppercase tracking-wide text-slate-400">
+            Focus · Capture Assist{projectName ? <> · <span className="text-slate-500 dark:text-slate-300">{projectName}</span></> : null}
+          </span>
           <Button variant="default" aria-label="Exit focus mode" title="Exit focus mode (Esc)" onClick={onExitZen}>
             Exit focus
           </Button>
