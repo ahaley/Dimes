@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, SelectHTMLAttributes, TextareaHTMLAttributes } from 'react'
+import type { ButtonHTMLAttributes, ComponentProps, InputHTMLAttributes, ReactNode, SelectHTMLAttributes } from 'react'
 
 export function cx(...parts: Array<string | false | null | undefined>): string {
   return parts.filter(Boolean).join(' ')
@@ -64,7 +64,8 @@ export function TextInput(props: InputHTMLAttributes<HTMLInputElement>) {
   return <input {...props} className={cx(inputCx, props.className)} />
 }
 
-export function Textarea(props: TextareaHTMLAttributes<HTMLTextAreaElement>) {
+// ComponentProps (not TextareaHTMLAttributes) so callers can pass a ref — React 19 forwards it as a prop.
+export function Textarea(props: ComponentProps<'textarea'>) {
   return <textarea {...props} className={cx(inputCx, 'min-h-20', props.className)} />
 }
 
