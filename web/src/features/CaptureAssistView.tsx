@@ -70,6 +70,9 @@ export function CaptureAssistView() {
   // Guided (chat) vs Freestyle (markdown brief → batch of proposals). Freestyle has no persisted
   // conversation, so resuming one forces guided.
   const [mode, setMode] = useState<'guided' | 'freestyle'>('guided')
+  // Zen (focus) mode strips the page chrome so the writer can concentrate on the brief. It only
+  // applies to freestyle; `inZen` (below) folds in that gate so guided can never get stuck in zen.
+  const [zen, setZen] = useState(false)
 
   // The draft being shaped.
   const [rough, setRough] = useState('')
@@ -199,6 +202,19 @@ export function CaptureAssistView() {
   const noAssistant = !activeAssistantId
   // Resuming a persisted conversation forces guided (freestyle has nothing to resume).
   const effectiveMode = conversationId ? 'guided' : mode
+  // Zen only bites in freestyle; deriving it here means switching to guided auto-drops zen with no reset.
+  const inZen = effectiveMode === 'freestyle' && zen
+
+  // Keyboard: Esc exits focus mode; Cmd/Ctrl+. toggles it. Only wired while freestyle is active.
+  useEffect(() => {
+    if (effectiveMode !== 'freestyle') return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && zen) setZen(false)
+      else if ((e.metaKey || e.ctrlKey) && e.key === '.') { e.preventDefault(); setZen((z) => !z) }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [effectiveMode, zen])
 
   const footer = (() => {
     if (!isHuman) return aiChat.isPending ? <p className="text-sm text-slate-400">Assistant is thinking…</p> : null
@@ -216,6 +232,14 @@ export function CaptureAssistView() {
 
   return (
     <div className="mx-auto flex h-full max-w-6xl flex-col gap-4">
+      {inZen ? (
+        // Focus mode: the page chrome is gone, so keep one always-visible way back out.
+        <div className="flex justify-end">
+          <Button variant="subtle" aria-label="Exit focus mode" title="Exit focus mode (Esc)" onClick={() => setZen(false)}>
+            Exit focus
+          </Button>
+        </div>
+      ) : (
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-lg font-semibold text-slate-800 dark:text-slate-100">Capture Assist</h1>
@@ -246,9 +270,21 @@ export function CaptureAssistView() {
               ))}
             </div>
           )}
+          {effectiveMode === 'freestyle' && (
+            <Button
+              variant="subtle"
+              aria-pressed={zen}
+              aria-label="Enter focus mode"
+              title="Focus mode — hide distractions (⌘/Ctrl+. or Esc to exit)"
+              onClick={() => setZen(true)}
+            >
+              Focus
+            </Button>
+          )}
           <Button variant="subtle" onClick={() => navigate(`/projects/${projectId}`)}>Exit</Button>
         </div>
       </div>
+      )}
 
       {effectiveMode === 'freestyle' && <CaptureFreestyle projectId={projectId} agents={agents} />}
 
