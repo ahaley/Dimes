@@ -240,14 +240,9 @@ export function CaptureAssistView() {
 
   return (
     <div className="mx-auto flex h-full max-w-6xl flex-col gap-4">
-      {inZen ? (
-        // Focus mode: the page chrome is gone, so keep one always-visible way back out.
-        <div className="flex justify-end">
-          <Button variant="subtle" aria-label="Exit focus mode" title="Exit focus mode (Esc)" onClick={() => setZen(false)}>
-            Exit focus
-          </Button>
-        </div>
-      ) : (
+      {/* Page header — hidden in focus mode; the fullscreen workbench (in CaptureFreestyle) carries
+          its own exit affordance. */}
+      {!inZen && (
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-lg font-semibold text-slate-800 dark:text-slate-100">Capture Assist</h1>
@@ -294,7 +289,9 @@ export function CaptureAssistView() {
       </div>
       )}
 
-      {effectiveMode === 'freestyle' && <CaptureFreestyle projectId={projectId} agents={agents} zen={inZen} />}
+      {effectiveMode === 'freestyle' && (
+        <CaptureFreestyle projectId={projectId} agents={agents} zen={inZen} onExitZen={() => setZen(false)} />
+      )}
 
       {effectiveMode === 'guided' && !conversationId && resumable.length > 0 && (
         <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-900/60">
