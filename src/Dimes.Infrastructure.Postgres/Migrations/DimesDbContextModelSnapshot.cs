@@ -651,6 +651,90 @@ namespace Dimes.Infrastructure.Postgres.Migrations
                     b.ToTable("SystemInstructions");
                 });
 
+            modelBuilder.Entity("Dimes.Domain.Entities.WorkOrder", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("ExportedByActorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("FileName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset?>("LastReportedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("ProjectId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("TokenHash")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ExportedByActorId");
+
+                    b.HasIndex("TokenHash")
+                        .IsUnique();
+
+                    b.HasIndex("ProjectId", "CreatedAt");
+
+                    b.ToTable("WorkOrders");
+                });
+
+            modelBuilder.Entity("Dimes.Domain.Entities.WorkOrderItem", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("BranchName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("ChangeRequestId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ReportNote")
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset?>("ReportedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("TitleSnapshot")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("WorkOrderId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ChangeRequestId");
+
+                    b.HasIndex("WorkOrderId", "ChangeRequestId")
+                        .IsUnique();
+
+                    b.ToTable("WorkOrderItems");
+                });
+
             modelBuilder.Entity("Microsoft.AspNetCore.DataProtection.EntityFrameworkCore.DataProtectionKey", b =>
                 {
                     b.Property<int>("Id")
@@ -927,6 +1011,44 @@ namespace Dimes.Infrastructure.Postgres.Migrations
                     b.Navigation("Project");
                 });
 
+            modelBuilder.Entity("Dimes.Domain.Entities.WorkOrder", b =>
+                {
+                    b.HasOne("Dimes.Domain.Entities.Actor", "ExportedBy")
+                        .WithMany()
+                        .HasForeignKey("ExportedByActorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Dimes.Domain.Entities.Project", "Project")
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("ExportedBy");
+
+                    b.Navigation("Project");
+                });
+
+            modelBuilder.Entity("Dimes.Domain.Entities.WorkOrderItem", b =>
+                {
+                    b.HasOne("Dimes.Domain.Entities.ChangeRequest", "ChangeRequest")
+                        .WithMany()
+                        .HasForeignKey("ChangeRequestId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Dimes.Domain.Entities.WorkOrder", "WorkOrder")
+                        .WithMany("Items")
+                        .HasForeignKey("WorkOrderId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("ChangeRequest");
+
+                    b.Navigation("WorkOrder");
+                });
+
             modelBuilder.Entity("Dimes.Domain.Entities.Actor", b =>
                 {
                     b.Navigation("Memberships");
@@ -964,6 +1086,11 @@ namespace Dimes.Infrastructure.Postgres.Migrations
                     b.Navigation("Observations");
 
                     b.Navigation("SystemInstructions");
+                });
+
+            modelBuilder.Entity("Dimes.Domain.Entities.WorkOrder", b =>
+                {
+                    b.Navigation("Items");
                 });
 #pragma warning restore 612, 618
         }

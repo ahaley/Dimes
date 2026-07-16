@@ -103,12 +103,15 @@ public class ChangeRequestsController(
         return Ok(await changes.GetAuditAsync(id, ct));
     }
 
-    /// <summary>Download a Claude Code work-order markdown of the project's In-Development changes.</summary>
-    [HttpGet("api/projects/{projectId:guid}/export/in-development")]
+    /// <summary>Download a Claude Code work-order markdown of the project's In-Development changes. POST,
+    /// not GET, because this records a <c>WorkOrder</c> and mints the capability token embedded in the file —
+    /// a credential-minting GET would be prefetchable by browsers and proxies.</summary>
+    [HttpPost("api/projects/{projectId:guid}/export/in-development")]
     public async Task<IActionResult> ExportInDevelopment(Guid projectId, CancellationToken ct)
     {
         await projects.EnsureProjectReadAsync(projectId, currentActor.ActorId, currentActor.IsSiteAdmin, ct);
-        var export = await changes.ExportInDevelopmentAsync(projectId, ct);
+        var export = await changes.ExportInDevelopmentAsync(
+            projectId, currentActor.ActorId, $"{Request.Scheme}://{Request.Host}", ct);
         return File(Encoding.UTF8.GetBytes(export.Markdown), "text/markdown", export.FileName);
     }
 

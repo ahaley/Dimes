@@ -343,11 +343,21 @@ public class ChangeRequestService(
     }
 
     /// <summary>Generate a single Claude Code "work order" markdown for a project's In-Development
-    /// change requests: an instruction header plus a numbered, checkboxed section per change.</summary>
-    public async Task<MarkdownExport> ExportInDevelopmentAsync(Guid projectId, CancellationToken ct = default)
+    /// change requests: an instruction header plus a numbered, checkboxed section per change. Records the
+    /// export as a <see cref="WorkOrder"/> and embeds a capability token so the executing agent can report
+    /// its results back (see <c>WorkOrderService.ReportResultsAsync</c>) — which is why this mints a
+    /// credential and must not be reachable by a GET.
+    /// <paramref name="apiBaseUrl"/> is the caller-facing origin (e.g. <c>https://dimes.example</c>) used to
+    /// build the report-back URL; passed in rather than resolved here so the service stays HTTP-free.</summary>
+    public async Task<MarkdownExport> ExportInDevelopmentAsync(
+        Guid projectId, Guid actorId, string? apiBaseUrl, CancellationToken ct = default)
     {
         var project = await db.Projects.FindAsync([projectId], ct)
             ?? throw new NotFoundException($"Project '{projectId}' not found.");
+
+        // The exported token carries this actor's authority, so establish it here — and re-check it on
+        // every report, which is what makes removing a member revoke their outstanding work orders.
+        var (actor, _) = await members.ResolveAsync(projectId, actorId, ct);
 
         // Sort in memory: Priority is persisted as a string, so a DB ORDER BY would sort it
         // alphabetically (e.g. "None" before "High") rather than by severity.
@@ -365,6 +375,36 @@ public class ChangeRequestService(
             .Select(s => s.Content)
             .FirstOrDefaultAsync(ct);
         var guidance = string.IsNullOrWhiteSpace(instruction) ? SystemInstructionDefaults.ExportWorkOrder : instruction;
+
+        // Short UTC timestamp keeps successive downloads from colliding/overwriting in the browser.
+        var stamp = DateTimeOffset.UtcNow.ToString("yyyyMMdd-HHmmss");
+        var fileName = $"{Slug(project.Name)}-in-development-{stamp}.md";
+
+        // Nothing to report on means the token would be pure liability, so mint one only when there's work.
+        WorkOrder? workOrder = null;
+        string? token = null;
+        if (changes.Count > 0)
+        {
+            token = WorkOrderToken.Mint();
+            workOrder = new WorkOrder
+            {
+                ProjectId = projectId,
+                ExportedByActorId = actor.Id,
+                FileName = fileName,
+                TokenHash = WorkOrderToken.Hash(token),
+            };
+            foreach (var c in changes)
+            {
+                workOrder.Items.Add(new WorkOrderItem
+                {
+                    ChangeRequestId = c.Id,
+                    TitleSnapshot = c.Title,
+                    BranchName = BranchName(c),
+                });
+            }
+            db.WorkOrders.Add(workOrder);
+            await db.SaveChangesAsync(ct);
+        }
 
         var sb = new StringBuilder();
         sb.AppendLine($"# Work order — implement In-Development changes ({project.Name})");
@@ -384,24 +424,88 @@ public class ChangeRequestService(
             foreach (var c in changes)
             {
                 var priority = c.Priority == Priority.None ? string.Empty : $" (priority: {c.Priority})";
-                var id8 = c.Id.ToString()[..8];
                 var displayKey = project.Key != null && c.Number is int num ? $"{project.Key}-{num} " : string.Empty;
                 sb.AppendLine($"### {n}. {displayKey}{c.Title}{priority}");
                 sb.AppendLine();
                 sb.AppendLine(string.IsNullOrWhiteSpace(c.Description) ? "_No description provided._" : c.Description);
                 sb.AppendLine();
                 sb.AppendLine($"- Change id: `{c.Id}`");
-                sb.AppendLine($"- Branch: `change/{id8}-{Slug(c.Title)}`");
+                sb.AppendLine($"- Branch: `{BranchName(c)}`");
                 sb.AppendLine("- [ ] Implemented, verified, committed, merged");
                 sb.AppendLine();
                 n++;
             }
         }
 
-        // Short UTC timestamp keeps successive downloads from colliding/overwriting in the browser.
-        var stamp = DateTimeOffset.UtcNow.ToString("yyyyMMdd-HHmmss");
-        return new MarkdownExport($"{Slug(project.Name)}-in-development-{stamp}.md", sb.ToString());
+        if (workOrder is not null && token is not null)
+        {
+            AppendReportBack(sb, workOrder, token, changes[0], apiBaseUrl);
+        }
+
+        return new MarkdownExport(fileName, sb.ToString());
     }
+
+    /// <summary>The deterministic branch name for a change. Both the rendered `Branch:` line and the stored
+    /// <see cref="WorkOrderItem.BranchName"/> come from here, so a report that names a branch matches by
+    /// exact comparison against a string Dimes itself minted — they cannot drift apart.</summary>
+    private static string BranchName(ChangeRequest c) => $"change/{c.Id.ToString()[..8]}-{Slug(c.Title)}";
+
+    /// <summary>The report-back contract, appended to every non-empty export. This lives in the renderer
+    /// rather than the editable <see cref="SystemInstructionDefaults.ExportWorkOrder"/> guidance for three
+    /// reasons: it carries a live per-export secret (the instruction is static text with no templating), it
+    /// is generated per-export in the same way the `Change id:`/`Branch:` lines are generated per-change,
+    /// and — decisively — <c>SystemInstructionBootstrapper</c> seeds each project its own copy of the
+    /// default, so editing the default would never reach a single existing project.</summary>
+    private static void AppendReportBack(
+        StringBuilder sb, WorkOrder workOrder, string token, ChangeRequest sample, string? apiBaseUrl)
+    {
+        var path = $"/api/work-orders/{token}/results";
+        var url = string.IsNullOrWhiteSpace(apiBaseUrl) ? path : $"{apiBaseUrl.TrimEnd('/')}{path}";
+
+        sb.AppendLine("## Report back");
+        sb.AppendLine();
+        sb.AppendLine("When you're done — or blocked — POST your results to Dimes. It attaches your commits");
+        sb.AppendLine("and PRs to each change and prompts a human to move it to In Review. Reporting never");
+        sb.AppendLine("changes a change's status by itself, so nothing is lost by reporting partial work.");
+        sb.AppendLine();
+        sb.AppendLine("> **This URL contains a credential unique to this export. Do not commit this file.**");
+        sb.AppendLine($"> It stops working on {workOrder.ExpiresAt:yyyy-MM-dd}.");
+        sb.AppendLine();
+        if (string.IsNullOrWhiteSpace(apiBaseUrl))
+        {
+            sb.AppendLine("_Prefix the path below with your Dimes origin (e.g. `https://dimes.example`)._");
+            sb.AppendLine();
+        }
+        sb.AppendLine("```bash");
+        sb.AppendLine($"curl -X POST {url} \\");
+        sb.AppendLine("  -H 'Content-Type: application/json' -d '{");
+        sb.AppendLine("  \"summary\": \"Integrated all but one change.\",");
+        sb.AppendLine("  \"commits\": [");
+        sb.AppendLine("    {");
+        sb.AppendLine("      \"sha\": \"a1b2c3d\",");
+        sb.AppendLine($"      \"message\": \"{EscapeJson(sample.Title)}\\n\\nDimes change {sample.Id}\",");
+        sb.AppendLine($"      \"branch\": \"{BranchName(sample)}\",");
+        sb.AppendLine("      \"url\": \"https://github.com/owner/repo/commit/a1b2c3d\"");
+        sb.AppendLine("    }");
+        sb.AppendLine("  ],");
+        sb.AppendLine("  \"pullRequests\": [{ \"url\": \"https://github.com/owner/repo/pull/1\" }],");
+        sb.AppendLine($"  \"blocked\": [{{ \"changeId\": \"{sample.Id}\", \"reason\": \"Needs a product decision.\" }}]");
+        sb.AppendLine("}'");
+        sb.AppendLine("```");
+        sb.AppendLine();
+        sb.AppendLine("- Every field except `sha` and `message` is optional; send only what you have.");
+        sb.AppendLine("- A commit is matched by its `Dimes change <id>` trailer. Without one, its `branch`");
+        sb.AppendLine("  is used as a fallback — so keep the branch names given above.");
+        sb.AppendLine("- A commit `url` becomes a link on the change; a bare `sha` is recorded in the comment.");
+        sb.AppendLine("- Report anything you couldn't finish in `blocked` — that's how a human learns it needs");
+        sb.AppendLine("  them, and it's better than silence.");
+        sb.AppendLine("- Only the changes listed above are accepted; anything else comes back in `ignored`.");
+        sb.AppendLine("- Reporting twice is safe: re-sending the same results changes nothing.");
+        sb.AppendLine();
+    }
+
+    /// <summary>Minimal JSON string escaping for the sample payload embedded in the curl recipe.</summary>
+    private static string EscapeJson(string s) => s.Replace("\\", "\\\\").Replace("\"", "\\\"");
 
     private static string Slug(string name)
     {
@@ -456,8 +560,28 @@ public class ChangeRequestService(
             .OrderBy(c => c.SortOrder)
             .ThenByDescending(c => c.UpdatedAt)
             .ToListAsync(ct);
-        return ordered.Select(c => c.ToDto(projectKey)).ToList();
+
+        var reports = await LatestReportsAsync(projectId, ct);
+        return ordered.Select(c => c.ToDto(projectKey, Report(reports, c.Id))).ToList();
     }
+
+    /// <summary>Each change's most recent work-order report, for the board card's affordance. Resolved in
+    /// memory on purpose: a re-exported change has an item in every order it appeared in, and the
+    /// group-then-take-latest that picks between them is exactly the shape SQLite's provider can't
+    /// translate (compare the in-memory Priority sort above, for the same class of reason).</summary>
+    private async Task<Dictionary<Guid, WorkOrderItem>> LatestReportsAsync(
+        Guid projectId, CancellationToken ct)
+    {
+        var items = await db.WorkOrderItems
+            .Where(i => i.WorkOrder.ProjectId == projectId && i.Status != WorkOrderItemStatus.Pending)
+            .ToListAsync(ct);
+        return items
+            .GroupBy(i => i.ChangeRequestId)
+            .ToDictionary(g => g.Key, g => g.OrderByDescending(i => i.ReportedAt).First());
+    }
+
+    private static WorkOrderItem? Report(Dictionary<Guid, WorkOrderItem> reports, Guid changeId) =>
+        reports.TryGetValue(changeId, out var item) ? item : null;
 
     /// <summary>Per-project counts of the caller's open (non-terminal) assigned change requests, for the
     /// sidebar "assigned to you" indicator. Assignees are always project members, so this is inherently
@@ -523,12 +647,14 @@ public class ChangeRequestService(
             .OrderBy(c => c.Number)
             .ToListAsync(ct);
 
+        var reports = await LatestReportsAsync(change.ProjectId, ct);
+
         return new ChangeRequestDetailDto(
-            change.ToDto(projectKey),
+            change.ToDto(projectKey, Report(reports, change.Id)),
             change.Comments.OrderBy(c => c.CreatedAt).Select(c => c.ToDto()).ToList(),
             change.Evidence.OrderByDescending(o => o.LastSeen).Select(o => o.ToDto()).ToList(),
             change.ScmLinks.OrderBy(l => l.CreatedAt).Select(l => l.ToDto()).ToList(),
-            children.Select(c => c.ToDto(projectKey)).ToList());
+            children.Select(c => c.ToDto(projectKey, Report(reports, c.Id))).ToList());
     }
 
     public async Task<ChangeRequestDto> TransitionAsync(
@@ -576,6 +702,22 @@ public class ChangeRequestService(
                     db.AuditEvents.Add(childAudit);
                     cascaded.Add(child.Id);
                 }
+            }
+        }
+
+        // Close the work-order loop. Entering In Review is the human confirmation of an agent's reported
+        // work, so settle any outstanding claim on this change (and on anything the Epic cascade moved with
+        // it). This is bookkeeping on an already-authorized transition — the status itself moved through
+        // LifecycleService above, which stays the only door into the state machine.
+        if (req.Target == ChangeStatus.InReview)
+        {
+            var settling = new List<Guid>(cascaded) { change.Id };
+            var claimed = await db.WorkOrderItems
+                .Where(i => settling.Contains(i.ChangeRequestId) && i.Status == WorkOrderItemStatus.Reported)
+                .ToListAsync(ct);
+            foreach (var item in claimed)
+            {
+                item.Status = WorkOrderItemStatus.Confirmed;
             }
         }
 

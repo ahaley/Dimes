@@ -207,7 +207,7 @@ public sealed class CaptureLifecycleServiceTests : IDisposable
         await InDevWithPriority("Fix login redirect", "Redirect loops on expired session.", Priority.None);
         await _changes.CreateAsync(seed.ProjectId, seed.MaintainerId, new CreateChangeRequest("Not started yet", "still captured", ChangeKind.Problem));
 
-        var export = await _changes.ExportInDevelopmentAsync(seed.ProjectId);
+        var export = await _changes.ExportInDevelopmentAsync(seed.ProjectId, seed.MaintainerId, "https://dimes.test");
 
         // Filename carries a short UTC timestamp: <slug>-in-development-yyyyMMdd-HHmmss.md
         Assert.Matches(@"-in-development-\d{8}-\d{6}\.md$", export.FileName);

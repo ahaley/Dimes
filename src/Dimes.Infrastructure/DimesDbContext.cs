@@ -30,6 +30,8 @@ public class DimesDbContext(DbContextOptions<DimesDbContext> options) : DbContex
     public DbSet<AssistMessage> AssistMessages => Set<AssistMessage>();
     public DbSet<SiteSettings> SiteSettings => Set<SiteSettings>();
     public DbSet<SystemInstruction> SystemInstructions => Set<SystemInstruction>();
+    public DbSet<WorkOrder> WorkOrders => Set<WorkOrder>();
+    public DbSet<WorkOrderItem> WorkOrderItems => Set<WorkOrderItem>();
     // Backing store for the ASP.NET Core Data Protection key ring (encrypts the BFF session cookie),
     // so cookies stay valid across restarts/deploys. Managed by the framework — not a domain entity.
     public DbSet<DataProtectionKey> DataProtectionKeys => Set<DataProtectionKey>();
@@ -172,6 +174,34 @@ public class DimesDbContext(DbContextOptions<DimesDbContext> options) : DbContex
             b.HasIndex(s => new { s.ProjectId, s.Kind }).IsUnique();
             b.HasOne(s => s.Project).WithMany(p => p.SystemInstructions)
                 .HasForeignKey(s => s.ProjectId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<WorkOrder>(b =>
+        {
+            // The ingest endpoint's only lookup: token hash → work order. Unique so it can't fan out.
+            b.HasIndex(w => w.TokenHash).IsUnique();
+            // "The project's most recent export" — the tracking strip.
+            b.HasIndex(w => new { w.ProjectId, w.CreatedAt });
+            b.HasOne(w => w.Project).WithMany()
+                .HasForeignKey(w => w.ProjectId).OnDelete(DeleteBehavior.Cascade);
+            b.HasOne(w => w.ExportedBy).WithMany()
+                .HasForeignKey(w => w.ExportedByActorId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<WorkOrderItem>(b =>
+        {
+            // One row per change per order; also the ingest's per-change resolution lookup.
+            b.HasIndex(i => new { i.WorkOrderId, i.ChangeRequestId }).IsUnique();
+            // The board's derived field: this change's most recent report, across orders.
+            b.HasIndex(i => i.ChangeRequestId);
+            b.HasOne(i => i.WorkOrder).WithMany(w => w.Items)
+                .HasForeignKey(i => i.WorkOrderId).OnDelete(DeleteBehavior.Cascade);
+            // Restrict, not Cascade, and this one is load-bearing rather than conventional:
+            // Project→ChangeRequest→Item and Project→WorkOrder→Item would be two cascade paths into this
+            // table, which stricter providers reject. Nothing deletes a ChangeRequest today anyway —
+            // rejection is a status.
+            b.HasOne(i => i.ChangeRequest).WithMany()
+                .HasForeignKey(i => i.ChangeRequestId).OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<LocalCredential>(b =>

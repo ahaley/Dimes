@@ -16,6 +16,7 @@ export type CommentKind = 'Human' | 'AgentRecommendation'
 export type LlmProviderType = 'Anthropic' | 'OpenAICompatible'
 export type ScmProviderType = 'GitHub'
 export type AuditEntityType = 'ChangeRequest' | 'Observation'
+export type WorkOrderItemStatus = 'Pending' | 'Reported' | 'Blocked' | 'Confirmed'
 
 export interface Project { id: string; name: string; description?: string | null; createdAt: string; isArchived: boolean; archivedAt?: string | null; sourceControlEnabled: boolean; humanOnly: boolean; key?: string | null }
 export interface Member {
@@ -39,6 +40,10 @@ export interface ChangeRequest {
   completedAt?: string | null
   // When set, this change is a composed child of the referenced Epic (null for standalone / an Epic).
   parentChangeRequestId?: string | null
+  // The most recent work-order report for this change (null if never exported / not yet reported back).
+  // Only the read paths (list, detail) populate these; mutation responses omit them.
+  workOrderStatus?: WorkOrderItemStatus | null
+  workOrderReportedAt?: string | null
 }
 export interface Comment {
   id: string; changeRequestId: string; authorActorId: string; body: string; kind: CommentKind; createdAt: string
@@ -58,6 +63,12 @@ export interface ChangeRequestDetail {
 // Per-project count of open change requests assigned to the current user (sidebar indicator).
 export interface ProjectAssignmentCount {
   projectId: string; count: number
+}
+// A project's most recent work-order export and how much of it has reported back. `pendingChangeIds`
+// are the changes still out with an agent — they drive the re-export warning.
+export interface WorkOrderSummary {
+  id: string; fileName: string; exportedAt: string; exportedByActorId: string
+  itemCount: number; reportedCount: number; blockedCount: number; pendingChangeIds: string[]
 }
 export interface LlmProviderConfig {
   id: string; projectId?: string | null; type: LlmProviderType; name: string

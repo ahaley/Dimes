@@ -33,12 +33,16 @@ public static class Mappings
         c.Messages.OrderBy(m => m.CreatedAt).Select(m => m.ToDto()).ToList());
 
     /// <summary>Maps a change to its DTO. <paramref name="projectKey"/> is the owning project's key, used
-    /// to build the human-readable display id "KEY-NUMBER" (null until both are backfilled/assigned).</summary>
-    public static ChangeRequestDto ToDto(this ChangeRequest c, string? projectKey) => new(
+    /// to build the human-readable display id "KEY-NUMBER" (null until both are backfilled/assigned).
+    /// <paramref name="report"/> is this change's most recent work-order item, when the caller resolved one.
+    /// Write paths leave it null and so omit the field: that's safe because the SPA only ever invalidates
+    /// on a mutation response, never seeding the cache from it. The read paths (list, detail) pass it.</summary>
+    public static ChangeRequestDto ToDto(this ChangeRequest c, string? projectKey, WorkOrderItem? report = null) => new(
         c.Id, c.ProjectId, c.Title, c.Description, c.Kind, c.Status, c.Priority,
         c.CreatedByActorId, c.AssigneeActorId, c.DuplicateOfId, c.CreatedAt, c.UpdatedAt, c.SortOrder,
         c.Number, projectKey != null && c.Number is int n ? $"{projectKey}-{n}" : null, c.CompletedAt,
-        c.ParentChangeRequestId);
+        c.ParentChangeRequestId,
+        report?.Status, report?.ReportedAt);
 
     public static CommentDto ToDto(this Comment c) =>
         new(c.Id, c.ChangeRequestId, c.AuthorActorId, c.Body, c.Kind, c.CreatedAt);

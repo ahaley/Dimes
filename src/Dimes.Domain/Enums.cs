@@ -118,6 +118,18 @@ public enum ScmProviderType
     GitHub,
 }
 
+/// <summary>How far one exported change got in the work-order round-trip. <c>Reported</c> and
+/// <c>Blocked</c> are the executing agent's claim and never a state change — ingest is recommend-only.
+/// <c>Confirmed</c> is stamped when a human actually drives InDevelopment → InReview through
+/// <see cref="Lifecycle.LifecycleService"/>, and so implies the change was reported first.</summary>
+public enum WorkOrderItemStatus
+{
+    Pending,
+    Reported,
+    Blocked,
+    Confirmed,
+}
+
 /// <summary>Which entity an <see cref="Entities.AuditEvent"/> describes (polymorphic, not an FK).</summary>
 public enum AuditEntityType
 {

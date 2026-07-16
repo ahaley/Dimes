@@ -24,19 +24,7 @@ public class ScmService(
         // (and trigger the provider context fetch) on any project's change.
         await members.ResolveAsync(change.ProjectId, actorId, ct);
 
-        if (string.IsNullOrWhiteSpace(req.Url))
-        {
-            throw new BadRequestException("SCM link URL is required.");
-        }
-
-        // The URL is stored and later rendered as an <a href> in the SPA. Restrict it to absolute
-        // http(s) so a "javascript:" (or other scheme) link can't be planted and executed in a
-        // viewer's authenticated session when clicked.
-        if (!Uri.TryCreate(req.Url, UriKind.Absolute, out var url)
-            || (url.Scheme != Uri.UriSchemeHttp && url.Scheme != Uri.UriSchemeHttps))
-        {
-            throw new BadRequestException("SCM link URL must be an absolute http(s) URL.");
-        }
+        ScmUrlValidator.Require(req.Url);
 
         // Explicit snapshot wins; otherwise try to pull context from the provider.
         var snapshot = req.ContextSnapshot;
