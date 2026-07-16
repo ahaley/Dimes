@@ -3,8 +3,8 @@ import { useMutation } from '@tanstack/react-query'
 import { api } from '../api/client'
 import { useAddEpicChild, useAudit, useChangeDetail, useChanges, useProjectInvalidator, useProjects, useRemoveEpicChild, useTransition } from '../api/hooks'
 import type { ChangeKind, ChangeStatus, Member, Priority } from '../api/types'
-import { ALLOWED_TRANSITIONS, STATUS_TONE, kindTone } from '../lifecycle'
-import { Badge, Button, ErrorText, Field, Modal, Select, TextInput, Textarea } from '../components/ui'
+import { ALLOWED_TRANSITIONS, STATUS_TONE, kindTone, relativeTime } from '../lifecycle'
+import { Badge, Button, ErrorText, Field, Modal, Select, TextInput, Textarea, cx } from '../components/ui'
 import { Linkify } from '../components/Linkify'
 import { useToast } from '../components/Toast'
 
@@ -301,6 +301,25 @@ export function ChangeDetailBody({
                 ))}
               </ul>
             </Section>
+          )}
+
+          {/* An agent's work-order report. The evidence itself lands as an agent comment below and as
+              links under Source control — this just says it arrived, and when. */}
+          {(detail.change.workOrderStatus === 'Reported' || detail.change.workOrderStatus === 'Blocked') && (
+            <div
+              className={cx(
+                'rounded-md border p-3 text-sm',
+                detail.change.workOrderStatus === 'Blocked'
+                  ? 'border-amber-200 bg-amber-50/40 text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/20 dark:text-amber-200'
+                  : 'border-indigo-200 bg-indigo-50/40 text-indigo-900 dark:border-indigo-900/60 dark:bg-indigo-950/20 dark:text-indigo-200',
+              )}
+            >
+              {detail.change.workOrderStatus === 'Blocked'
+                ? 'An agent reported this change as blocked'
+                : 'An agent reported this change as done'}
+              {detail.change.workOrderReportedAt && ` ${relativeTime(detail.change.workOrderReportedAt)}`}
+              {' — see the comments below.'}
+            </div>
           )}
 
           {/* Comments */}

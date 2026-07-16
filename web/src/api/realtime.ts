@@ -20,6 +20,8 @@ export function useBoardLiveUpdates(projectId: string | undefined) {
     const refresh = () => {
       qc.invalidateQueries({ queryKey: ['changes', projectId] })
       qc.invalidateQueries({ queryKey: ['inbox', projectId] })
+      // An agent reporting back broadcasts here too, so the tracking strip moves live for everyone.
+      qc.invalidateQueries({ queryKey: ['work-order', projectId] })
       // Capture Assist conversations + the assistant's pending list + the requester's resume list
       // (coarse but cheap + idempotent).
       qc.invalidateQueries({ queryKey: ['assist'] })

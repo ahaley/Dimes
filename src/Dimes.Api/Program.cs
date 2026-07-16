@@ -71,6 +71,7 @@ builder.Services.AddScoped<CommentaryService>();
 builder.Services.AddScoped<CaptureAssistService>();
 builder.Services.AddScoped<AssistConversationService>();
 builder.Services.AddScoped<ScmService>();
+builder.Services.AddScoped<WorkOrderService>();
 builder.Services.AddScoped<SiteAdminService>();
 builder.Services.AddScoped<SiteSettingsService>();
 builder.Services.AddScoped<IdentifierBootstrapper>();
@@ -80,18 +81,24 @@ builder.Services.AddScoped<SystemInstructionBootstrapper>();
 builder.Services.AddSignalR();
 builder.Services.AddSingleton<IBoardNotifier, SignalRBoardNotifier>();
 
-// Throttle the anonymous capture endpoint. It's [AllowAnonymous] (host apps have no Dimes session),
-// so the only control is the unguessable source id — a leaked id could otherwise flood unbounded
-// observations. Partition a fixed window per source id (falling back to client IP), and reject excess
-// with 429 rather than queueing.
+// Throttle the anonymous ingest endpoints (observation capture, work-order results). They're
+// [AllowAnonymous] (host apps and coding agents have no Dimes session), so the only control is an
+// unguessable capability — a leaked one could otherwise flood unbounded writes. Partition a fixed window
+// per capability (falling back to client IP), and reject excess with 429 rather than queueing.
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
     options.AddPolicy(RateLimitPolicies.Ingest, httpContext =>
     {
-        var key = httpContext.Request.RouteValues.TryGetValue("sourceId", out var sourceId) && sourceId is not null
-            ? sourceId.ToString()!
-            : httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        // Partition by whichever capability the route carries. Without the work-order token here, every
+        // agent report would fall back to the IP bucket, letting one busy CI runner throttle unrelated
+        // work orders.
+        var key = Capability(httpContext, "sourceId")
+            ?? Capability(httpContext, "token")
+            ?? httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+
+        static string? Capability(HttpContext ctx, string routeValue) =>
+            ctx.Request.RouteValues.TryGetValue(routeValue, out var v) && v is not null ? v.ToString() : null;
         return RateLimitPartition.GetFixedWindowLimiter(key, _ => new FixedWindowRateLimiterOptions
         {
             PermitLimit = 300,

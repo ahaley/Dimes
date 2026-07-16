@@ -154,7 +154,12 @@ public record ChangeRequestDto(
     string? DisplayKey,
     DateTimeOffset? CompletedAt,
     // When set, this change is a composed child of the referenced Epic (null for standalone / an Epic).
-    Guid? ParentChangeRequestId);
+    Guid? ParentChangeRequestId,
+    // The most recent work-order report for this change, or null if it was never exported or hasn't
+    // reported back. Derived from WorkOrderItem rather than stored on the change — it drives the board
+    // card's "agent reports done" affordance, which is why it rides on the list DTO.
+    WorkOrderItemStatus? WorkOrderStatus = null,
+    DateTimeOffset? WorkOrderReportedAt = null);
 
 public record ChangeRequestDetailDto(
     ChangeRequestDto Change,
@@ -196,6 +201,58 @@ public record CommentDto(Guid Id, Guid ChangeRequestId, Guid AuthorActorId, stri
 
 public record AddScmLinkRequest(string Url, string? ContextSnapshot);
 public record ScmLinkDto(Guid Id, Guid ChangeRequestId, ScmProviderType Provider, string Url, string? ContextSnapshot);
+
+// ----- Work orders -----
+
+/// <summary>One commit the agent made. <paramref name="Message"/> is scanned for `Dimes change &lt;id&gt;`
+/// trailers; <paramref name="Branch"/> is the fallback when a commit carries none. <paramref name="Url"/> is
+/// optional — a bare sha isn't linkable (Dimes stores no repo base URL), so a commit only becomes an
+/// ScmLink when the agent supplies one; otherwise the sha is recorded in the summary comment.</summary>
+public record WorkOrderCommitReport(string Sha, string Message, string? Branch, string? Url);
+
+/// <summary>A PR the agent opened. <paramref name="ChangeId"/> when it knows it, else resolved from
+/// <paramref name="Branch"/>.</summary>
+public record WorkOrderPullRequestReport(string Url, string? Branch, Guid? ChangeId);
+
+/// <summary>An item the agent couldn't complete. <paramref name="ChangeId"/> is required: a negative claim
+/// is never inferred from a branch name.</summary>
+public record WorkOrderBlockedReport(Guid ChangeId, string Reason);
+
+/// <summary>An agent's report against an exported work order. Every field is optional — an agent that only
+/// got blocked still has something worth saying.</summary>
+public record WorkOrderResultsRequest(
+    string? Summary,
+    IReadOnlyList<WorkOrderCommitReport>? Commits,
+    IReadOnlyList<WorkOrderPullRequestReport>? PullRequests,
+    IReadOnlyList<WorkOrderBlockedReport>? Blocked);
+
+public record WorkOrderResultItemDto(
+    Guid ChangeId, string? DisplayKey, string Title, WorkOrderItemStatus Status, int LinksAdded);
+
+/// <summary>What a report actually did. Returned with 200 whenever the token is valid — including when
+/// nothing matched — so a retrying agent settles instead of looping. <paramref name="Ignored"/> is the
+/// diagnostic channel: every trailer or branch that named something outside this work order.</summary>
+public record WorkOrderResultsDto(
+    Guid WorkOrderId,
+    int ItemCount,
+    int ReportedCount,
+    int BlockedCount,
+    int PendingCount,
+    IReadOnlyList<WorkOrderResultItemDto> Items,
+    IReadOnlyList<string> Ignored);
+
+/// <summary>A project's most recent export and how much of it has come back. <paramref name="Id"/> is safe
+/// to expose: the ingest capability is a separate token, never this row's id.
+/// <paramref name="PendingChangeIds"/> drives the re-export warning.</summary>
+public record WorkOrderSummaryDto(
+    Guid Id,
+    string FileName,
+    DateTimeOffset ExportedAt,
+    Guid ExportedByActorId,
+    int ItemCount,
+    int ReportedCount,
+    int BlockedCount,
+    IReadOnlyList<Guid> PendingChangeIds);
 
 public record AuditEventDto(
     Guid Id,

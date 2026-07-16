@@ -12,6 +12,7 @@ export const keys = {
   providers: (projectId: string) => ['providers', projectId] as const,
   sources: (projectId: string) => ['sources', projectId] as const,
   exportInstruction: (projectId: string) => ['export-instruction', projectId] as const,
+  workOrder: (projectId: string) => ['work-order', projectId] as const,
   actors: (agentsOnly: boolean, includeArchived: boolean) => ['actors', agentsOnly, includeArchived] as const,
   actor: (id: string) => ['actor', id] as const,
   inbox: (projectId: string, status?: ObservationStatus) => ['inbox', projectId, status ?? 'all'] as const,
@@ -48,6 +49,18 @@ export function useExportInstruction(projectId: string) {
   return useQuery({
     queryKey: keys.exportInstruction(projectId),
     queryFn: () => api.getExportInstruction(projectId),
+  })
+}
+
+/** The project's most recent work-order export and how much of it has reported back. Null before the
+ * project has ever exported. */
+export function useLatestWorkOrder(projectId: string | undefined) {
+  return useQuery({
+    queryKey: keys.workOrder(projectId ?? ''),
+    // A project that has never exported yields a 204, which `request` surfaces as undefined — and React
+    // Query rejects undefined as query data. Normalize to null, the "never exported" value the UI reads.
+    queryFn: async () => (await api.latestWorkOrder(projectId!)) ?? null,
+    enabled: !!projectId,
   })
 }
 
@@ -235,6 +248,8 @@ export function useProjectInvalidator(projectId: string | undefined) {
     qc.invalidateQueries({ queryKey: ['inbox'] })
     // Creation / assignment / transition can change the caller's open-assignment counts (sidebar badge).
     qc.invalidateQueries({ queryKey: keys.assignmentCounts })
+    // Confirming an agent's report settles its work-order item, so the "reported back" counts move too.
+    qc.invalidateQueries({ queryKey: ['work-order'] })
     if (projectId) qc.invalidateQueries({ queryKey: keys.projects })
     if (changeId) {
       qc.invalidateQueries({ queryKey: keys.change(changeId) })

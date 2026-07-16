@@ -1,6 +1,6 @@
 import type {
   ActorDetail, ActorSummary, AssistConversation, AssistConversationStatus, AssistConversationSummary, AuthConfig, AuditEvent, CaptureProposal, ChangeKind, ChangeRequest, ChangeRequestDetail, ChangeStatus, ChatTurn, CaptureAssistReply, Comment, ExportInstruction, GenerateProposalsReply,
-  LlmProviderConfig, Me, Member, Observation, ObservationSource, ObservationStatus, Priority, Project, ProjectAssignmentCount, ScmLink, SiteBranding, SiteUser, UserMembership,
+  LlmProviderConfig, Me, Member, Observation, ObservationSource, ObservationStatus, Priority, Project, ProjectAssignmentCount, ScmLink, SiteBranding, SiteUser, UserMembership, WorkOrderSummary,
 } from './types'
 
 /** Error carrying the HTTP status + ProblemDetails so the UI can show 403/409 guard failures nicely.
@@ -55,8 +55,8 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
 }
 
 /** Fetch a file response and trigger a browser download. Filename comes from Content-Disposition. */
-async function download(path: string, fallbackName: string): Promise<void> {
-  const res = await fetch(path, { credentials: 'same-origin' })
+async function download(path: string, fallbackName: string, method: 'GET' | 'POST' = 'GET'): Promise<void> {
+  const res = await fetch(path, { method, credentials: 'same-origin' })
   if (!res.ok) {
     throw new ApiError(res.status, res.statusText, res.statusText)
   }
@@ -202,12 +202,17 @@ export const api = {
   deleteActor: (id: string) => request<void>('DELETE', `/api/actors/${id}`),
 
   // Export
+  // POST, not GET: exporting records a work order and mints the capability token embedded in the file.
   exportInDevelopment: (projectId: string) =>
-    download(`/api/projects/${projectId}/export/in-development`, 'in-development.md'),
+    download(`/api/projects/${projectId}/export/in-development`, 'in-development.md', 'POST'),
   getExportInstruction: (projectId: string) =>
     request<ExportInstruction>('GET', `/api/projects/${projectId}/export/instruction`),
   updateExportInstruction: (projectId: string, body: { content: string }) =>
     request<ExportInstruction>('PUT', `/api/projects/${projectId}/export/instruction`, body),
+
+  // Work orders
+  latestWorkOrder: (projectId: string) =>
+    request<WorkOrderSummary | null>('GET', `/api/projects/${projectId}/work-orders/latest`),
 
   // Site branding (public read; site-admin write)
   getSiteBranding: () => request<SiteBranding>('GET', '/api/config/branding'),

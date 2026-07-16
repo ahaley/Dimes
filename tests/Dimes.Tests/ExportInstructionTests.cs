@@ -1,3 +1,4 @@
+using Dimes.Api;
 using Dimes.Api.Services;
 using Dimes.Domain;
 using Dimes.Domain.Entities;
@@ -29,13 +30,36 @@ public sealed class ExportInstructionTests : IDisposable
         _changes = new ChangeRequestService(_db, new LifecycleService(), resolver, new FakeBoardNotifier());
     }
 
-    // Add a project directly, with no seeded instruction row, so each test controls whether an override exists.
-    private async Task<Project> AddProjectAsync(string name)
+    // Add a project directly, with no seeded instruction row, so each test controls whether an override
+    // exists. Exporting mints a work order under the exporting actor's authority, so give it one member.
+    private async Task<(Project Project, Guid ActorId)> AddProjectAsync(string name)
     {
         var project = new Project { Name = name };
+        var actor = new Actor { DisplayName = "Mae", Type = ActorType.Human };
         _db.Projects.Add(project);
+        _db.Actors.Add(actor);
+        _db.Memberships.Add(new Membership
+        {
+            ProjectId = project.Id,
+            ActorId = actor.Id,
+            Role = MemberRole.Maintainer,
+        });
         await _db.SaveChangesAsync();
-        return project;
+        return (project, actor.Id);
+    }
+
+    // Put a change In Development directly: the export only mints a work order (and so only renders the
+    // report-back section) when there's something to work on.
+    private async Task AddInDevelopmentChangeAsync(Project project, Guid actorId, string title)
+    {
+        _db.ChangeRequests.Add(new ChangeRequest
+        {
+            ProjectId = project.Id,
+            Title = title,
+            Status = ChangeStatus.InDevelopment,
+            CreatedByActorId = actorId,
+        });
+        await _db.SaveChangesAsync();
     }
 
     private static string Lf(string s) => s.Replace("\r\n", "\n");
@@ -43,9 +67,9 @@ public sealed class ExportInstructionTests : IDisposable
     [Fact]
     public async Task Export_WithNoInstructionRow_UsesTheBuiltInDefault()
     {
-        var project = await AddProjectAsync("Demo");
+        var (project, actorId) = await AddProjectAsync("Demo");
 
-        var export = await _changes.ExportInDevelopmentAsync(project.Id);
+        var export = await _changes.ExportInDevelopmentAsync(project.Id, actorId, "https://dimes.test");
         var md = Lf(export.Markdown);
 
         Assert.Contains("# Work order — implement In-Development changes (Demo)", md);
@@ -56,7 +80,8 @@ public sealed class ExportInstructionTests : IDisposable
     [Fact]
     public async Task Export_WithCustomInstructionRow_UsesTheCustomGuidance()
     {
-        var project = await AddProjectAsync("Demo");
+        var (project, actorId) = await AddProjectAsync("Demo");
+        await AddInDevelopmentChangeAsync(project, actorId, "Add CSV export");
         _db.SystemInstructions.Add(new SystemInstruction
         {
             ProjectId = project.Id,
@@ -65,7 +90,7 @@ public sealed class ExportInstructionTests : IDisposable
         });
         await _db.SaveChangesAsync();
 
-        var export = await _changes.ExportInDevelopmentAsync(project.Id);
+        var export = await _changes.ExportInDevelopmentAsync(project.Id, actorId, "https://dimes.test");
         var md = Lf(export.Markdown);
 
         // Custom guidance replaces the default, but the generated scaffolding remains.
@@ -73,6 +98,36 @@ public sealed class ExportInstructionTests : IDisposable
         Assert.DoesNotContain("Work autonomously through the whole list", md);
         Assert.Contains("# Work order — implement In-Development changes (Demo)", md);
         Assert.Contains("## Changes", md);
+        // The report-back contract is renderer-owned, not part of the editable guidance — so a project that
+        // has customized (or never updated) its instruction still gets a working round-trip. This is the
+        // whole reason the section doesn't live in SystemInstructionDefaults: the bootstrapper seeds each
+        // project its own copy, so a change to the default would never reach an existing project.
+        Assert.Contains("## Report back", md);
+    }
+
+    [Fact]
+    public async Task Export_WithNothingInDevelopment_MintsNoWorkOrderAndNoToken()
+    {
+        var (project, actorId) = await AddProjectAsync("Demo");
+
+        var export = await _changes.ExportInDevelopmentAsync(project.Id, actorId, "https://dimes.test");
+
+        // Nothing to report on: a capability token with no items would be pure liability.
+        Assert.DoesNotContain("## Report back", Lf(export.Markdown));
+        Assert.Empty(await _db.WorkOrders.ToListAsync());
+    }
+
+    [Fact]
+    public async Task Export_ByNonMember_IsForbidden()
+    {
+        var (project, memberId) = await AddProjectAsync("Demo");
+        await AddInDevelopmentChangeAsync(project, memberId, "Add CSV export");
+        var stranger = new Actor { DisplayName = "Stranger", Type = ActorType.Human };
+        _db.Actors.Add(stranger);
+        await _db.SaveChangesAsync();
+
+        await Assert.ThrowsAsync<ForbiddenException>(
+            () => _changes.ExportInDevelopmentAsync(project.Id, stranger.Id, "https://dimes.test"));
     }
 
     public void Dispose()

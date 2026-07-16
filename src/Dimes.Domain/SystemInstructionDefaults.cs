@@ -8,7 +8,10 @@ public static class SystemInstructionDefaults
 {
     /// <summary>The In-Development export "work order" guidance body — the Objective + How-to-work sections
     /// inserted between the generated title and the generated change list. Must stay in lockstep with the
-    /// export renderer's surrounding scaffolding in <c>ChangeRequestService.ExportInDevelopmentAsync</c>.</summary>
+    /// export renderer's surrounding scaffolding in <c>ChangeRequestService.ExportInDevelopmentAsync</c>,
+    /// including its generated "Report back" section, which step 9 points at.
+    /// <para>Step 4's <c>Dimes change &lt;id&gt;</c> line is a wire contract, not prose: it is parsed back by
+    /// <see cref="WorkOrders.WorkOrderTrailer"/>. Changing its shape breaks the round-trip.</para></summary>
     public const string ExportWorkOrder =
         """
         ## Objective
@@ -38,8 +41,12 @@ public static class SystemInstructionDefaults
            so later changes build on earlier ones.
         7. **If a change can't be completed or verified** (it doesn't work, conflicts can't be
            resolved, or it needs a decision you can't make), leave it unintegrated, check it off as
-           blocked with a one-line reason, and continue with the remaining changes.
+           blocked with a one-line reason, include it in the `blocked` list of your report, and
+           continue with the remaining changes.
         8. Work autonomously through the whole list; pause only if a change is too ambiguous to carry
            out safely. When finished, report what integrated and what's blocked.
+        9. **Report back.** Post your results as described in the "Report back" section at the end of
+           this file: the commits you made, any PRs you opened, and anything blocked. This is how the
+           work gets back to a human — without it, someone has to reconstruct it by hand.
         """;
 }
