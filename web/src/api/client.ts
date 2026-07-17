@@ -205,6 +205,9 @@ export const api = {
   // POST, not GET: exporting records a work order and mints the capability token embedded in the file.
   exportInDevelopment: (projectId: string) =>
     download(`/api/projects/${projectId}/export/in-development`, 'in-development.md', 'POST'),
+  // GET: a read-only snapshot of the change list. Mints nothing, so it stays a plain read.
+  exportChangesCsv: (projectId: string) =>
+    download(`/api/projects/${projectId}/export/changes`, 'changes.csv'),
   getExportInstruction: (projectId: string) =>
     request<ExportInstruction>('GET', `/api/projects/${projectId}/export/instruction`),
   updateExportInstruction: (projectId: string, body: { content: string }) =>
