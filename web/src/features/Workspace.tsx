@@ -7,7 +7,7 @@ import { useBoardLiveUpdates } from '../api/realtime'
 import { api } from '../api/client'
 import { relativeTime } from '../lifecycle'
 import { Badge, Button, Modal, TextInput, cx } from '../components/ui'
-import { OverflowMenu } from '../components/OverflowMenu'
+import { OverflowMenu, type MenuAction } from '../components/OverflowMenu'
 import { useToast } from '../components/Toast'
 import { ChangeBoard } from './ChangeBoard'
 import { ChangeDetail } from './ChangeDetail'
@@ -41,6 +41,9 @@ export function Workspace({
 
   const { data: changes } = useChanges(projectId)
   const inDevCount = (changes ?? []).filter((c) => c.status === 'InDevelopment').length
+  // What the CSV will actually contain: the lifecycle spine, minus the two terminal exits the export
+  // leaves out. Counted the same way here so the badge can't promise rows the file doesn't have.
+  const spineCount = (changes ?? []).filter((c) => c.status !== 'Rejected' && c.status !== 'Duplicate').length
 
   // Capture Assist conversations I started where the teammate has replied and it's my turn to read/respond.
   const { data: myConversations } = useMyAssistConversations(projectId)
@@ -56,6 +59,12 @@ export function Workspace({
     onError: (e) => toast.error(e instanceof Error ? e.message : 'Export failed'),
   })
 
+  const exportCsv = useMutation({
+    mutationFn: () => api.exportChangesCsv(projectId),
+    onSuccess: () => toast.success(`Exported ${spineCount} change${spineCount === 1 ? '' : 's'} to CSV`),
+    onError: (e) => toast.error(e instanceof Error ? e.message : 'Export failed'),
+  })
+
   // Warn before re-exporting changes that are still out with an agent — but don't block it: the old work
   // order's token stays live on purpose, so both can still report.
   const startExport = () => {
@@ -63,14 +72,30 @@ export function Workspace({
     else exportInDev.mutate()
   }
 
-  // Secondary toolbar actions, single-sourced so the desktop buttons and the mobile ⋯ menu can't drift.
+  // The two exports. They aren't two formats of one action — the work order mints a token and hands
+  // changes to an agent, the CSV only reads — so each carries its own scope count and its own
+  // availability rather than sharing the trigger's. Declared once: the desktop `Export ▾` menu and the
+  // phone ⋯ menu both render this array, so they can't drift.
+  const exportActions: MenuAction[] = [
+    {
+      label: <MenuItemLabel title="Work order" detail="Markdown for a coding agent" />,
+      title: inDevCount === 0 ? 'No in-development changes to export' : 'Download a Claude Code work order',
+      disabled: inDevCount === 0 || exportInDev.isPending,
+      trailing: <Badge tone="slate">{inDevCount}</Badge>,
+      onClick: startExport,
+    },
+    {
+      label: <MenuItemLabel title="Change list" detail="CSV for a spreadsheet" />,
+      title: spineCount === 0 ? 'No changes to export' : 'Download the change list as CSV',
+      disabled: spineCount === 0 || exportCsv.isPending,
+      trailing: <Badge tone="slate">{spineCount}</Badge>,
+      onClick: () => exportCsv.mutate(),
+    },
+  ]
+
+  // Remaining secondary actions, single-sourced so the desktop buttons and the mobile ⋯ menu can't drift.
   type ToolbarAction = { label: string; title?: string; disabled?: boolean; badge?: number; onClick: () => void }
-  const secondaryActions: ToolbarAction[] = [{
-    label: 'Export',
-    title: inDevCount === 0 ? 'No in-development changes to export' : 'Download a Claude Code work order',
-    disabled: inDevCount === 0 || exportInDev.isPending,
-    onClick: startExport,
-  }]
+  const secondaryActions: ToolbarAction[] = []
   if (!humanOnly) {
     secondaryActions.push({
       label: 'Capture Assist',
@@ -116,8 +141,11 @@ export function Workspace({
             Inbox{inboxCount > 0 && <span className="ml-1.5"><Badge tone="amber">{inboxCount}</Badge></span>}
           </Button>
 
-          {/* Secondary actions: inline buttons on desktop, folded into a ⋯ overflow menu on phones. */}
+          {/* Secondary actions: inline on desktop, folded into a ⋯ overflow menu on phones. The exports
+              group under their own Export ▾ menu here — but on phones that would nest a menu inside the
+              ⋯ menu, so there they flatten into it as siblings instead. */}
           <div className="hidden items-center gap-2 sm:flex">
+            <OverflowMenu label="Export" trigger={<>Export <span aria-hidden="true">▾</span></>} width="wide" actions={exportActions} />
             {secondaryActions.map((a, i) => (
               <Button key={i} variant="default" disabled={a.disabled} title={a.title} onClick={a.onClick}>
                 {a.label}{a.badge ? <span className="ml-1.5"><Badge tone="indigo">{a.badge}</Badge></span> : null}
@@ -128,13 +156,17 @@ export function Workspace({
             <OverflowMenu
               label="More actions"
               align="left"
-              actions={secondaryActions.map((a) => ({
-                label: a.label,
-                title: a.title,
-                disabled: a.disabled,
-                onClick: a.onClick,
-                trailing: a.badge ? <Badge tone="indigo">{a.badge}</Badge> : undefined,
-              }))}
+              width="wide"
+              actions={[
+                ...exportActions,
+                ...secondaryActions.map((a) => ({
+                  label: a.label,
+                  title: a.title,
+                  disabled: a.disabled,
+                  onClick: a.onClick,
+                  trailing: a.badge ? <Badge tone="indigo">{a.badge}</Badge> : undefined,
+                })),
+              ]}
             />
           </div>
           <Button variant="primary" onClick={() => setCreating(true)}>+ New<span className="hidden sm:inline"> change</span></Button>
@@ -214,5 +246,16 @@ export function Workspace({
         />
       )}
     </div>
+  )
+}
+
+/** A menu item that names an action and says what it produces, for a menu whose entries do different
+ *  things rather than offering variants of one. */
+function MenuItemLabel({ title, detail }: { title: string; detail: string }) {
+  return (
+    <span className="block">
+      <span className="block font-medium">{title}</span>
+      <span className="block text-[11px] text-slate-400">{detail}</span>
+    </span>
   )
 }

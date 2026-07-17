@@ -189,6 +189,11 @@ public record AssignChangeRequest(Guid? AssigneeActorId);
 /// <summary>A generated file ready to download (name + UTF-8 text content).</summary>
 public record MarkdownExport(string FileName, string Markdown);
 
+/// <summary>A generated CSV of the change list, ready to download. Distinct from
+/// <see cref="MarkdownExport"/> because the two exports are different acts, not two renderings of one:
+/// that one mints a work-order credential and hands changes to an agent, this one only reads.</summary>
+public record CsvExport(string FileName, string Csv);
+
 /// <summary>A project's editable export "work order" guidance. <paramref name="IsDefault"/> is true when
 /// the project has no stored override and the built-in default is in effect.</summary>
 public record ExportInstructionDto(string Content, bool IsDefault);

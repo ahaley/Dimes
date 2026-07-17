@@ -115,6 +115,21 @@ public class ChangeRequestsController(
         return File(Encoding.UTF8.GetBytes(export.Markdown), "text/markdown", export.FileName);
     }
 
+    /// <summary>Download the project's change list as a CSV, along the lifecycle spine. GET, unlike the
+    /// work-order export, precisely because it mints nothing and records nothing — keeping the read-only
+    /// export a GET is what leaves "this export is a POST" meaning "this one hands out a credential".</summary>
+    [HttpGet("api/projects/{projectId:guid}/export/changes")]
+    public async Task<IActionResult> ExportChangesCsv(Guid projectId, CancellationToken ct)
+    {
+        await projects.EnsureProjectReadAsync(projectId, currentActor.ActorId, currentActor.IsSiteAdmin, ct);
+        var export = await changes.ExportChangesCsvAsync(projectId, ct);
+
+        // Lead with the UTF-8 BOM: Excel assumes the local ANSI codepage for a BOM-less CSV and mangles any
+        // non-ASCII title on open.
+        var bytes = Encoding.UTF8.GetPreamble().Concat(Encoding.UTF8.GetBytes(export.Csv)).ToArray();
+        return File(bytes, "text/csv", export.FileName);
+    }
+
     /// <summary>Read the project's editable export work-order guidance (or the built-in default).</summary>
     [HttpGet("api/projects/{projectId:guid}/export/instruction")]
     public async Task<ActionResult<ExportInstructionDto>> GetExportInstruction(Guid projectId, CancellationToken ct)

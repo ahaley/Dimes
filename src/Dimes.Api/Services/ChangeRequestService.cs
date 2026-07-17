@@ -445,6 +445,82 @@ public class ChangeRequestService(
         return new MarkdownExport(fileName, sb.ToString());
     }
 
+    /// <summary>The change spine in lifecycle order. Single-sourced because it is both the CSV's filter and
+    /// its primary sort, and the two must not drift. Rejected/Duplicate are deliberately absent: they are
+    /// exits from the funnel rather than stages in it, which is why the board also keeps them out of the
+    /// columns and in a separate Closed strip.</summary>
+    private static readonly ChangeStatus[] CsvSpine =
+    [
+        ChangeStatus.Captured, ChangeStatus.Triaged, ChangeStatus.Approved,
+        ChangeStatus.InDevelopment, ChangeStatus.InReview, ChangeStatus.Done,
+    ];
+
+    /// <summary>Human labels for the CSV's enum columns. The wire format is camel-case (it mirrors the C#
+    /// enum), but a spreadsheet is read by people, so these use the spec's own wording.</summary>
+    private static string StatusLabel(ChangeStatus s) => s switch
+    {
+        ChangeStatus.InDevelopment => "In Development",
+        ChangeStatus.InReview => "In Review",
+        _ => s.ToString(),
+    };
+
+    private static string KindLabel(ChangeKind k) => k switch
+    {
+        ChangeKind.ObservationDriven => "Observation-driven",
+        _ => k.ToString(),
+    };
+
+    /// <summary>Export a project's change list as a CSV snapshot, ordered along the lifecycle spine
+    /// (Captured first, Done last) and by change number within each status.
+    ///
+    /// Deliberately unlike <see cref="ExportInDevelopmentAsync"/>: it mints nothing, records nothing and
+    /// spans the whole board, so it needs no actor authority beyond the caller's project read access and is
+    /// safe to reach by GET.</summary>
+    public async Task<CsvExport> ExportChangesCsvAsync(Guid projectId, CancellationToken ct = default)
+    {
+        var project = await db.Projects.FindAsync([projectId], ct)
+            ?? throw new NotFoundException($"Project '{projectId}' not found.");
+
+        // Sort in memory: Status is persisted as a string, so a DB ORDER BY would sort it alphabetically
+        // (Approved, Captured, Done, …) rather than along the lifecycle — the same trap the work-order
+        // export sidesteps for Priority.
+        var changes = (await db.ChangeRequests
+            .Where(c => c.ProjectId == projectId && CsvSpine.Contains(c.Status))
+            .Include(c => c.Assignee)
+            .ToListAsync(ct))
+            .OrderBy(c => Array.IndexOf(CsvSpine, c.Status))
+            // Number is nullable only until the startup backfill reaches a row; an un-numbered change sorts
+            // last rather than ahead of DIMES-1.
+            .ThenBy(c => c.Number ?? int.MaxValue)
+            .ToList();
+
+        var sb = new StringBuilder();
+        Csv.AppendRow(sb, "Key", "Title", "Status", "Kind", "Priority", "Recipient", "CreatedAt", "CompletedAt");
+
+        foreach (var c in changes)
+        {
+            // DisplayKey is derived at DTO-mapping time and isn't on the entity, so build it the same way
+            // here. Blank when either half is missing — a bare number would read as a key and mislead.
+            var key = project.Key != null && c.Number is int num ? $"{project.Key}-{num}" : string.Empty;
+
+            Csv.AppendRow(
+                sb,
+                key,
+                c.Title,
+                StatusLabel(c.Status),
+                KindLabel(c.Kind),
+                c.Priority.ToString(),
+                // "Unassigned" is the word the create modal and detail view already use for an unset
+                // recipient, rather than a blank cell that reads as missing data.
+                c.Assignee?.DisplayName ?? "Unassigned",
+                c.CreatedAt.ToUniversalTime().ToString("u"),
+                c.CompletedAt?.ToUniversalTime().ToString("u") ?? string.Empty);
+        }
+
+        var stamp = DateTimeOffset.UtcNow.ToString("yyyyMMdd-HHmmss");
+        return new CsvExport($"{Slug(project.Name)}-changes-{stamp}.csv", sb.ToString());
+    }
+
     /// <summary>The deterministic branch name for a change. Both the rendered `Branch:` line and the stored
     /// <see cref="WorkOrderItem.BranchName"/> come from here, so a report that names a branch matches by
     /// exact comparison against a string Dimes itself minted — they cannot drift apart.</summary>
