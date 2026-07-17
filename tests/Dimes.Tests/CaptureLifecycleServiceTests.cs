@@ -221,9 +221,9 @@ public sealed class CaptureLifecycleServiceTests : IDisposable
         Assert.Contains("Fix login redirect", export.Markdown);
         Assert.DoesNotContain("Not started yet", export.Markdown);
 
-        // Per-change git workflow instructions.
+        // Per-change git workflow instructions: squash each change into one integration commit.
         Assert.Contains("integration branch", export.Markdown);
-        Assert.Contains("git merge --no-ff", export.Markdown);
+        Assert.Contains("git merge --squash", export.Markdown);
         Assert.Contains("Branch: `change/", export.Markdown);
         Assert.Contains("- [ ] Implemented, verified, committed, merged", export.Markdown);
 

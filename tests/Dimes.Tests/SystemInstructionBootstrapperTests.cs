@@ -8,7 +8,9 @@ using Microsoft.EntityFrameworkCore;
 namespace Dimes.Tests;
 
 /// <summary>The startup seeder gives every project an editable ExportWorkOrder instruction seeded from the
-/// built-in default — idempotently, and without clobbering a row a user has customized.</summary>
+/// built-in default — idempotently, and without clobbering a row a user has customized. It also upgrades a
+/// project still carrying an un-customized *older* default to the current text, so a changed default reaches
+/// existing projects.</summary>
 public sealed class SystemInstructionBootstrapperTests : IDisposable
 {
     private readonly SqliteConnection _connection;
@@ -78,6 +80,26 @@ public sealed class SystemInstructionBootstrapperTests : IDisposable
 
         var row = Assert.Single(await _db.SystemInstructions.ToListAsync());
         Assert.Equal("custom guidance", row.Content);
+    }
+
+    [Fact]
+    public async Task Seed_UpgradesUncustomizedOlderDefaultToCurrent()
+    {
+        var project = await AddProjectAsync("A");
+        _db.SystemInstructions.Add(new SystemInstruction
+        {
+            ProjectId = project.Id,
+            Kind = SystemInstructionKind.ExportWorkOrder,
+            Content = SystemInstructionDefaults.PreviousExportWorkOrders[0],
+        });
+        await _db.SaveChangesAsync();
+
+        await _seeder.SeedAsync();
+
+        // A row still carrying a prior built-in default is upgraded to the current text (so a changed
+        // default reaches existing projects), while a customized row is left alone (test above).
+        var row = Assert.Single(await _db.SystemInstructions.ToListAsync());
+        Assert.Equal(SystemInstructionDefaults.ExportWorkOrder, row.Content);
     }
 
     public void Dispose()

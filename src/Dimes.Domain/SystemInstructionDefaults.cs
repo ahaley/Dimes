@@ -10,9 +10,57 @@ public static class SystemInstructionDefaults
     /// inserted between the generated title and the generated change list. Must stay in lockstep with the
     /// export renderer's surrounding scaffolding in <c>ChangeRequestService.ExportInDevelopmentAsync</c>,
     /// including its generated "Report back" section, which step 9 points at.
-    /// <para>Step 4's <c>Dimes change &lt;id&gt;</c> line is a wire contract, not prose: it is parsed back by
-    /// <see cref="WorkOrders.WorkOrderTrailer"/>. Changing its shape breaks the round-trip.</para></summary>
+    /// <para>The <c>Dimes change &lt;id&gt;</c> trailer (steps 4 and 5) is a wire contract, not prose: it is
+    /// parsed back from the commit message by <see cref="WorkOrders.WorkOrderTrailer"/>, and must land on the
+    /// squashed integration commit (step 5). Changing its shape breaks the round-trip.</para></summary>
     public const string ExportWorkOrder =
+        """
+        ## Objective
+
+        This file is a work order: implement every change request in the "Changes" section below
+        against this repository, until each is merged or recorded as blocked. The changes differ in
+        nature — engineering, design, docs, infrastructure — so size up each one and bring (or
+        delegate to a specialized agent with) the expertise it actually needs.
+
+        ## How to work
+
+        1. **Record the integration branch.** Note the branch you start on (e.g. `main`); call it
+           the *integration branch*. Every change branches from it and integrates back into it.
+        2. **One branch per change**, in order. Create a branch off the *current* integration
+           branch using the `Branch:` name given for each change below.
+        3. **Implement only that change**, then **verify before committing**: confirm it works the
+           way that change can be checked — the project builds and its tests pass for code, the result
+           renders and behaves correctly for UI or design, content is accurate for docs. Never commit
+           a change you haven't verified.
+        4. **Commit on the branch as a single commit.** First line is the change title, then a blank
+           line, then `Dimes change <id>` (this links the commit back to the request). Keep unrelated
+           edits out of the commit.
+        5. **Integrate back as one commit.** Switch to the integration branch and squash the change so
+           it lands as a single commit rather than a merge bubble: `git merge --squash <branch>`, then
+           commit once with the change title, a blank line, and `Dimes change <id>`. The trailer must be
+           on this integration commit — squashing writes a fresh commit message. Resolve any conflicts
+           and re-verify after merging. (If you open a PR instead, squash-merge it and keep the same
+           title and `Dimes change <id>` on the squash commit.)
+        6. **Sequence matters.** Branch each subsequent change from the *updated* integration branch
+           so later changes build on earlier ones.
+        7. **If a change can't be completed or verified** (it doesn't work, conflicts can't be
+           resolved, or it needs a decision you can't make), leave it unintegrated, check it off as
+           blocked with a one-line reason, include it in the `blocked` list of your report, and
+           continue with the remaining changes.
+        8. Work autonomously through the whole list; pause only if a change is too ambiguous to carry
+           out safely. When finished, report what integrated and what's blocked.
+        9. **Report back.** Post your results as described in the "Report back" section at the end of
+           this file: the commits you made, any PRs you opened, and anything blocked. This is how the
+           work gets back to a human — without it, someone has to reconstruct it by hand.
+        """;
+
+    /// <summary>Prior verbatim versions of <see cref="ExportWorkOrder"/>. The startup bootstrapper uses
+    /// these to upgrade projects still carrying an un-customized older default to the current text, without
+    /// touching a project that edited its guidance. Append (never rewrite) an entry here whenever
+    /// <see cref="ExportWorkOrder"/> changes, so older un-customized rows keep upgrading.</summary>
+    public static readonly IReadOnlyList<string> PreviousExportWorkOrders =
+    [
+        // v1 — the original `git merge --no-ff` (per-change merge-commit) guidance, superseded by squash.
         """
         ## Objective
 
@@ -48,5 +96,6 @@ public static class SystemInstructionDefaults
         9. **Report back.** Post your results as described in the "Report back" section at the end of
            this file: the commits you made, any PRs you opened, and anything blocked. This is how the
            work gets back to a human — without it, someone has to reconstruct it by hand.
-        """;
+        """,
+    ];
 }
