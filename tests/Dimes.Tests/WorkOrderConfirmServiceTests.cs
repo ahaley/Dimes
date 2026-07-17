@@ -31,7 +31,7 @@ public sealed class WorkOrderConfirmServiceTests : IDisposable
         _db.Database.Migrate();
 
         var resolver = new MembershipResolver(_db);
-        _changes = new ChangeRequestService(_db, new LifecycleService(), resolver, new FakeBoardNotifier());
+        _changes = new ChangeRequestService(_db, new LifecycleService(), resolver, new FakeBoardNotifier(), new NotificationDispatcher(_db));
     }
 
     private async Task SetupAsync()

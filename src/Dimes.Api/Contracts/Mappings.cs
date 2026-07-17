@@ -1,3 +1,5 @@
+using System.Text.Json;
+using Dimes.Domain;
 using Dimes.Domain.Entities;
 
 namespace Dimes.Api.Contracts;
@@ -5,6 +7,38 @@ namespace Dimes.Api.Contracts;
 /// <summary>Entity → DTO projections. Kept in one place so controllers and services stay thin.</summary>
 public static class Mappings
 {
+    public static NotificationChannelDto ToDto(this NotificationChannelConfig c) =>
+        new(c.Id, c.ProjectId, c.Type, c.Name, c.Target, c.SecretRef,
+            ParseEvents(c.EventsJson), c.Enabled, c.LastDeliveryAt, c.LastDeliveryOk, c.LastDeliveryError);
+
+    /// <summary>Parse a channel's stored event set (a JSON array of names) into typed events, dropping any
+    /// unknown/legacy names rather than throwing.</summary>
+    public static IReadOnlyList<NotificationEventType> ParseEvents(string? eventsJson)
+    {
+        if (string.IsNullOrWhiteSpace(eventsJson))
+        {
+            return [];
+        }
+        try
+        {
+            var names = JsonSerializer.Deserialize<List<string>>(eventsJson) ?? [];
+            return names
+                .Select(n => Enum.TryParse<NotificationEventType>(n, ignoreCase: true, out var e) ? (NotificationEventType?)e : null)
+                .Where(e => e is not null)
+                .Select(e => e!.Value)
+                .Distinct()
+                .ToList();
+        }
+        catch (JsonException)
+        {
+            return [];
+        }
+    }
+
+    /// <summary>Serialize a typed event set to the stored JSON array of names, de-duplicated.</summary>
+    public static string SerializeEvents(IReadOnlyList<NotificationEventType> events) =>
+        JsonSerializer.Serialize(events.Distinct().Select(e => e.ToString()).ToList());
+
     public static ProjectDto ToDto(this Project p) =>
         new(p.Id, p.Name, p.Description, p.CreatedAt, p.IsArchived, p.ArchivedAt, p.SourceControlEnabled, p.HumanOnly, p.Key);
 

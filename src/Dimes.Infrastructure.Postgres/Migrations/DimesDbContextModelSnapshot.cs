@@ -395,6 +395,140 @@ namespace Dimes.Infrastructure.Postgres.Migrations
                     b.ToTable("Memberships");
                 });
 
+            modelBuilder.Entity("Dimes.Domain.Entities.NotificationChannelConfig", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("Enabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("EventsJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset?>("LastDeliveryAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("LastDeliveryError")
+                        .HasColumnType("text");
+
+                    b.Property<bool?>("LastDeliveryOk")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("ProjectId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("SecretRef")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Target")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProjectId");
+
+                    b.ToTable("NotificationChannelConfigs");
+                });
+
+            modelBuilder.Entity("Dimes.Domain.Entities.NotificationDelivery", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Attempts")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Body")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid?>("ChangeRequestId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ChannelConfigId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Event")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset?>("LastAttemptAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("LastError")
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset?>("NextAttemptAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("ProjectId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("RecipientActorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ChannelConfigId");
+
+                    b.HasIndex("Status", "NextAttemptAt");
+
+                    b.ToTable("NotificationDeliveries");
+                });
+
+            modelBuilder.Entity("Dimes.Domain.Entities.NotificationPreference", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ActorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("DigestOptOut")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid?>("ProjectId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ActorId", "ProjectId")
+                        .IsUnique();
+
+                    b.ToTable("NotificationPreferences");
+                });
+
             modelBuilder.Entity("Dimes.Domain.Entities.Observation", b =>
                 {
                     b.Property<Guid>("Id")
@@ -932,6 +1066,39 @@ namespace Dimes.Infrastructure.Postgres.Migrations
                     b.Navigation("Actor");
 
                     b.Navigation("Project");
+                });
+
+            modelBuilder.Entity("Dimes.Domain.Entities.NotificationChannelConfig", b =>
+                {
+                    b.HasOne("Dimes.Domain.Entities.Project", "Project")
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Project");
+                });
+
+            modelBuilder.Entity("Dimes.Domain.Entities.NotificationDelivery", b =>
+                {
+                    b.HasOne("Dimes.Domain.Entities.NotificationChannelConfig", "ChannelConfig")
+                        .WithMany()
+                        .HasForeignKey("ChannelConfigId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("ChannelConfig");
+                });
+
+            modelBuilder.Entity("Dimes.Domain.Entities.NotificationPreference", b =>
+                {
+                    b.HasOne("Dimes.Domain.Entities.Actor", "Actor")
+                        .WithMany()
+                        .HasForeignKey("ActorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Actor");
                 });
 
             modelBuilder.Entity("Dimes.Domain.Entities.Observation", b =>

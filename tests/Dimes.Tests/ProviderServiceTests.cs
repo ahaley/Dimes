@@ -30,7 +30,7 @@ public sealed class ProviderServiceTests : IDisposable
 
         var resolver = new MembershipResolver(_db);
         _projects = new ProjectService(_db, resolver);
-        _changes = new ChangeRequestService(_db, new LifecycleService(), resolver, new FakeBoardNotifier());
+        _changes = new ChangeRequestService(_db, new LifecycleService(), resolver, new FakeBoardNotifier(), new NotificationDispatcher(_db));
     }
 
     private sealed class StubLlm(LlmProviderType type, string text) : ILlmProvider
@@ -51,6 +51,22 @@ public sealed class ProviderServiceTests : IDisposable
     private sealed class StubSecrets : ISecretResolver
     {
         public string? Resolve(string? secretRef) => secretRef is null ? null : "resolved";
+    }
+
+    [Fact]
+    public async Task CreateLlmProvider_RequiresKeyForAnthropic_ButNotForKeylessLocal()
+    {
+        var project = await _projects.CreateAsync(new CreateProjectRequest("P", null));
+
+        // Anthropic always authenticates, so a missing key reference must fail at save.
+        await Assert.ThrowsAsync<BadRequestException>(() => _projects.CreateLlmProviderAsync(project.Id,
+            new CreateLlmProviderRequest(LlmProviderType.Anthropic, "claude", null, "claude-sonnet-4-6", "  ")));
+
+        // A local OpenAI-compatible endpoint (Ollama/vLLM) legitimately has no key — the data-stays-local
+        // path the spec preserves — so a null reference is accepted.
+        var local = await _projects.CreateLlmProviderAsync(project.Id,
+            new CreateLlmProviderRequest(LlmProviderType.OpenAICompatible, "ollama", "http://localhost:11434/v1", "llama3", null));
+        Assert.Null(local.ApiKeySecretRef);
     }
 
     [Fact]

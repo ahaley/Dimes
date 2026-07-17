@@ -10,8 +10,18 @@ using Microsoft.EntityFrameworkCore;
 namespace Dimes.Api.Services;
 
 public class ChangeRequestService(
-    DimesDbContext db, LifecycleService lifecycle, MembershipResolver members, IBoardNotifier notifier)
+    DimesDbContext db, LifecycleService lifecycle, MembershipResolver members, IBoardNotifier notifier,
+    INotificationDispatcher notifications)
 {
+    /// <summary>The human-readable label for a change in a notification: "KEY-N — Title" when the display
+    /// key is available, else just the title.</summary>
+    private async Task<string> ChangeLabelAsync(ChangeRequest change, CancellationToken ct)
+    {
+        var key = await ProjectKeyAsync(change.ProjectId, ct);
+        var display = key != null && change.Number is int num ? $"{key}-{num}" : null;
+        return display != null ? $"{display} — {change.Title}" : change.Title;
+    }
+
     /// <summary>JsonStringEnumConverter accepts raw integers, so an undefined numeric value (e.g.
     /// <c>"kind": 100</c>) deserializes without error and would persist as garbage. Reject it here.</summary>
     private static void EnsureDefined(ChangeKind kind, Priority priority)
@@ -45,13 +55,14 @@ public class ChangeRequestService(
 
         // An optional recipient at creation: only a Contributor+ may direct work, and the target must be
         // a project member (assignment otherwise has its own endpoint — see AssignAsync).
+        Actor? recipientActor = null;
         if (req.AssigneeActorId is Guid recipientId)
         {
             if (role < MemberRole.Contributor)
             {
                 throw new ForbiddenException("Assigning a recipient requires at least the Contributor role.");
             }
-            await members.ResolveAsync(projectId, recipientId, ct); // throws ForbiddenException for a non-member
+            (recipientActor, _) = await members.ResolveAsync(projectId, recipientId, ct); // throws for a non-member
         }
 
         var change = new ChangeRequest
@@ -75,6 +86,17 @@ public class ChangeRequestService(
             ToStatus = ChangeStatus.Captured.ToString(),
             Action = "Created",
         });
+
+        // Notify a recipient assigned at creation (unless they assigned it to themselves).
+        if (recipientActor is not null && recipientActor.Id != actor.Id)
+        {
+            var label = await ChangeLabelAsync(change, ct);
+            await notifications.EnqueueAsync(
+                projectId, NotificationEventType.AssignedToYou, "Change assigned",
+                $"{label} was assigned to {recipientActor.DisplayName} by {actor.DisplayName}.",
+                changeId: change.Id, recipientActorId: recipientActor.Id, ct: ct);
+        }
+
         await db.SaveChangesAsync(ct);
         await notifier.ChangedAsync(change.ProjectId, change.Id, "created", ct);
         return change.ToDto(await ProjectKeyAsync(projectId, ct));
@@ -231,9 +253,10 @@ public class ChangeRequestService(
             throw new ForbiddenException("Assigning a recipient requires at least the Contributor role.");
         }
 
+        Actor? recipientActor = null;
         if (req.AssigneeActorId is Guid recipientId)
         {
-            await members.ResolveAsync(change.ProjectId, recipientId, ct); // throws ForbiddenException for a non-member
+            (recipientActor, _) = await members.ResolveAsync(change.ProjectId, recipientId, ct); // throws for a non-member
         }
 
         change.AssigneeActorId = req.AssigneeActorId;
@@ -245,6 +268,17 @@ public class ChangeRequestService(
             ActorId = actor.Id,
             Action = "Assigned",
         });
+
+        // Notify the new recipient (unless they assigned it to themselves, or it was just cleared).
+        if (recipientActor is not null && recipientActor.Id != actor.Id)
+        {
+            var label = await ChangeLabelAsync(change, ct);
+            await notifications.EnqueueAsync(
+                change.ProjectId, NotificationEventType.AssignedToYou, "Change assigned",
+                $"{label} was assigned to {recipientActor.DisplayName} by {actor.DisplayName}.",
+                changeId: change.Id, recipientActorId: recipientActor.Id, ct: ct);
+        }
+
         await db.SaveChangesAsync(ct);
         await notifier.ChangedAsync(change.ProjectId, change.Id, "updated", ct);
         return change.ToDto(await ProjectKeyAsync(change.ProjectId, ct));
@@ -795,6 +829,18 @@ public class ChangeRequestService(
             {
                 item.Status = WorkOrderItemStatus.Confirmed;
             }
+        }
+
+        // Entering Triaged is the moment a change starts waiting on the Maintainer approval gate — the
+        // product's single most important latency. Nudge the project's channels (the body names the change;
+        // the shared space reaches whoever holds the gate).
+        if (req.Target == ChangeStatus.Triaged)
+        {
+            var label = await ChangeLabelAsync(change, ct);
+            await notifications.EnqueueAsync(
+                change.ProjectId, NotificationEventType.AwaitingApproval, "Change awaiting approval",
+                $"{label} is now Triaged and awaiting a Maintainer's approval.",
+                changeId: change.Id, ct: ct);
         }
 
         await db.SaveChangesAsync(ct);

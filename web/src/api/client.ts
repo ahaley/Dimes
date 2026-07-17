@@ -1,6 +1,6 @@
 import type {
   ActorDetail, ActorSummary, AssistConversation, AssistConversationStatus, AssistConversationSummary, AuthConfig, AuditEvent, CaptureProposal, ChangeKind, ChangeRequest, ChangeRequestDetail, ChangeStatus, ChatTurn, CaptureAssistReply, Comment, ExportInstruction, GenerateProposalsReply,
-  LlmProviderConfig, Me, Member, Observation, ObservationSource, ObservationStatus, Priority, Project, ProjectAssignmentCount, ScmLink, SiteBranding, SiteUser, UserMembership, WorkOrderSummary,
+  LlmProviderConfig, Me, Member, NotificationChannel, NotificationChannelType, NotificationEventType, NotificationPreference, Observation, ObservationSource, ObservationStatus, Priority, Project, ProjectAssignmentCount, ScmLink, SiteBranding, SiteUser, UserMembership, WorkOrderSummary,
 } from './types'
 
 /** Error carrying the HTTP status + ProblemDetails so the UI can show 403/409 guard failures nicely.
@@ -119,6 +119,25 @@ export const api = {
     body: { type: LlmProviderConfig['type']; name: string; baseUrl?: string | null; model: string; apiKeySecretRef?: string | null; enabled: boolean },
   ) => request<LlmProviderConfig>('PATCH', `/api/llm-providers/${id}`, body),
   deleteLlmProvider: (id: string) => request<void>('DELETE', `/api/llm-providers/${id}`),
+
+  // Notification channels (per-project outbound)
+  listNotificationChannels: (projectId: string) =>
+    request<NotificationChannel[]>('GET', `/api/projects/${projectId}/notification-channels`),
+  createNotificationChannel: (
+    projectId: string,
+    body: { type: NotificationChannelType; name: string; target: string; secretRef?: string | null; events: NotificationEventType[] },
+  ) => request<NotificationChannel>('POST', `/api/projects/${projectId}/notification-channels`, body),
+  updateNotificationChannel: (
+    projectId: string,
+    id: string,
+    body: { type: NotificationChannelType; name: string; target: string; secretRef?: string | null; events: NotificationEventType[]; enabled: boolean },
+  ) => request<NotificationChannel>('PATCH', `/api/projects/${projectId}/notification-channels/${id}`, body),
+  deleteNotificationChannel: (projectId: string, id: string) =>
+    request<void>('DELETE', `/api/projects/${projectId}/notification-channels/${id}`),
+  getNotificationPreference: (projectId: string) =>
+    request<NotificationPreference>('GET', `/api/projects/${projectId}/notification-preference`),
+  updateNotificationPreference: (projectId: string, body: { digestOptOut: boolean }) =>
+    request<NotificationPreference>('PUT', `/api/projects/${projectId}/notification-preference`, body),
 
   // Observations
   ingest: (

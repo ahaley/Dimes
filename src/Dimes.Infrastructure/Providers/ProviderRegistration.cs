@@ -20,6 +20,10 @@ public static class ProviderRegistration
         services.AddHttpClient<GitHubScmProvider>();
         services.AddTransient<IScmProvider>(sp => sp.GetRequiredService<GitHubScmProvider>());
 
+        services.AddHttpClient<GoogleChatNotificationProvider>();
+        services.AddTransient<INotificationChannelProvider>(
+            sp => sp.GetRequiredService<GoogleChatNotificationProvider>());
+
         return services;
     }
 }

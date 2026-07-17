@@ -1,8 +1,8 @@
 import { useState, type ReactNode } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '../api/client'
-import { keys, useActors, useExportInstruction, useLlmProviders, useMembers, useProjects, useSources, useUpdateExportInstruction } from '../api/hooks'
-import type { LlmProviderConfig, Member, MemberRole } from '../api/types'
+import { keys, useActors, useExportInstruction, useLlmProviders, useMembers, useNotificationChannels, useNotificationPreference, useProjects, useSaveNotificationChannel, useSources, useUpdateExportInstruction, useUpdateNotificationPreference } from '../api/hooks'
+import type { LlmProviderConfig, Member, MemberRole, NotificationChannel, NotificationEventType } from '../api/types'
 import { Badge, Button, cx, ErrorText, Field, Modal, Select, TextInput, Textarea } from '../components/ui'
 import { initials } from '../lifecycle'
 
@@ -12,7 +12,7 @@ const ROLES: MemberRole[] = ['Reporter', 'Contributor', 'Maintainer']
 const AGENT_ROLES: MemberRole[] = ['Assistant', 'Reporter', 'Contributor', 'Maintainer']
 
 export function SettingsModal({ projectId, onClose }: { projectId: string; onClose: () => void }) {
-  const [tab, setTab] = useState<'general' | 'members' | 'sources' | 'export' | 'danger'>('general')
+  const [tab, setTab] = useState<'general' | 'members' | 'sources' | 'notifications' | 'export' | 'danger'>('general')
   return (
     <Modal title="Manage project" onClose={onClose} wide>
       <div className="space-y-4">
@@ -21,14 +21,16 @@ export function SettingsModal({ projectId, onClose }: { projectId: string; onClo
           <TabButton active={tab === 'general'} onClick={() => setTab('general')}>General</TabButton>
           <TabButton active={tab === 'members'} onClick={() => setTab('members')}>Members</TabButton>
           <TabButton active={tab === 'sources'} onClick={() => setTab('sources')}>Sources</TabButton>
+          <TabButton active={tab === 'notifications'} onClick={() => setTab('notifications')}>Notifications</TabButton>
           <TabButton active={tab === 'export'} onClick={() => setTab('export')}>Export</TabButton>
           <TabButton active={tab === 'danger'} onClick={() => setTab('danger')}>Danger</TabButton>
         </div>
         {tab === 'general' ? <GeneralSection projectId={projectId} />
           : tab === 'members' ? <MembersSection projectId={projectId} />
             : tab === 'sources' ? <SourcesSection projectId={projectId} />
-              : tab === 'export' ? <ExportSection projectId={projectId} />
-                : <DangerSection projectId={projectId} />}
+              : tab === 'notifications' ? <NotificationsSection projectId={projectId} />
+                : tab === 'export' ? <ExportSection projectId={projectId} />
+                  : <DangerSection projectId={projectId} />}
       </div>
     </Modal>
   )
@@ -471,6 +473,201 @@ function MemberRow({
 
 // The UI only creates external capture sources; the Internal source type is provisioned server-side.
 type CreatableSourceType = 'Sdk' | 'Seq'
+
+// Only the events that actually fire this pass are offered (the type union declares more for the future).
+const SELECTABLE_EVENTS: { value: NotificationEventType; label: string; hint: string }[] = [
+  { value: 'AwaitingApproval', label: 'Awaiting approval', hint: 'A change enters Triaged and awaits a Maintainer.' },
+  { value: 'AssignedToYou', label: 'Assigned to you', hint: 'A change is assigned to a member.' },
+  { value: 'WorkOrderResults', label: 'Work-order results', hint: 'A coding agent reports back on an export.' },
+  { value: 'DailyDigest', label: 'Daily digest', hint: 'A once-a-day per-member summary.' },
+]
+
+const EVENT_LABEL: Record<string, string> = Object.fromEntries(SELECTABLE_EVENTS.map((e) => [e.value, e.label]))
+
+/// Outbound notifications: per-project Google Chat channels (which events flow to which space) plus the
+/// current user's own digest opt-out. Channel management is gated on Maintainer/site-admin by the backend;
+/// a 403 surfaces inline. The digest opt-out is the caller's own preference, so any member may set it.
+function NotificationsSection({ projectId }: { projectId: string }) {
+  const { data: channels } = useNotificationChannels(projectId)
+  const { data: preference } = useNotificationPreference(projectId)
+  const updatePreference = useUpdateNotificationPreference(projectId)
+  const { create, update, remove } = useSaveNotificationChannel(projectId)
+
+  const [editing, setEditing] = useState<NotificationChannel | null>(null)
+  const [creating, setCreating] = useState(false)
+
+  const onDelete = (c: NotificationChannel) => {
+    if (!window.confirm(`Delete the notification channel "${c.name}"? Its pending deliveries are dropped.`)) return
+    remove.mutate(c.id)
+  }
+
+  return (
+    <section className="space-y-4">
+      {/* The caller's own digest opt-out — a personal preference, not project config. */}
+      <label className="flex items-start gap-2 rounded-md border border-slate-200 p-3 text-sm text-slate-700 dark:border-slate-700 dark:text-slate-200">
+        <input
+          type="checkbox"
+          className="mt-0.5"
+          checked={preference?.digestOptOut ?? false}
+          disabled={!preference || updatePreference.isPending}
+          onChange={(e) => updatePreference.mutate({ digestOptOut: e.target.checked })}
+        />
+        <span>
+          Exclude me from the daily digest
+          <span className="block text-xs text-slate-400">
+            The digest still sends for this project; your section is left out of it.
+          </span>
+        </span>
+      </label>
+
+      <div>
+        <div className="mb-2 flex items-center justify-between">
+          <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-400">Channels</h4>
+          {!creating && !editing && (
+            <Button variant="subtle" onClick={() => { setCreating(true); setEditing(null) }}>Add channel</Button>
+          )}
+        </div>
+        <div className="divide-y divide-slate-100 overflow-hidden rounded-md border border-slate-200 dark:divide-slate-800 dark:border-slate-700">
+          {(channels ?? []).map((c) => (
+            <div key={c.id} className="flex items-start justify-between gap-3 px-3 py-2 text-sm">
+              <div className="min-w-0 space-y-1">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="text-slate-700 dark:text-slate-200">{c.name}</span>
+                  <span className="text-slate-400">· Google Chat</span>
+                  {c.enabled ? <Badge tone="green">Enabled</Badge> : <Badge tone="slate">Disabled</Badge>}
+                  <ChannelHealth channel={c} />
+                </div>
+                <div className="text-xs text-slate-500 dark:text-slate-400">
+                  <code className="font-mono">{c.target}</code>
+                </div>
+                <div className="flex flex-wrap gap-1">
+                  {c.events.length === 0
+                    ? <span className="text-xs text-slate-400">No events</span>
+                    : c.events.map((e) => <Badge key={e} tone="indigo">{EVENT_LABEL[e] ?? e}</Badge>)}
+                </div>
+              </div>
+              <div className="flex shrink-0 gap-1">
+                <Button variant="subtle" onClick={() => { setEditing(c); setCreating(false) }}>Edit</Button>
+                <Button variant="subtle" disabled={remove.isPending} onClick={() => onDelete(c)}>Delete</Button>
+              </div>
+            </div>
+          ))}
+          {channels?.length === 0 && <p className="px-3 py-4 text-sm text-slate-400">No channels configured.</p>}
+        </div>
+        <ErrorText error={remove.error} />
+      </div>
+
+      {(creating || editing) && (
+        <NotificationChannelForm
+          key={editing?.id ?? 'new'}
+          initial={editing}
+          pending={create.isPending || update.isPending}
+          error={editing ? update.error : create.error}
+          onCancel={() => { setCreating(false); setEditing(null) }}
+          onSubmit={(body) => {
+            if (editing) {
+              update.mutate({ id: editing.id, body }, { onSuccess: () => setEditing(null) })
+            } else {
+              // Create has no `enabled` (new channels are enabled by default); pass only its fields.
+              create.mutate(
+                { type: body.type, name: body.name, target: body.target, secretRef: body.secretRef, events: body.events },
+                { onSuccess: () => setCreating(false) },
+              )
+            }
+          }}
+        />
+      )}
+    </section>
+  )
+}
+
+// The last-delivery health badge — makes a dead endpoint visible instead of silently failing.
+function ChannelHealth({ channel }: { channel: NotificationChannel }) {
+  if (!channel.lastDeliveryAt) return <Badge tone="slate">Never delivered</Badge>
+  if (channel.lastDeliveryOk) return <Badge tone="green">Delivered</Badge>
+  return (
+    <span title={channel.lastDeliveryError ?? undefined}>
+      <Badge tone="red">Last delivery failed</Badge>
+    </span>
+  )
+}
+
+function NotificationChannelForm({
+  initial, pending, error, onSubmit, onCancel,
+}: {
+  initial: NotificationChannel | null
+  pending: boolean
+  error: unknown
+  onSubmit: (body: { type: 'GoogleChat'; name: string; target: string; secretRef: string | null; events: NotificationEventType[]; enabled: boolean }) => void
+  onCancel: () => void
+}) {
+  const [name, setName] = useState(initial?.name ?? '')
+  const [target, setTarget] = useState(initial?.target ?? '')
+  const [secretRef, setSecretRef] = useState(initial?.secretRef ?? '')
+  const [enabled, setEnabled] = useState(initial?.enabled ?? true)
+  const [events, setEvents] = useState<Set<NotificationEventType>>(new Set(initial?.events ?? []))
+
+  const toggleEvent = (value: NotificationEventType) =>
+    setEvents((prev) => {
+      const next = new Set(prev)
+      if (next.has(value)) next.delete(value); else next.add(value)
+      return next
+    })
+
+  const submit = () =>
+    onSubmit({
+      type: 'GoogleChat',
+      name: name.trim(),
+      target: target.trim(),
+      secretRef: secretRef.trim() || null,
+      events: [...events],
+      enabled,
+    })
+
+  return (
+    <div className="space-y-3 rounded-md border border-slate-200 p-3 dark:border-slate-700">
+      <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+        {initial ? 'Edit channel' : 'Add Google Chat channel'}
+      </h4>
+      <Field label="Name"><TextInput value={name} onChange={(e) => setName(e.target.value)} placeholder="Team space" /></Field>
+      <Field label="Google Chat space">
+        <TextInput value={target} onChange={(e) => setTarget(e.target.value)} placeholder="spaces/AAAAAAAAAAA" />
+      </Field>
+      <Field label="Credentials secret reference">
+        <TextInput value={secretRef} onChange={(e) => setSecretRef(e.target.value)} placeholder="e.g. GCHAT_CREDS" />
+      </Field>
+      <p className="text-xs text-slate-400">
+        A lookup key, not the credentials themselves — you must separately set its value (the service-account
+        JSON) in configuration (<code className="font-mono">Secrets:{secretRef.trim() || '<name>'}</code>) or an
+        environment variable of the same name. Required, because Google Chat can't authenticate without it.
+      </p>
+      <div>
+        <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">Events</div>
+        <div className="space-y-1.5">
+          {SELECTABLE_EVENTS.map((e) => (
+            <label key={e.value} className="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-200">
+              <input type="checkbox" className="mt-0.5" checked={events.has(e.value)} onChange={() => toggleEvent(e.value)} />
+              <span>{e.label}<span className="block text-xs text-slate-400">{e.hint}</span></span>
+            </label>
+          ))}
+        </div>
+      </div>
+      {initial && (
+        <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-200">
+          <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
+          Enabled
+        </label>
+      )}
+      <ErrorText error={error} />
+      <div className="flex justify-end gap-2">
+        <Button variant="subtle" onClick={onCancel}>Cancel</Button>
+        <Button variant="primary" disabled={!name.trim() || !target.trim() || !secretRef.trim() || pending} onClick={submit}>
+          {pending ? 'Saving…' : initial ? 'Save changes' : 'Add channel'}
+        </Button>
+      </div>
+    </div>
+  )
+}
 
 function SourcesSection({ projectId }: { projectId: string }) {
   const qc = useQueryClient()

@@ -32,6 +32,9 @@ public class DimesDbContext(DbContextOptions<DimesDbContext> options) : DbContex
     public DbSet<SystemInstruction> SystemInstructions => Set<SystemInstruction>();
     public DbSet<WorkOrder> WorkOrders => Set<WorkOrder>();
     public DbSet<WorkOrderItem> WorkOrderItems => Set<WorkOrderItem>();
+    public DbSet<NotificationChannelConfig> NotificationChannelConfigs => Set<NotificationChannelConfig>();
+    public DbSet<NotificationDelivery> NotificationDeliveries => Set<NotificationDelivery>();
+    public DbSet<NotificationPreference> NotificationPreferences => Set<NotificationPreference>();
     // Backing store for the ASP.NET Core Data Protection key ring (encrypts the BFF session cookie),
     // so cookies stay valid across restarts/deploys. Managed by the framework — not a domain entity.
     public DbSet<DataProtectionKey> DataProtectionKeys => Set<DataProtectionKey>();
@@ -210,6 +213,32 @@ public class DimesDbContext(DbContextOptions<DimesDbContext> options) : DbContex
             b.HasIndex(c => c.ActorId).IsUnique();
             b.HasOne(c => c.Actor).WithOne()
                 .HasForeignKey<LocalCredential>(c => c.ActorId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<NotificationChannelConfig>(b =>
+        {
+            // A project's channels, listed by name.
+            b.HasIndex(c => c.ProjectId);
+            b.HasOne(c => c.Project).WithMany()
+                .HasForeignKey(c => c.ProjectId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<NotificationDelivery>(b =>
+        {
+            // The drain worker's only query: due, still-pending deliveries.
+            b.HasIndex(d => new { d.Status, d.NextAttemptAt });
+            // Restrict (not Cascade): the channel-delete path clears outstanding deliveries first, so a
+            // channel can't be removed out from under an in-flight send and orphan the outbox.
+            b.HasOne(d => d.ChannelConfig).WithMany()
+                .HasForeignKey(d => d.ChannelConfigId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<NotificationPreference>(b =>
+        {
+            // At most one preference row per actor per scope (null ProjectId = the actor's global default).
+            b.HasIndex(p => new { p.ActorId, p.ProjectId }).IsUnique();
+            b.HasOne(p => p.Actor).WithMany()
+                .HasForeignKey(p => p.ActorId).OnDelete(DeleteBehavior.Restrict);
         });
 
         StoreEnumsAsStrings(modelBuilder);

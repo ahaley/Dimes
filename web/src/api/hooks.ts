@@ -11,6 +11,8 @@ export const keys = {
   members: (projectId: string) => ['members', projectId] as const,
   providers: (projectId: string) => ['providers', projectId] as const,
   sources: (projectId: string) => ['sources', projectId] as const,
+  notificationChannels: (projectId: string) => ['notification-channels', projectId] as const,
+  notificationPreference: (projectId: string) => ['notification-preference', projectId] as const,
   exportInstruction: (projectId: string) => ['export-instruction', projectId] as const,
   workOrder: (projectId: string) => ['work-order', projectId] as const,
   actors: (agentsOnly: boolean, includeArchived: boolean) => ['actors', agentsOnly, includeArchived] as const,
@@ -152,6 +154,53 @@ export function useSources(projectId: string | undefined) {
     queryKey: keys.sources(projectId ?? ''),
     queryFn: () => api.listSources(projectId!),
     enabled: !!projectId,
+  })
+}
+
+export function useNotificationChannels(projectId: string | undefined) {
+  return useQuery({
+    queryKey: keys.notificationChannels(projectId ?? ''),
+    queryFn: () => api.listNotificationChannels(projectId!),
+    enabled: !!projectId,
+  })
+}
+
+/** Create/update/delete a project's notification channels; each refreshes the channel list. */
+export function useSaveNotificationChannel(projectId: string) {
+  const qc = useQueryClient()
+  const invalidate = () => qc.invalidateQueries({ queryKey: keys.notificationChannels(projectId) })
+  return {
+    create: useMutation({
+      mutationFn: (body: Parameters<typeof api.createNotificationChannel>[1]) =>
+        api.createNotificationChannel(projectId, body),
+      onSuccess: invalidate,
+    }),
+    update: useMutation({
+      mutationFn: (vars: { id: string; body: Parameters<typeof api.updateNotificationChannel>[2] }) =>
+        api.updateNotificationChannel(projectId, vars.id, vars.body),
+      onSuccess: invalidate,
+    }),
+    remove: useMutation({
+      mutationFn: (id: string) => api.deleteNotificationChannel(projectId, id),
+      onSuccess: invalidate,
+    }),
+  }
+}
+
+/** The current user's own digest opt-out for a project. */
+export function useNotificationPreference(projectId: string | undefined) {
+  return useQuery({
+    queryKey: keys.notificationPreference(projectId ?? ''),
+    queryFn: () => api.getNotificationPreference(projectId!),
+    enabled: !!projectId,
+  })
+}
+
+export function useUpdateNotificationPreference(projectId: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (body: { digestOptOut: boolean }) => api.updateNotificationPreference(projectId, body),
+    onSuccess: (data) => qc.setQueryData(keys.notificationPreference(projectId), data),
   })
 }
 

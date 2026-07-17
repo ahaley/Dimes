@@ -30,7 +30,7 @@ public sealed class ChangeIdentifierTests : IDisposable
 
         var resolver = new MembershipResolver(_db);
         _projects = new ProjectService(_db, resolver);
-        _changes = new ChangeRequestService(_db, new LifecycleService(), resolver, _notifier);
+        _changes = new ChangeRequestService(_db, new LifecycleService(), resolver, _notifier, new NotificationDispatcher(_db));
     }
 
     private async Task<(Guid ProjectId, Guid ActorId)> SeedProjectAsync(string name, string? key)

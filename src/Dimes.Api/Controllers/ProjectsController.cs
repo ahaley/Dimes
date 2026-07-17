@@ -129,4 +129,56 @@ public class ProjectsController(
         await projects.EnsureProjectAdminAsync(projectId, currentActor.ActorId, currentActor.IsSiteAdmin, ct);
         return Ok(await projects.CreateLlmProviderAsync(projectId, req, ct));
     }
+
+    // ----- Notification channels (per-project outbound) -----
+
+    [HttpGet("{projectId:guid}/notification-channels")]
+    public async Task<ActionResult<IReadOnlyList<NotificationChannelDto>>> ListNotificationChannels(Guid projectId, CancellationToken ct)
+    {
+        await projects.EnsureProjectReadAsync(projectId, currentActor.ActorId, currentActor.IsSiteAdmin, ct);
+        return Ok(await projects.ListNotificationChannelsAsync(projectId, ct));
+    }
+
+    [HttpPost("{projectId:guid}/notification-channels")]
+    public async Task<ActionResult<NotificationChannelDto>> CreateNotificationChannel(
+        Guid projectId, CreateNotificationChannelRequest req, CancellationToken ct)
+    {
+        // A channel carries a secret reference and an outbound target, so minting one is project
+        // configuration — gate it like the sibling provider/source create.
+        await projects.EnsureProjectAdminAsync(projectId, currentActor.ActorId, currentActor.IsSiteAdmin, ct);
+        return Ok(await projects.CreateNotificationChannelAsync(projectId, req, ct));
+    }
+
+    [HttpPatch("{projectId:guid}/notification-channels/{id:guid}")]
+    public async Task<ActionResult<NotificationChannelDto>> UpdateNotificationChannel(
+        Guid projectId, Guid id, UpdateNotificationChannelRequest req, CancellationToken ct)
+    {
+        await projects.EnsureProjectAdminAsync(projectId, currentActor.ActorId, currentActor.IsSiteAdmin, ct);
+        return Ok(await projects.UpdateNotificationChannelAsync(projectId, id, req, ct));
+    }
+
+    [HttpDelete("{projectId:guid}/notification-channels/{id:guid}")]
+    public async Task<IActionResult> DeleteNotificationChannel(Guid projectId, Guid id, CancellationToken ct)
+    {
+        await projects.EnsureProjectAdminAsync(projectId, currentActor.ActorId, currentActor.IsSiteAdmin, ct);
+        await projects.DeleteNotificationChannelAsync(projectId, id, ct);
+        return NoContent();
+    }
+
+    // The current actor's own digest opt-out for a project (any member may read/set their own).
+
+    [HttpGet("{projectId:guid}/notification-preference")]
+    public async Task<ActionResult<NotificationPreferenceDto>> GetNotificationPreference(Guid projectId, CancellationToken ct)
+    {
+        await projects.EnsureProjectReadAsync(projectId, currentActor.ActorId, currentActor.IsSiteAdmin, ct);
+        return Ok(await projects.GetNotificationPreferenceAsync(currentActor.ActorId, projectId, ct));
+    }
+
+    [HttpPut("{projectId:guid}/notification-preference")]
+    public async Task<ActionResult<NotificationPreferenceDto>> UpdateNotificationPreference(
+        Guid projectId, UpdateNotificationPreferenceRequest req, CancellationToken ct)
+    {
+        await projects.EnsureProjectReadAsync(projectId, currentActor.ActorId, currentActor.IsSiteAdmin, ct);
+        return Ok(await projects.UpdateNotificationPreferenceAsync(currentActor.ActorId, projectId, req.DigestOptOut, ct));
+    }
 }

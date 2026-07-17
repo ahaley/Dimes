@@ -34,8 +34,8 @@ public sealed class WorkOrderIngestServiceTests : IDisposable
         _db.Database.Migrate();
 
         var resolver = new MembershipResolver(_db);
-        _changes = new ChangeRequestService(_db, new LifecycleService(), resolver, _notifier);
-        _workOrders = new WorkOrderService(_db, resolver, _notifier);
+        _changes = new ChangeRequestService(_db, new LifecycleService(), resolver, _notifier, new NotificationDispatcher(_db));
+        _workOrders = new WorkOrderService(_db, resolver, _notifier, new NotificationDispatcher(_db));
     }
 
     private async Task<(Guid ProjectId, Guid ActorId)> SeedProjectAsync(string name = "Demo")

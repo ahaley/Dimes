@@ -35,7 +35,7 @@ public sealed class CaptureLifecycleServiceTests : IDisposable
         var resolver = new MembershipResolver(_db);
         _projects = new ProjectService(_db, resolver);
         _observations = new ObservationService(_db, lifecycle, resolver, _notifier);
-        _changes = new ChangeRequestService(_db, lifecycle, resolver, _notifier);
+        _changes = new ChangeRequestService(_db, lifecycle, resolver, _notifier, new NotificationDispatcher(_db));
     }
 
     private async Task<(Guid ProjectId, Guid MaintainerId, Guid ContributorId, Guid SourceId)> SeedAsync()

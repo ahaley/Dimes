@@ -80,14 +80,23 @@ function AddProviderForm({ projectId }: { projectId: string }) {
         <TextInput value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} placeholder="http://localhost:11434/v1" />
       </Field>
       <Field label="API key secret ref">
-        <TextInput value={apiKeySecretRef} onChange={(e) => setSecret(e.target.value)} placeholder="ANTHROPIC_KEY" />
+        <TextInput value={apiKeySecretRef} onChange={(e) => setSecret(e.target.value)} placeholder="e.g. ANTHROPIC_KEY" />
       </Field>
+      <p className="text-xs text-slate-400">
+        A lookup key, not the key itself — set its value in configuration
+        (<code className="font-mono">Secrets:{apiKeySecretRef.trim() || '<name>'}</code>) or an environment
+        variable of the same name. Required for Anthropic; optional for a keyless local OpenAI-compatible endpoint.
+      </p>
       <label className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300">
         <input type="checkbox" checked={websiteWide} onChange={(e) => setWebsiteWide(e.target.checked)} />
         Website-wide (available to all projects)
       </label>
       <ErrorText error={add.error} />
-      <Button variant="primary" disabled={!name.trim() || !model.trim() || add.isPending} onClick={() => add.mutate()}>
+      <Button
+        variant="primary"
+        disabled={!name.trim() || !model.trim() || (type === 'Anthropic' && !apiKeySecretRef.trim()) || add.isPending}
+        onClick={() => add.mutate()}
+      >
         {websiteWide ? 'Add website-wide provider' : 'Add provider'}
       </Button>
     </Card>
@@ -151,14 +160,24 @@ function ProviderRow({ provider }: { provider: LlmProviderConfig }) {
       </div>
       <Field label="Model"><TextInput value={model} onChange={(e) => setModel(e.target.value)} /></Field>
       <Field label="Base URL"><TextInput value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} placeholder="http://localhost:11434/v1" /></Field>
-      <Field label="API key secret ref"><TextInput value={apiKeySecretRef} onChange={(e) => setSecret(e.target.value)} placeholder="ANTHROPIC_KEY" /></Field>
+      <Field label="API key secret ref"><TextInput value={apiKeySecretRef} onChange={(e) => setSecret(e.target.value)} placeholder="e.g. ANTHROPIC_KEY" /></Field>
+      <p className="text-xs text-slate-400">
+        A lookup key, not the key itself — set its value in <code className="font-mono">Secrets:{apiKeySecretRef.trim() || '<name>'}</code>
+        {' '}or an environment variable of the same name. Required for Anthropic; optional for a keyless local endpoint.
+      </p>
       <label className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300">
         <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} /> Enabled
       </label>
       <ErrorText error={save.error} />
       <div className="flex justify-end gap-2">
         <Button variant="subtle" onClick={() => setEditing(false)}>Cancel</Button>
-        <Button variant="primary" disabled={!name.trim() || !model.trim() || save.isPending} onClick={() => save.mutate()}>Save</Button>
+        <Button
+          variant="primary"
+          disabled={!name.trim() || !model.trim() || (type === 'Anthropic' && !apiKeySecretRef.trim()) || save.isPending}
+          onClick={() => save.mutate()}
+        >
+          Save
+        </Button>
       </div>
     </div>
   )

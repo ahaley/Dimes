@@ -64,6 +64,23 @@ public record UpdateLlmProviderRequest(LlmProviderType Type, string Name, string
 // safe to expose so the edit form can prefill it.
 public record LlmProviderConfigDto(Guid Id, Guid? ProjectId, LlmProviderType Type, string Name, string? BaseUrl, string Model, string? ApiKeySecretRef, bool Enabled);
 
+// ----- Notification channels (outbound; per-project) -----
+// SecretRef is a non-sensitive reference name (e.g. "GCHAT_CREDS"), not the secret itself — safe to
+// expose so the edit form can prefill it. Events is the set of NotificationEventType names routed here.
+public record CreateNotificationChannelRequest(
+    NotificationChannelType Type, string Name, string Target, string? SecretRef, IReadOnlyList<NotificationEventType> Events);
+public record UpdateNotificationChannelRequest(
+    NotificationChannelType Type, string Name, string Target, string? SecretRef, IReadOnlyList<NotificationEventType> Events, bool Enabled);
+public record NotificationChannelDto(
+    Guid Id, Guid ProjectId, NotificationChannelType Type, string Name, string Target, string? SecretRef,
+    IReadOnlyList<NotificationEventType> Events, bool Enabled,
+    // Delivery-health, so the settings UI can show a last-delivery badge and surface a dead endpoint.
+    DateTimeOffset? LastDeliveryAt, bool? LastDeliveryOk, string? LastDeliveryError);
+
+// The current actor's own digest opt-out for a project (a project-scoped preference over their global one).
+public record NotificationPreferenceDto(bool DigestOptOut);
+public record UpdateNotificationPreferenceRequest(bool DigestOptOut);
+
 // ----- Recommend-only agent commentary -----
 public record AgentCommentRequest(Guid AgentActorId);
 

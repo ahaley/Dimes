@@ -16,6 +16,9 @@
     <PackageReference Include="Microsoft.AspNetCore.DataProtection.EntityFrameworkCore" Version="10.0.9" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="10.0.9" />
     <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.9" />
+    <!-- Mints service-account access tokens for the Google Chat notification adapter (credentials JSON
+         → scoped OAuth2 bearer). Auth-only; no Google client libraries pulled in. -->
+    <PackageReference Include="Google.Apis.Auth" Version="1.69.0" />
     <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="3.0.3" />
   </ItemGroup>
 

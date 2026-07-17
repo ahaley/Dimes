@@ -77,6 +77,13 @@ builder.Services.AddScoped<SiteSettingsService>();
 builder.Services.AddScoped<IdentifierBootstrapper>();
 builder.Services.AddScoped<SystemInstructionBootstrapper>();
 
+// Outbound notifications: the dispatcher stages outbox rows in the same transaction as the triggering
+// audit event; two background workers deliver them (with retry) and build the daily digest.
+builder.Services.AddScoped<INotificationDispatcher, NotificationDispatcher>();
+builder.Services.AddScoped<NotificationDrainRunner>();
+builder.Services.AddHostedService<NotificationDrainService>();
+builder.Services.AddHostedService<NotificationDigestService>();
+
 // Realtime board updates (SignalR).
 builder.Services.AddSignalR();
 builder.Services.AddSingleton<IBoardNotifier, SignalRBoardNotifier>();

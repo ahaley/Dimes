@@ -611,6 +611,7 @@ public class ProjectService(DimesDbContext db, MembershipResolver members)
         {
             throw new BadRequestException("Provider name and model are required.");
         }
+        RequireApiKeyRef(req.Type, req.ApiKeySecretRef);
 
         await ProviderUrlValidator.ValidateAsync(req.BaseUrl, ct);
 
@@ -640,6 +641,7 @@ public class ProjectService(DimesDbContext db, MembershipResolver members)
         {
             throw new BadRequestException("Provider name and model are required.");
         }
+        RequireApiKeyRef(req.Type, req.ApiKeySecretRef);
 
         await ProviderUrlValidator.ValidateAsync(req.BaseUrl, ct);
 
@@ -651,6 +653,20 @@ public class ProjectService(DimesDbContext db, MembershipResolver members)
         config.Enabled = req.Enabled;
         await db.SaveChangesAsync(ct);
         return config.ToDto();
+    }
+
+    /// <summary>An API key reference is required for providers whose endpoint always authenticates
+    /// (Anthropic), but must stay optional for an OpenAI-compatible endpoint pointed at a keyless local
+    /// runner (Ollama / vLLM / LM Studio) — the data-stays-local path the spec preserves. Like the Google
+    /// Chat check, this fails at save so a misconfiguration surfaces immediately rather than at first call.</summary>
+    private static void RequireApiKeyRef(LlmProviderType type, string? apiKeySecretRef)
+    {
+        if (type == LlmProviderType.Anthropic && string.IsNullOrWhiteSpace(apiKeySecretRef))
+        {
+            throw new BadRequestException(
+                "An API key secret reference is required for Anthropic providers. It names a secret you " +
+                "configure in Secrets:<name> or an environment variable — it is not the key itself.");
+        }
     }
 
     /// <summary>Delete a provider config. Blocked while any agent still references it (reassign first).</summary>
@@ -668,5 +684,138 @@ public class ProjectService(DimesDbContext db, MembershipResolver members)
 
         db.LlmProviderConfigs.Remove(config);
         await db.SaveChangesAsync(ct);
+    }
+
+    // ----- Notification channels (per-project outbound) -----
+
+    public async Task<IReadOnlyList<NotificationChannelDto>> ListNotificationChannelsAsync(
+        Guid projectId, CancellationToken ct = default) =>
+        await db.NotificationChannelConfigs
+            .Where(c => c.ProjectId == projectId)
+            .OrderBy(c => c.Name)
+            .Select(c => c.ToDto())
+            .ToListAsync(ct);
+
+    public async Task<NotificationChannelDto> CreateNotificationChannelAsync(
+        Guid projectId, CreateNotificationChannelRequest req, CancellationToken ct = default)
+    {
+        if (!await db.Projects.AnyAsync(p => p.Id == projectId, ct))
+        {
+            throw new NotFoundException($"Project '{projectId}' not found.");
+        }
+        ValidateChannel(req.Type, req.Name, req.Target, req.SecretRef, req.Events);
+
+        var channel = new NotificationChannelConfig
+        {
+            ProjectId = projectId,
+            Type = req.Type,
+            Name = req.Name.Trim(),
+            Target = req.Target.Trim(),
+            SecretRef = req.SecretRef,
+            EventsJson = Mappings.SerializeEvents(req.Events),
+        };
+        db.NotificationChannelConfigs.Add(channel);
+        await db.SaveChangesAsync(ct);
+        return channel.ToDto();
+    }
+
+    public async Task<NotificationChannelDto> UpdateNotificationChannelAsync(
+        Guid projectId, Guid id, UpdateNotificationChannelRequest req, CancellationToken ct = default)
+    {
+        var channel = await db.NotificationChannelConfigs
+            .FirstOrDefaultAsync(c => c.Id == id && c.ProjectId == projectId, ct)
+            ?? throw new NotFoundException($"Notification channel '{id}' not found.");
+        ValidateChannel(req.Type, req.Name, req.Target, req.SecretRef, req.Events);
+
+        channel.Type = req.Type;
+        channel.Name = req.Name.Trim();
+        channel.Target = req.Target.Trim();
+        channel.SecretRef = req.SecretRef;
+        channel.EventsJson = Mappings.SerializeEvents(req.Events);
+        channel.Enabled = req.Enabled;
+        await db.SaveChangesAsync(ct);
+        return channel.ToDto();
+    }
+
+    public async Task DeleteNotificationChannelAsync(Guid projectId, Guid id, CancellationToken ct = default)
+    {
+        var channel = await db.NotificationChannelConfigs
+            .FirstOrDefaultAsync(c => c.Id == id && c.ProjectId == projectId, ct)
+            ?? throw new NotFoundException($"Notification channel '{id}' not found.");
+
+        // The delivery FK is Restrict, so clear any outstanding outbox rows for this channel first (they're
+        // a projection of the audit log, not history worth keeping once the channel is gone).
+        var deliveries = await db.NotificationDeliveries.Where(d => d.ChannelConfigId == id).ToListAsync(ct);
+        db.NotificationDeliveries.RemoveRange(deliveries);
+        db.NotificationChannelConfigs.Remove(channel);
+        await db.SaveChangesAsync(ct);
+    }
+
+    private static void ValidateChannel(
+        NotificationChannelType type, string? name, string? target, string? secretRef,
+        IReadOnlyList<NotificationEventType> events)
+    {
+        if (!Enum.IsDefined(type))
+        {
+            throw new BadRequestException("Unknown notification channel type.");
+        }
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            throw new BadRequestException("Channel name is required.");
+        }
+        if (string.IsNullOrWhiteSpace(target))
+        {
+            throw new BadRequestException("Channel target is required (for Google Chat, the space resource name).");
+        }
+        // Google Chat can't authenticate without service-account credentials, so the reference is required.
+        // Failing here (at save) turns a silent, minutes-later delivery failure into an immediate, local one.
+        if (type == NotificationChannelType.GoogleChat && string.IsNullOrWhiteSpace(secretRef))
+        {
+            throw new BadRequestException(
+                "A credentials secret reference is required for Google Chat. It names a secret you configure " +
+                "in Secrets:<name> or an environment variable — it is not the credentials themselves.");
+        }
+        if (events.Any(e => !Enum.IsDefined(e)))
+        {
+            throw new BadRequestException("Unknown notification event in the subscription set.");
+        }
+    }
+
+    // ----- Notification preferences (the current actor's own digest opt-out) -----
+
+    /// <summary>The caller's effective digest opt-out for a project: their project-scoped preference if set,
+    /// otherwise their global one, otherwise opted in.</summary>
+    public async Task<NotificationPreferenceDto> GetNotificationPreferenceAsync(
+        Guid actorId, Guid projectId, CancellationToken ct = default)
+    {
+        var rows = await db.NotificationPreferences
+            .Where(p => p.ActorId == actorId && (p.ProjectId == projectId || p.ProjectId == null))
+            .ToListAsync(ct);
+        var scoped = rows.FirstOrDefault(p => p.ProjectId == projectId);
+        var optOut = scoped?.DigestOptOut ?? rows.FirstOrDefault(p => p.ProjectId == null)?.DigestOptOut ?? false;
+        return new NotificationPreferenceDto(optOut);
+    }
+
+    /// <summary>Upsert the caller's project-scoped digest opt-out.</summary>
+    public async Task<NotificationPreferenceDto> UpdateNotificationPreferenceAsync(
+        Guid actorId, Guid projectId, bool digestOptOut, CancellationToken ct = default)
+    {
+        var row = await db.NotificationPreferences
+            .FirstOrDefaultAsync(p => p.ActorId == actorId && p.ProjectId == projectId, ct);
+        if (row is null)
+        {
+            db.NotificationPreferences.Add(new NotificationPreference
+            {
+                ActorId = actorId,
+                ProjectId = projectId,
+                DigestOptOut = digestOptOut,
+            });
+        }
+        else
+        {
+            row.DigestOptOut = digestOptOut;
+        }
+        await db.SaveChangesAsync(ct);
+        return new NotificationPreferenceDto(digestOptOut);
     }
 }

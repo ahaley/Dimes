@@ -13,7 +13,8 @@ namespace Dimes.Api.Services;
 /// Strictly recommend-only: this attaches links, posts a summary comment, and flags the item as reported —
 /// it never changes a change's status. A human confirms InDevelopment → InReview through the normal guarded
 /// <c>LifecycleService</c> path, which is also where the item settles to Confirmed.</summary>
-public class WorkOrderService(DimesDbContext db, MembershipResolver members, IBoardNotifier notifier)
+public class WorkOrderService(
+    DimesDbContext db, MembershipResolver members, IBoardNotifier notifier, INotificationDispatcher notifications)
 {
     // The report endpoint is anonymous — the token is the only gate — so bound what one call can store.
     // Mirrors the capture endpoint's posture rather than trusting a well-behaved client.
@@ -183,6 +184,20 @@ public class WorkOrderService(DimesDbContext db, MembershipResolver members, IBo
         }
 
         workOrder.LastReportedAt = now;
+
+        // Notify the human who exported this work order that an agent reported back — but only when the
+        // report actually did something (a replayed/empty report touches nothing and stays silent).
+        if (touched.Count > 0)
+        {
+            var reported = workOrder.Items.Count(
+                i => i.Status is WorkOrderItemStatus.Reported or WorkOrderItemStatus.Confirmed);
+            var blockedCount = workOrder.Items.Count(i => i.Status == WorkOrderItemStatus.Blocked);
+            await notifications.EnqueueAsync(
+                workOrder.ProjectId, NotificationEventType.WorkOrderResults, "Work order results received",
+                $"Your work order \"{workOrder.FileName}\" received an agent report — {reported} reported, {blockedCount} blocked.",
+                recipientActorId: workOrder.ExportedByActorId, ct: ct);
+        }
+
         await db.SaveChangesAsync(ct);
 
         foreach (var changeId in touched)

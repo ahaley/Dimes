@@ -17,6 +17,9 @@ export type LlmProviderType = 'Anthropic' | 'OpenAICompatible'
 export type ScmProviderType = 'GitHub'
 export type AuditEntityType = 'ChangeRequest' | 'Observation'
 export type WorkOrderItemStatus = 'Pending' | 'Reported' | 'Blocked' | 'Confirmed'
+export type NotificationChannelType = 'GoogleChat'
+export type NotificationEventType =
+  | 'AwaitingApproval' | 'AssignedToYou' | 'WorkOrderResults' | 'ChangeTransitioned' | 'AssistReply' | 'DailyDigest'
 
 export interface Project { id: string; name: string; description?: string | null; createdAt: string; isArchived: boolean; archivedAt?: string | null; sourceControlEnabled: boolean; humanOnly: boolean; key?: string | null }
 export interface Member {
@@ -74,6 +77,16 @@ export interface LlmProviderConfig {
   id: string; projectId?: string | null; type: LlmProviderType; name: string
   baseUrl?: string | null; model: string; apiKeySecretRef?: string | null; enabled: boolean
 }
+// ----- Notification channels (per-project outbound) -----
+// secretRef is a non-sensitive reference name (e.g. "GCHAT_CREDS"), safe to prefill in the edit form.
+export interface NotificationChannel {
+  id: string; projectId: string; type: NotificationChannelType; name: string; target: string
+  secretRef?: string | null; events: NotificationEventType[]; enabled: boolean
+  lastDeliveryAt?: string | null; lastDeliveryOk?: boolean | null; lastDeliveryError?: string | null
+}
+// The current user's own digest opt-out for a project.
+export interface NotificationPreference { digestOptOut: boolean }
+
 export interface ActorSummary {
   id: string; displayName: string; type: ActorType; email?: string | null
   llmProviderConfigId?: string | null; providerName?: string | null

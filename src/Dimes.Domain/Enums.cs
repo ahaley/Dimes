@@ -118,6 +118,41 @@ public enum ScmProviderType
     GitHub,
 }
 
+/// <summary>An outbound notification channel. Pass-1 ships Google Chat only (service account + a
+/// credentials-JSON secret); the interface is a set so Webhook/SMTP adapters slot in later.</summary>
+public enum NotificationChannelType
+{
+    GoogleChat,
+}
+
+/// <summary>The events a project can route to its notification channels. The first three are wired to
+/// fire in this pass; <see cref="DailyDigest"/> is the scheduled per-actor rollup. The remainder are
+/// declared so the config UI can offer them, and are wired incrementally.</summary>
+public enum NotificationEventType
+{
+    /// <summary>A change entered Triaged and now awaits a Maintainer's approval gate.</summary>
+    AwaitingApproval,
+    /// <summary>A change was assigned (or created assigned) to an actor.</summary>
+    AssignedToYou,
+    /// <summary>A coding agent reported results back against an exported work order.</summary>
+    WorkOrderResults,
+    /// <summary>Any change status transition (declared; not fired in this pass).</summary>
+    ChangeTransitioned,
+    /// <summary>A Capture Assist conversation received a reply (declared; not fired in this pass).</summary>
+    AssistReply,
+    /// <summary>The scheduled daily per-actor digest.</summary>
+    DailyDigest,
+}
+
+/// <summary>An outbox delivery's lifecycle. <see cref="Failed"/> is terminal — the drain worker gave up
+/// after exhausting retries; the channel keeps the last error for the settings health badge.</summary>
+public enum NotificationDeliveryStatus
+{
+    Pending,
+    Sent,
+    Failed,
+}
+
 /// <summary>How far one exported change got in the work-order round-trip. <c>Reported</c> and
 /// <c>Blocked</c> are the executing agent's claim and never a state change — ingest is recommend-only.
 /// <c>Confirmed</c> is stamped when a human actually drives InDevelopment → InReview through

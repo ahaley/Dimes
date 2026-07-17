@@ -27,7 +27,7 @@ public sealed class ExportInstructionTests : IDisposable
         _db.Database.Migrate();
 
         var resolver = new MembershipResolver(_db);
-        _changes = new ChangeRequestService(_db, new LifecycleService(), resolver, new FakeBoardNotifier());
+        _changes = new ChangeRequestService(_db, new LifecycleService(), resolver, new FakeBoardNotifier(), new NotificationDispatcher(_db));
     }
 
     // Add a project directly, with no seeded instruction row, so each test controls whether an override
