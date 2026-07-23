@@ -9,11 +9,13 @@ import { useBoardSensors } from '../lib/dndSensors'
 import { initials, projectColor } from '../lifecycle'
 
 export function Sidebar({
-  projects, archivedProjects = [], assignmentCounts, siteTitle, projectId, onSelect, collapsed, onToggleCollapse,
+  projects, otherProjects = [], archivedProjects = [], assignmentCounts, siteTitle, projectId, onSelect, collapsed, onToggleCollapse,
   canCreateProject, onNewProject,
   activeView, onShowProviders, onShowActors, onShowSettings, showSettings, mobileOpen,
 }: {
   projects: Project[]
+  /** Projects the viewer can see but isn't a member of — only ever non-empty for a site admin. */
+  otherProjects?: Project[]
   archivedProjects?: Project[]
   assignmentCounts: Map<string, number>
   siteTitle: string
@@ -33,6 +35,7 @@ export function Sidebar({
   // "collapsed" is a desktop-only rail concept; the mobile drawer always shows full labels.
   const compact = collapsed && !mobileOpen
   const [showArchived, setShowArchived] = useState(false)
+  const [showOthers, setShowOthers] = useState(false)
 
   // Personal project ordering via drag (expanded mode only). The grip handle carries the drag; the row
   // itself stays click-to-navigate. A 5px move (mouse) or 250ms long-press (touch) starts the drag, so
@@ -169,6 +172,40 @@ export function Sidebar({
                 >
                   <span className={cx('h-4 w-0.5 rounded', active ? 'bg-slate-400' : 'bg-transparent')} />
                   <span className="truncate italic">{p.name}</span>
+                </button>
+              )
+            })}
+          </div>
+        )}
+
+        {/* Projects the viewer isn't a member of: kept out of the menu proper (they're someone else's
+            project until you join), but reachable here so a site admin can still get into one. Empty
+            for everyone else, so this group simply doesn't exist for them. */}
+        {!compact && otherProjects.length > 0 && (
+          <div className="pt-2">
+            <button
+              onClick={() => setShowOthers((v) => !v)}
+              className="flex w-full items-center gap-1 rounded-md px-2 py-1.5 text-left text-xs font-semibold uppercase tracking-wide text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+            >
+              <span className="text-[0.65rem]">{showOthers ? '▾' : '▸'}</span>
+              <span>All projects ({otherProjects.length})</span>
+            </button>
+            {showOthers && otherProjects.map((p) => {
+              const active = p.id === projectId && activeView === 'board'
+              return (
+                <button
+                  key={p.id}
+                  onClick={() => onSelect(p.id)}
+                  title={`${p.name} — you're not a member`}
+                  className={cx(
+                    'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm',
+                    active
+                      ? 'bg-slate-100 font-medium text-slate-700 dark:bg-slate-800 dark:text-slate-200'
+                      : 'text-slate-400 hover:bg-slate-50 dark:text-slate-500 dark:hover:bg-slate-800',
+                  )}
+                >
+                  <span className={cx('h-4 w-0.5 rounded', active ? 'bg-slate-400' : 'bg-transparent')} />
+                  <span className="truncate">{p.name}</span>
                 </button>
               )
             })}

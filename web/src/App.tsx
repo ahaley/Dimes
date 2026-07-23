@@ -76,6 +76,12 @@ export default function App() {
   const { data: projects } = useProjects(!!me, true)
   const activeProjects = projects?.filter((p) => !p.isArchived)
   const archivedProjects = projects?.filter((p) => p.isArchived) ?? []
+  // The nav lists the projects you belong to. A site admin also *sees* the ones they aren't a member
+  // of (the API returns them so every project stays resolvable by id — header, board, settings), but
+  // those don't belong in the menu: they're someone else's project until an admin joins it. They get
+  // their own collapsed group in the sidebar instead. Non-admins never receive any, so this is empty.
+  const myProjects = activeProjects?.filter((p) => p.myRole != null)
+  const otherProjects = activeProjects?.filter((p) => p.myRole == null) ?? []
   const navigate = useNavigate()
   const location = useLocation()
 
@@ -209,7 +215,8 @@ export default function App() {
         />
       )}
       <Sidebar
-        projects={activeProjects ?? []}
+        projects={myProjects ?? []}
+        otherProjects={otherProjects}
         archivedProjects={archivedProjects}
         assignmentCounts={assignmentBadgeByProject}
         siteTitle={siteTitle}
@@ -260,7 +267,18 @@ export default function App() {
 
         <main className="min-h-0 flex-1 overflow-auto p-4 sm:p-6">
           <Routes>
-            <Route path="/" element={<IndexRedirect projects={activeProjects} canCreate={me.isSiteAdmin} onNewProject={() => setShowCreateProject(true)} />} />
+            {/* Land on one of your own projects; an admin who belongs to none still lands somewhere
+                rather than on the "no projects yet" empty state. */}
+            <Route
+              path="/"
+              element={(
+                <IndexRedirect
+                  projects={myProjects?.length ? myProjects : activeProjects}
+                  canCreate={me.isSiteAdmin}
+                  onNewProject={() => setShowCreateProject(true)}
+                />
+              )}
+            />
             <Route
               path="/projects/:projectId"
               element={<Workspace actingActorId={me.actorId} members={members ?? []} />}
