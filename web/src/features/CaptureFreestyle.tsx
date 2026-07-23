@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../api/client'
-import { useProjectInvalidator } from '../api/hooks'
+import { useProjectInvalidator, useProjects } from '../api/hooks'
 import type { ChangeKind, Member, Priority } from '../api/types'
 import { Badge, Button, cx, ErrorText, Field, Select, TextInput, Textarea } from '../components/ui'
 import { useToast } from '../components/Toast'
@@ -20,7 +20,11 @@ const MIN_MARKDOWN = 8 // skip generation until the brief has some substance
 const freestyleDraftKey = (projectId: string) => `dimes.captureAssist.freestyle.${projectId}`
 
 // Client-only editable proposal. `id` is a stable React key; it is never sent to the create endpoint.
-type Proposal = { id: string; title: string; description: string; kind: ChangeKind; priority: Priority }
+// `projectId` is the project the proposal will be captured into — the one being briefed unless the
+// user redirects the card elsewhere.
+type Proposal = {
+  id: string; title: string; description: string; kind: ChangeKind; priority: Priority; projectId: string
+}
 
 /**
  * Capture Assist — Freestyle Mode. The user writes a freeform markdown brief on the left; an Agent's
@@ -35,6 +39,18 @@ export function CaptureFreestyle({ projectId, projectName, agents, zen = false, 
   const navigate = useNavigate()
   const toast = useToast()
   const invalidate = useProjectInvalidator(projectId)
+
+  // Projects a proposal can be redirected to. Same args as the app shell's call so this shares its
+  // cached query instead of issuing a second /api/projects fetch; archived projects are dropped here
+  // (you can't capture into one) and the briefed project always leads the list as the default.
+  const { data: allProjects } = useProjects(true, true)
+  const targets = useMemo(() => {
+    const active = (allProjects ?? []).filter((p) => !p.isArchived)
+    const current = active.find((p) => p.id === projectId)
+    const rest = active.filter((p) => p.id !== projectId).sort((a, b) => a.name.localeCompare(b.name))
+    return [...(current ? [current] : []), ...rest]
+  }, [allProjects, projectId])
+  const targetName = (id: string) => targets.find((p) => p.id === id)?.name ?? 'another project'
 
   const defaultAgentId =
     (agents.find((a) => a.role === 'Assistant') ?? agents[0])?.actorId ?? ''
@@ -71,6 +87,7 @@ export function CaptureFreestyle({ projectId, projectName, agents, zen = false, 
         description: p.description ?? '',
         kind: p.kind,
         priority: p.priority,
+        projectId,
       })))
       // The prior proposals (and any open editor) are gone — collapse so editingId can't dangle.
       setEditingId(null)
@@ -120,7 +137,7 @@ export function CaptureFreestyle({ projectId, projectName, agents, zen = false, 
   }
   const addProposal = () => {
     const id = crypto.randomUUID()
-    setProposals((ps) => [...ps, { id, title: '', description: '', kind: 'Feature', priority: 'None' }])
+    setProposals((ps) => [...ps, { id, title: '', description: '', kind: 'Feature', priority: 'None', projectId }])
     // A brand-new card has nothing to read, so open it straight into edit mode.
     setEditingId(id)
     setDirty(true)
@@ -135,26 +152,58 @@ export function CaptureFreestyle({ projectId, projectName, agents, zen = false, 
 
   const validCount = useMemo(() => proposals.filter((p) => p.title.trim()).length, [proposals])
 
+  // Ids of the proposals a confirm has already created, so a partial failure (one project's batch
+  // rejected after an earlier one landed) can drop them before the user retries — otherwise the
+  // retry would create them a second time.
+  const createdIds = useRef(new Set<string>())
+
   const confirm = useMutation({
-    mutationFn: () =>
-      api.createChangesBatch(projectId, {
-        changes: proposals
-          .filter((p) => p.title.trim())
-          .map((p) => ({
+    mutationFn: async () => {
+      createdIds.current = new Set()
+      // The batch endpoint is per-project, so a redirected card means one call per target. Group by
+      // project, briefed project first, so the common path is created before any redirect.
+      const groups = new Map<string, Proposal[]>()
+      for (const p of proposals.filter((p) => p.title.trim())) {
+        const group = groups.get(p.projectId)
+        if (group) group.push(p)
+        else groups.set(p.projectId, [p])
+      }
+      const ordered = [...groups].sort(([a], [b]) => (a === projectId ? -1 : b === projectId ? 1 : 0))
+
+      let count = 0
+      for (const [target, group] of ordered) {
+        const created = await api.createChangesBatch(target, {
+          changes: group.map((p) => ({
             title: p.title.trim(),
             description: p.description.trim() || null,
             kind: p.kind,
             priority: p.priority,
           })),
-      }),
-    onSuccess: (created) => {
+        })
+        count += created.length
+        group.forEach((p) => createdIds.current.add(p.id))
+      }
+      return { count, projects: ordered.length }
+    },
+    onSuccess: ({ count, projects }) => {
       // The brief has done its job — drop the persisted draft so it doesn't resurrect on return.
       try { localStorage.removeItem(draftKey) } catch { /* non-fatal */ }
       invalidate()
-      toast.success(`${created.length} change request${created.length === 1 ? '' : 's'} captured`)
+      toast.success(
+        `${count} change request${count === 1 ? '' : 's'} captured`
+        + (projects > 1 ? ` across ${projects} projects` : ''),
+      )
       navigate(`/projects/${projectId}`)
     },
-    onError: (e) => toast.error(e instanceof Error ? e.message : 'Could not create the changes'),
+    onError: (e) => {
+      // Keep only what didn't get created; those are what a retry should send.
+      if (createdIds.current.size > 0) {
+        setProposals((ps) => ps.filter((p) => !createdIds.current.has(p.id)))
+        setEditingId((cur) => (cur !== null && createdIds.current.has(cur) ? null : cur))
+        invalidate()
+      }
+      toast.error(e instanceof Error ? e.message : 'Could not create the changes')
+    },
   })
 
   const noAgent = !activeAgentId
@@ -319,6 +368,17 @@ export function CaptureFreestyle({ projectId, projectName, agents, zen = false, 
                         </Select>
                       </Field>
                     </div>
+                    {/* Redirect: send this one proposal to a different project. Only worth a control
+                        when there's somewhere else to send it. */}
+                    {targets.length > 1 && (
+                      <Field label="Project">
+                        <Select value={p.projectId} onChange={(e) => update(p.id, { projectId: e.target.value })}>
+                          {targets.map((t) => (
+                            <option key={t.id} value={t.id}>{t.name}{t.id === projectId ? ' (this project)' : ''}</option>
+                          ))}
+                        </Select>
+                      </Field>
+                    )}
                   </>
                 ) : (
                   // Compact read-only view — dense enough to fit many at once. The read area expands into the
@@ -336,6 +396,8 @@ export function CaptureFreestyle({ projectId, projectName, agents, zen = false, 
                       <div className="flex flex-wrap items-center gap-1">
                         <Badge tone={kindTone(p.kind)}>{p.kind}</Badge>
                         {p.priority !== 'None' && <Badge tone="amber">{p.priority}</Badge>}
+                        {/* A redirect changes where this lands, so surface it without opening the card. */}
+                        {p.projectId !== projectId && <Badge tone="violet">→ {targetName(p.projectId)}</Badge>}
                       </div>
                     </button>
                     <button
