@@ -41,13 +41,18 @@ export function CaptureFreestyle({ projectId, projectName, agents, zen = false, 
   const invalidate = useProjectInvalidator(projectId)
 
   // Projects a proposal can be redirected to. Same args as the app shell's call so this shares its
-  // cached query instead of issuing a second /api/projects fetch; archived projects are dropped here
-  // (you can't capture into one) and the briefed project always leads the list as the default.
+  // cached query instead of issuing a second /api/projects fetch. A redirect target must be one the
+  // user has real capture authority in — Contributor or higher — so a Reporter-only (or, for a site
+  // admin, non-member) project is never offered. Archived projects are dropped too (you can't capture
+  // into one), and the briefed project always leads the list as the default: the user is already
+  // capturing into it, so it stays available whatever their role there.
   const { data: allProjects } = useProjects(true, true)
   const targets = useMemo(() => {
     const active = (allProjects ?? []).filter((p) => !p.isArchived)
     const current = active.find((p) => p.id === projectId)
-    const rest = active.filter((p) => p.id !== projectId).sort((a, b) => a.name.localeCompare(b.name))
+    const rest = active
+      .filter((p) => p.id !== projectId && (p.myRole === 'Contributor' || p.myRole === 'Maintainer'))
+      .sort((a, b) => a.name.localeCompare(b.name))
     return [...(current ? [current] : []), ...rest]
   }, [allProjects, projectId])
   const targetName = (id: string) => targets.find((p) => p.id === id)?.name ?? 'another project'

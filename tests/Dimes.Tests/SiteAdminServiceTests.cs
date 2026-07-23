@@ -176,6 +176,29 @@ public sealed class SiteAdminServiceTests : IDisposable
         Assert.Equal(2, (await _projects.ListAsync(boss.Id, isSiteAdmin: true)).Count);
     }
 
+    /// <summary>Every listed project carries the caller's own role in it, so a client can gate an
+    /// affordance (e.g. the freestyle redirect targets) on their authority in a project other than the
+    /// one they're viewing. A site admin's non-member project reports no role.</summary>
+    [Fact]
+    public async Task ProjectList_CarriesCallersRole_NullWhereNotAMember()
+    {
+        var a = await _projects.CreateAsync(new CreateProjectRequest("A", null));
+        var b = await _projects.CreateAsync(new CreateProjectRequest("B", null));
+        var ned = await CreateUser("Ned", "ned@x.com");
+        var boss = await CreateUser("Boss", "boss@x.com", admin: true);
+        await _projects.AssignMemberAsync(a.Id, ned.Id, MemberRole.Reporter);
+        await _projects.AssignMemberAsync(b.Id, ned.Id, MemberRole.Contributor);
+        await _projects.AssignMemberAsync(a.Id, boss.Id, MemberRole.Maintainer);
+
+        var nedSees = await _projects.ListAsync(ned.Id, isSiteAdmin: false);
+        Assert.Equal(MemberRole.Reporter, nedSees.Single(p => p.Id == a.Id).MyRole);
+        Assert.Equal(MemberRole.Contributor, nedSees.Single(p => p.Id == b.Id).MyRole);
+
+        var bossSees = await _projects.ListAsync(boss.Id, isSiteAdmin: true);
+        Assert.Equal(MemberRole.Maintainer, bossSees.Single(p => p.Id == a.Id).MyRole);
+        Assert.Null(bossSees.Single(p => p.Id == b.Id).MyRole); // visible as a site admin, but not a member
+    }
+
     [Fact]
     public async Task ArchiveProject_HidesFromDefaultList_AndUnarchiveRestores()
     {

@@ -21,7 +21,9 @@ export type NotificationChannelType = 'GoogleChat'
 export type NotificationEventType =
   | 'AwaitingApproval' | 'AssignedToYou' | 'WorkOrderResults' | 'ChangeTransitioned' | 'AssistReply' | 'DailyDigest'
 
-export interface Project { id: string; name: string; description?: string | null; createdAt: string; isArchived: boolean; archivedAt?: string | null; sourceControlEnabled: boolean; humanOnly: boolean; key?: string | null }
+// myRole is your own role in the project, or null when you hold no membership in it (only a site
+// admin, who sees every project, ever gets a null).
+export interface Project { id: string; name: string; description?: string | null; createdAt: string; isArchived: boolean; archivedAt?: string | null; sourceControlEnabled: boolean; humanOnly: boolean; key?: string | null; myRole?: MemberRole | null }
 export interface Member {
   actorId: string; projectId: string; displayName: string; type: ActorType
   email?: string | null; role: MemberRole; llmProviderConfigId?: string | null

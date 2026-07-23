@@ -106,12 +106,18 @@ public class ProjectService(DimesDbContext db, MembershipResolver members)
 
     /// <summary>Projects visible to an actor: site admins see all; everyone else sees only the
     /// projects they're a member of. Archived projects are excluded unless <paramref name="includeArchived"/>
-    /// is set (the sidebar opts in so it can surface them in a separate "Archived" group).</summary>
+    /// is set (the sidebar opts in so it can surface them in a separate "Archived" group). Each project
+    /// carries the caller's own role in it (null where they hold no membership — only a site admin sees
+    /// such a project), so a client can gate an affordance on their authority in a project other than
+    /// the one it's viewing.</summary>
     public async Task<IReadOnlyList<ProjectDto>> ListAsync(
         Guid actorId, bool isSiteAdmin, bool includeArchived = false, CancellationToken ct = default)
     {
         var orderJson = await db.Actors.Where(a => a.Id == actorId).Select(a => a.ProjectOrderJson).FirstOrDefaultAsync(ct);
         var rank = ParseProjectOrder(orderJson);
+        var roles = await db.Memberships
+            .Where(m => m.ActorId == actorId)
+            .ToDictionaryAsync(m => m.ProjectId, m => m.Role, ct);
 
         var query = db.Projects.AsQueryable();
         if (!isSiteAdmin)
@@ -128,7 +134,7 @@ public class ProjectService(DimesDbContext db, MembershipResolver members)
         return projects
             .OrderBy(p => rank.TryGetValue(p.Id, out var i) ? i : int.MaxValue)
             .ThenBy(p => p.Name)
-            .Select(p => p.ToDto())
+            .Select(p => p.ToDto(roles.TryGetValue(p.Id, out var role) ? role : null))
             .ToList();
     }
 
