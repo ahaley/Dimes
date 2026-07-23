@@ -138,7 +138,7 @@ public class WorkOrderService(
                     ChangeRequestId = item.ChangeRequestId,
                     AuthorActorId = actor.Id,
                     Kind = CommentKind.AgentRecommendation,
-                    Body = BuildReportBody(workOrder, actor, report, summary, now),
+                    Body = BuildReportBody(workOrder, actor, report, now),
                 });
                 touched.Add(item.ChangeRequestId);
             }
@@ -192,10 +192,17 @@ public class WorkOrderService(
             var reported = workOrder.Items.Count(
                 i => i.Status is WorkOrderItemStatus.Reported or WorkOrderItemStatus.Confirmed);
             var blockedCount = workOrder.Items.Count(i => i.Status == WorkOrderItemStatus.Blocked);
+            // The run-wide summary belongs here, at the work-order level — not copied onto each change's
+            // comment, where it describes the whole run rather than that one item.
+            var body = $"Your work order \"{workOrder.FileName}\" received an agent report — " +
+                $"{reported} reported, {blockedCount} blocked.";
+            if (!string.IsNullOrWhiteSpace(summary))
+            {
+                body += $"\n\n{summary}";
+            }
             await notifications.EnqueueAsync(
                 workOrder.ProjectId, NotificationEventType.WorkOrderResults, "Work order results received",
-                $"Your work order \"{workOrder.FileName}\" received an agent report — {reported} reported, {blockedCount} blocked.",
-                recipientActorId: workOrder.ExportedByActorId, ct: ct);
+                body, recipientActorId: workOrder.ExportedByActorId, ct: ct);
         }
 
         await db.SaveChangesAsync(ct);
@@ -346,15 +353,10 @@ public class WorkOrderService(
     }
 
     private static string BuildReportBody(
-        WorkOrder workOrder, Actor actor, ItemReport report, string? summary, DateTimeOffset now)
+        WorkOrder workOrder, Actor actor, ItemReport report, DateTimeOffset now)
     {
         var sb = new StringBuilder();
         sb.AppendLine(Provenance(workOrder, actor, now));
-        if (!string.IsNullOrWhiteSpace(summary))
-        {
-            sb.AppendLine();
-            sb.AppendLine(summary);
-        }
         sb.AppendLine();
         foreach (var (commit, inferred) in report.Commits)
         {

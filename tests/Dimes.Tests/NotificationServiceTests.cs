@@ -169,6 +169,7 @@ public sealed class NotificationServiceTests : IDisposable
         var delivery = Assert.Single(await DeliveriesAsync(NotificationEventType.WorkOrderResults));
         Assert.Equal(seed.MaintainerId, delivery.RecipientActorId); // the exporter
         Assert.Contains("received an agent report", delivery.Body);
+        Assert.Contains("Done.", delivery.Body); // the run-wide summary rides on the notification, not per-item comments
     }
 
     [Fact]

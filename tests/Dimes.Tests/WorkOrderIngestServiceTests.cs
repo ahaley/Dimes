@@ -123,7 +123,8 @@ public sealed class WorkOrderIngestServiceTests : IDisposable
         // be unauthenticated self-attribution.
         Assert.Equal(_exporterId, comment.AuthorActorId);
         Assert.Contains("a1b2c3d4e5", comment.Body);
-        Assert.Contains("All done.", comment.Body);
+        // The run-wide summary rides on the exporter notification now, not on each change's comment.
+        Assert.DoesNotContain("All done.", comment.Body);
 
         var item = Assert.Single(await _db.WorkOrderItems.ToListAsync());
         Assert.Equal(WorkOrderItemStatus.Reported, item.Status);
