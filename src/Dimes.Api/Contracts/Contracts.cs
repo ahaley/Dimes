@@ -13,7 +13,11 @@ public record CreateProjectRequest(string Name, string? Description, string? Key
 // A user's personal top-to-bottom ordering of their visible projects (drives the sidebar + default project).
 public record ReorderProjectsRequest(IReadOnlyList<Guid> OrderedIds);
 public record UpdateProjectRequest(string Name, string? Description, bool SourceControlEnabled, bool HumanOnly);
-public record ProjectDto(Guid Id, string Name, string? Description, DateTimeOffset CreatedAt, bool IsArchived, DateTimeOffset? ArchivedAt, bool SourceControlEnabled, bool HumanOnly, string? Key);
+// MyRole is the caller's own role in the project, or null when they hold no membership in it — only
+// reachable for a site admin, who sees every project. It lets a client gate an affordance on the
+// caller's authority in a project other than the one it's viewing (per-project members are readable
+// only to that project's members).
+public record ProjectDto(Guid Id, string Name, string? Description, DateTimeOffset CreatedAt, bool IsArchived, DateTimeOffset? ArchivedAt, bool SourceControlEnabled, bool HumanOnly, string? Key, MemberRole? MyRole = null);
 
 public record AddMemberRequest(string DisplayName, ActorType Type, string? Email, MemberRole Role, Guid? LlmProviderConfigId = null);
 public record UpdateMemberRequest(string DisplayName, string? Email, MemberRole Role, Guid? LlmProviderConfigId);
