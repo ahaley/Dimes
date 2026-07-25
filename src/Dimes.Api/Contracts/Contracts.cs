@@ -25,7 +25,11 @@ public record ProjectDto(Guid Id, string Name, string? Description, DateTimeOffs
 // The caller's own project-creation allowance, for gating the "New project" affordance and showing how
 // much of it is left. Used counts every project they created, archived ones included. Site admins report
 // Unlimited (and Limit is meaningless for them).
-public record ProjectQuotaDto(int Used, int Limit, bool CanCreate, bool Unlimited);
+//
+// LimitIsPersonal says whether Limit came from this user's own override or from the site policy. It only
+// matters when Limit is 0, where the two are different situations with different remedies: a site 0
+// reserves creation for administrators, while a personal 0 singles this user out.
+public record ProjectQuotaDto(int Used, int Limit, bool CanCreate, bool Unlimited, bool LimitIsPersonal);
 
 public record AddMemberRequest(string DisplayName, ActorType Type, string? Email, MemberRole Role, Guid? LlmProviderConfigId = null);
 public record UpdateMemberRequest(string DisplayName, string? Email, MemberRole Role, Guid? LlmProviderConfigId);

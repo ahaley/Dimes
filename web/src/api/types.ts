@@ -119,7 +119,11 @@ export interface SiteBranding { title: string }
 // ----- Project creation quota -----
 // The caller's own allowance. `used` counts every project they created, archived ones included — archiving
 // deliberately does not free a slot. Site admins report `unlimited` (their `limit` is meaningless).
-export interface ProjectQuota { used: number; limit: number; canCreate: boolean; unlimited: boolean }
+// `limitIsPersonal` distinguishes a limit set on this user from one inherited from the site policy. It
+// only matters at 0, where the two mean different things and point at different remedies.
+export interface ProjectQuota {
+  used: number; limit: number; canCreate: boolean; unlimited: boolean; limitIsPersonal: boolean
+}
 // The site-wide default for users without an override. 0 restricts creation to site admins. Admin-only.
 export interface ProjectPolicy { projectLimit: number }
 

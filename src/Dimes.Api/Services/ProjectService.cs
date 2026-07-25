@@ -69,16 +69,21 @@ public class ProjectService(DimesDbContext db, MembershipResolver members)
     /// <summary>The caller's project-creation allowance: their personal <see cref="Actor.ProjectLimit"/>
     /// if set, otherwise the site-wide <see cref="SiteSettings.ProjectLimit"/>, otherwise the built-in
     /// default (no settings row exists until someone saves one — reads never create it). A limit of 0
-    /// means non-admins can't create projects at all, which is the behaviour before quotas existed.</summary>
-    private async Task<int> ResolveProjectLimitAsync(Guid actorId, CancellationToken ct)
+    /// means the actor can't create projects at all.
+    ///
+    /// <paramref name="IsPersonal"/> reports which of the two it came from, and is load-bearing for the
+    /// message: a limit of 0 from the site policy means "this site reserves creation for admins", while a
+    /// personal 0 means this one user was singled out. Telling someone the site is locked down when it
+    /// isn't sends them to ask for the wrong thing.</summary>
+    private async Task<(int Limit, bool IsPersonal)> ResolveProjectLimitAsync(Guid actorId, CancellationToken ct)
     {
         var personal = await db.Actors.Where(a => a.Id == actorId).Select(a => a.ProjectLimit).FirstOrDefaultAsync(ct);
         if (personal is int limit)
         {
-            return limit;
+            return (limit, IsPersonal: true);
         }
         var siteLimit = await db.SiteSettings.AsNoTracking().Select(s => (int?)s.ProjectLimit).FirstOrDefaultAsync(ct);
-        return siteLimit ?? SiteSettings.DefaultProjectLimit;
+        return (siteLimit ?? SiteSettings.DefaultProjectLimit, IsPersonal: false);
     }
 
     /// <summary>Authority to create a project. Site admins are unrestricted; everyone else is capped by
@@ -94,12 +99,14 @@ public class ProjectService(DimesDbContext db, MembershipResolver members)
             return;
         }
 
-        var limit = await ResolveProjectLimitAsync(callerActorId, ct);
+        var (limit, isPersonal) = await ResolveProjectLimitAsync(callerActorId, ct);
         if (limit <= 0)
         {
-            throw new ForbiddenException(
-                "Creating projects is restricted to site administrators on this site. Ask an administrator "
-                + "if you need a project of your own.");
+            throw new ForbiddenException(isPersonal
+                ? "Your project limit is set to 0, so you can't create projects. Ask a site administrator "
+                    + "to grant you a limit if you need a project of your own."
+                : "Creating projects is restricted to site administrators on this site. Ask an administrator "
+                    + "to set you up with a project, or to grant you a limit of your own.");
         }
 
         var used = await db.Projects.CountAsync(p => p.CreatedByActorId == callerActorId, ct);
@@ -107,7 +114,7 @@ public class ProjectService(DimesDbContext db, MembershipResolver members)
         {
             throw new ForbiddenException(
                 $"You've created {used} of your {limit} allowed projects. Archiving one doesn't free a slot — "
-                + "ask an administrator to raise your project limit.");
+                + "ask a site administrator to raise your project limit.");
         }
     }
 
@@ -119,11 +126,12 @@ public class ProjectService(DimesDbContext db, MembershipResolver members)
         var used = await db.Projects.CountAsync(p => p.CreatedByActorId == actorId, ct);
         if (isSiteAdmin)
         {
-            return new ProjectQuotaDto(used, Limit: 0, CanCreate: true, Unlimited: true);
+            return new ProjectQuotaDto(used, Limit: 0, CanCreate: true, Unlimited: true, LimitIsPersonal: false);
         }
 
-        var limit = await ResolveProjectLimitAsync(actorId, ct);
-        return new ProjectQuotaDto(used, limit, CanCreate: limit > 0 && used < limit, Unlimited: false);
+        var (limit, isPersonal) = await ResolveProjectLimitAsync(actorId, ct);
+        return new ProjectQuotaDto(
+            used, limit, CanCreate: limit > 0 && used < limit, Unlimited: false, LimitIsPersonal: isPersonal);
     }
 
     /// <summary>Create a project on behalf of <paramref name="callerActorId"/>, subject to their creation

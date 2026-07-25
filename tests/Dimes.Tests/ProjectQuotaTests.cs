@@ -177,6 +177,51 @@ public sealed class ProjectQuotaTests : IDisposable
         await CreateAs(trusted.Id, "Granted");
     }
 
+    /// <summary>A limit of 0 has two sources that need different remedies: the site policy (creation is
+    /// reserved for admins here) versus an override singling this user out. Reporting a personal 0 as site
+    /// policy would send the user to ask for the wrong thing, so the quota reports which it was and the
+    /// refusal message follows suit.</summary>
+    [Fact]
+    public async Task ZeroLimit_DistinguishesSitePolicyFromAPersonalOverride()
+    {
+        // Site policy 0, no personal override.
+        await _settings.UpdateProjectPolicyAsync(new UpdateProjectPolicyRequest(0));
+        var inherits = await CreateUser("Inh", "inh@x.com");
+
+        var siteQuota = await _projects.GetProjectQuotaAsync(inherits.Id, isSiteAdmin: false);
+        Assert.Equal(0, siteQuota.Limit);
+        Assert.False(siteQuota.LimitIsPersonal);
+        var siteError = await Assert.ThrowsAsync<ForbiddenException>(() => CreateAs(inherits.Id, "Nope"));
+        Assert.Contains("restricted to site administrators", siteError.Message);
+
+        // A generous site policy, but this user is pinned to 0.
+        await _settings.UpdateProjectPolicyAsync(new UpdateProjectPolicyRequest(5));
+        var singledOut = await CreateUser("Sng", "sng@x.com");
+        await _admin.SetProjectLimitAsync(singledOut.Id, 0);
+
+        var personalQuota = await _projects.GetProjectQuotaAsync(singledOut.Id, isSiteAdmin: false);
+        Assert.Equal(0, personalQuota.Limit);
+        Assert.True(personalQuota.LimitIsPersonal);
+        var personalError = await Assert.ThrowsAsync<ForbiddenException>(() => CreateAs(singledOut.Id, "Nope"));
+        Assert.DoesNotContain("restricted to site administrators", personalError.Message);
+        Assert.Contains("Your project limit is set to 0", personalError.Message);
+    }
+
+    /// <summary>The source is also reported for non-zero limits, so a client can tell an inherited
+    /// allowance from one an administrator set deliberately.</summary>
+    [Fact]
+    public async Task Quota_ReportsWhetherTheLimitIsInheritedOrPersonal()
+    {
+        var ned = await CreateUser("Ned", "ned@x.com");
+        Assert.False((await _projects.GetProjectQuotaAsync(ned.Id, isSiteAdmin: false)).LimitIsPersonal);
+
+        await _admin.SetProjectLimitAsync(ned.Id, 7);
+        Assert.True((await _projects.GetProjectQuotaAsync(ned.Id, isSiteAdmin: false)).LimitIsPersonal);
+
+        await _admin.SetProjectLimitAsync(ned.Id, null);
+        Assert.False((await _projects.GetProjectQuotaAsync(ned.Id, isSiteAdmin: false)).LimitIsPersonal);
+    }
+
     [Fact]
     public async Task SiteAdmin_IsExempt_AndGainsNoMembership()
     {

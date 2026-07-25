@@ -204,3 +204,8 @@ app.MapGet("/health", () => Results.Ok(new { status = "ok" })).AllowAnonymous();
 app.MapFallbackToFile("index.html").AllowAnonymous();
 
 app.Run();
+
+/// <summary>Top-level statements compile to an internal Program class, which WebApplicationFactory&lt;T&gt;
+/// can't reach. Making it public lets the test project boot this exact pipeline — the only way to cover
+/// endpoint authorization, which lives in attributes and the fallback policy rather than in a service.</summary>
+public partial class Program;
