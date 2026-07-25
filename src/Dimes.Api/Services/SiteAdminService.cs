@@ -21,9 +21,12 @@ public class SiteAdminService(DimesDbContext db, IPasswordHasher<Actor> hasher, 
                 db.LocalCredentials.Any(c => c.ActorId == a.Id),
                 a.IsArchived,
                 !db.Memberships.Any(m => m.ActorId == a.Id)
+                    && !db.Projects.Any(p => p.CreatedByActorId == a.Id)
                     && !db.ChangeRequests.Any(c => c.CreatedByActorId == a.Id || c.AssigneeActorId == a.Id)
                     && !db.Comments.Any(c => c.AuthorActorId == a.Id)
-                    && !db.AuditEvents.Any(e => e.ActorId == a.Id)))
+                    && !db.AuditEvents.Any(e => e.ActorId == a.Id),
+                a.ProjectLimit,
+                db.Projects.Count(p => p.CreatedByActorId == a.Id)))
             .ToListAsync(ct);
 
     public async Task<SiteUserDto> CreateLocalUserAsync(CreateLocalUserRequest req, CancellationToken ct = default)
@@ -139,18 +142,41 @@ public class SiteAdminService(DimesDbContext db, IPasswordHasher<Actor> hasher, 
         return await ToDtoAsync(actor.Id, ct);
     }
 
+    /// <summary>Set a user's personal project-creation allowance, overriding the site default in either
+    /// direction. Null clears the override so they inherit the site policy again. This is the out-of-band
+    /// escalation path: a user who has hit their limit asks an administrator, who raises just their number.
+    /// Lowering it below what they've already created doesn't remove projects — it only blocks new ones.</summary>
+    public async Task<SiteUserDto> SetProjectLimitAsync(
+        Guid actorId, int? limit, CancellationToken ct = default)
+    {
+        var actor = await db.Actors.FindAsync([actorId], ct)
+            ?? throw new NotFoundException($"Actor '{actorId}' not found.");
+
+        if (limit is int value)
+        {
+            SiteSettingsService.ValidateProjectLimit(value);
+        }
+
+        actor.ProjectLimit = limit;
+        await db.SaveChangesAsync(ct);
+
+        return await ToDtoAsync(actor.Id, ct);
+    }
+
     private async Task<SiteUserDto> ToDtoAsync(Guid actorId, CancellationToken ct)
     {
         var actor = await db.Actors.FindAsync([actorId], ct)
             ?? throw new NotFoundException($"Actor '{actorId}' not found.");
         var hasCredential = await db.LocalCredentials.AnyAsync(c => c.ActorId == actorId, ct);
+        var created = await db.Projects.CountAsync(p => p.CreatedByActorId == actorId, ct);
         var deletable =
             !await db.Memberships.AnyAsync(m => m.ActorId == actorId, ct)
+            && created == 0
             && !await db.ChangeRequests.AnyAsync(c => c.CreatedByActorId == actorId || c.AssigneeActorId == actorId, ct)
             && !await db.Comments.AnyAsync(c => c.AuthorActorId == actorId, ct)
             && !await db.AuditEvents.AnyAsync(e => e.ActorId == actorId, ct);
         return new SiteUserDto(
             actor.Id, actor.DisplayName, actor.Email, actor.Type,
-            actor.IsSiteAdmin, hasCredential, actor.IsArchived, deletable);
+            actor.IsSiteAdmin, hasCredential, actor.IsArchived, deletable, actor.ProjectLimit, created);
     }
 }

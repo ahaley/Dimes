@@ -41,7 +41,7 @@ public sealed class NotificationServiceTests : IDisposable
 
     private async Task<(Guid ProjectId, Guid MaintainerId, Guid ContributorId)> SeedAsync()
     {
-        var project = await _projects.CreateAsync(new CreateProjectRequest("Demo", null));
+        var project = await _projects.CreateAsync(_db, new CreateProjectRequest("Demo", null));
         var maintainer = await _projects.AddMemberAsync(project.Id,
             new AddMemberRequest("Maud", ActorType.Human, "maud@x.com", MemberRole.Maintainer));
         var contributor = await _projects.AddMemberAsync(project.Id,

@@ -120,7 +120,7 @@ public sealed class SiteAdminServiceTests : IDisposable
     [Fact]
     public async Task AssignMember_LinksExistingActor_AndUpsertsRole()
     {
-        var project = await _projects.CreateAsync(new CreateProjectRequest("P", null));
+        var project = await _projects.CreateAsync(_db, new CreateProjectRequest("P", null));
         var user = await CreateUser("Mem", "mem@x.com");
 
         await _projects.AssignMemberAsync(project.Id, user.Id, MemberRole.Reporter);
@@ -138,7 +138,7 @@ public sealed class SiteAdminServiceTests : IDisposable
     [Fact]
     public async Task UserMemberships_AssignAndRemove_RoundTrip()
     {
-        var project = await _projects.CreateAsync(new CreateProjectRequest("P", null));
+        var project = await _projects.CreateAsync(_db, new CreateProjectRequest("P", null));
         var user = await CreateUser("Mem", "mem@x.com");
 
         await _admin.AssignMembershipAsync(user.Id, new AssignMembershipRequest(project.Id, MemberRole.Contributor));
@@ -164,8 +164,8 @@ public sealed class SiteAdminServiceTests : IDisposable
     [Fact]
     public async Task ProjectList_NonAdminSeesOnlyMemberProjects_AdminSeesAll()
     {
-        var a = await _projects.CreateAsync(new CreateProjectRequest("A", null));
-        await _projects.CreateAsync(new CreateProjectRequest("B", null));
+        var a = await _projects.CreateAsync(_db, new CreateProjectRequest("A", null));
+        await _projects.CreateAsync(_db, new CreateProjectRequest("B", null));
         var ned = await CreateUser("Ned", "ned@x.com");
         var boss = await CreateUser("Boss", "boss@x.com", admin: true);
         await _projects.AssignMemberAsync(a.Id, ned.Id, MemberRole.Contributor);
@@ -182,8 +182,8 @@ public sealed class SiteAdminServiceTests : IDisposable
     [Fact]
     public async Task ProjectList_CarriesCallersRole_NullWhereNotAMember()
     {
-        var a = await _projects.CreateAsync(new CreateProjectRequest("A", null));
-        var b = await _projects.CreateAsync(new CreateProjectRequest("B", null));
+        var a = await _projects.CreateAsync(_db, new CreateProjectRequest("A", null));
+        var b = await _projects.CreateAsync(_db, new CreateProjectRequest("B", null));
         var ned = await CreateUser("Ned", "ned@x.com");
         var boss = await CreateUser("Boss", "boss@x.com", admin: true);
         await _projects.AssignMemberAsync(a.Id, ned.Id, MemberRole.Reporter);
@@ -203,7 +203,7 @@ public sealed class SiteAdminServiceTests : IDisposable
     public async Task ArchiveProject_HidesFromDefaultList_AndUnarchiveRestores()
     {
         var boss = await CreateUser("Boss", "boss@x.com", admin: true);
-        var p = await _projects.CreateAsync(new CreateProjectRequest("P", null));
+        var p = await _projects.CreateAsync(_db, new CreateProjectRequest("P", null));
 
         await _projects.ArchiveProjectAsync(p.Id, archived: true, boss.Id, callerIsSiteAdmin: true);
         Assert.True((await _db.Projects.FindAsync(p.Id))!.IsArchived);
@@ -218,7 +218,7 @@ public sealed class SiteAdminServiceTests : IDisposable
     [Fact]
     public async Task ArchiveProject_RequiresMaintainerOrSiteAdmin()
     {
-        var p = await _projects.CreateAsync(new CreateProjectRequest("P", null));
+        var p = await _projects.CreateAsync(_db, new CreateProjectRequest("P", null));
         var contributor = await CreateUser("Con", "con@x.com");
         var maintainer = await CreateUser("Main", "main@x.com");
         await _projects.AssignMemberAsync(p.Id, contributor.Id, MemberRole.Contributor);

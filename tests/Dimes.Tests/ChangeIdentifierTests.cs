@@ -35,7 +35,7 @@ public sealed class ChangeIdentifierTests : IDisposable
 
     private async Task<(Guid ProjectId, Guid ActorId)> SeedProjectAsync(string name, string? key)
     {
-        var project = await _projects.CreateAsync(new CreateProjectRequest(name, null, key));
+        var project = await _projects.CreateAsync(_db, new CreateProjectRequest(name, null, key));
         // No email: this helper seeds several projects, and email is now a unique login identity, so a
         // shared address would (correctly) collide. These tests don't exercise login.
         var member = await _projects.AddMemberAsync(project.Id,
@@ -48,7 +48,7 @@ public sealed class ChangeIdentifierTests : IDisposable
     [Fact]
     public async Task CreateProject_StoresKeyUppercased()
     {
-        var project = await _projects.CreateAsync(new CreateProjectRequest("Acme Web", null, "acme"));
+        var project = await _projects.CreateAsync(_db, new CreateProjectRequest("Acme Web", null, "acme"));
         Assert.Equal("ACME", project.Key);
     }
 
@@ -60,22 +60,22 @@ public sealed class ChangeIdentifierTests : IDisposable
     public async Task CreateProject_RejectsBadKeyFormat(string key)
     {
         await Assert.ThrowsAsync<BadRequestException>(() =>
-            _projects.CreateAsync(new CreateProjectRequest("P", null, key)));
+            _projects.CreateAsync(_db, new CreateProjectRequest("P", null, key)));
     }
 
     [Fact]
     public async Task CreateProject_RejectsDuplicateKey()
     {
-        await _projects.CreateAsync(new CreateProjectRequest("First", null, "DIMES"));
+        await _projects.CreateAsync(_db, new CreateProjectRequest("First", null, "DIMES"));
         await Assert.ThrowsAsync<BadRequestException>(() =>
-            _projects.CreateAsync(new CreateProjectRequest("Second", null, "dimes")));
+            _projects.CreateAsync(_db, new CreateProjectRequest("Second", null, "dimes")));
     }
 
     [Fact]
     public async Task CreateProject_DerivesKeyWhenOmitted()
     {
-        var a = await _projects.CreateAsync(new CreateProjectRequest("Mobile App", null, null));
-        var b = await _projects.CreateAsync(new CreateProjectRequest("Mobile App", null, null)); // same name → unique key
+        var a = await _projects.CreateAsync(_db, new CreateProjectRequest("Mobile App", null, null));
+        var b = await _projects.CreateAsync(_db, new CreateProjectRequest("Mobile App", null, null)); // same name → unique key
         Assert.True(ProjectKeys.IsValid(a.Key!));
         Assert.True(ProjectKeys.IsValid(b.Key!));
         Assert.NotEqual(a.Key, b.Key);

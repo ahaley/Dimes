@@ -1,16 +1,17 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { DndContext, pointerWithin, type DragEndEvent } from '@dnd-kit/core'
 import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import type { Project } from '../api/types'
+import type { Project, ProjectQuota } from '../api/types'
 import { useReorderProjects } from '../api/hooks'
 import { Badge, cx } from '../components/ui'
 import { useBoardSensors } from '../lib/dndSensors'
 import { initials, projectColor } from '../lifecycle'
+import { projectLimitMessage } from '../projectQuota'
 
 export function Sidebar({
   projects, otherProjects = [], archivedProjects = [], assignmentCounts, siteTitle, projectId, onSelect, collapsed, onToggleCollapse,
-  canCreateProject, onNewProject,
+  canCreateProject, projectQuota, onNewProject,
   activeView, onShowProviders, onShowActors, onShowSettings, showSettings, mobileOpen,
 }: {
   projects: Project[]
@@ -24,6 +25,9 @@ export function Sidebar({
   collapsed: boolean
   onToggleCollapse: () => void
   canCreateProject: boolean
+  /** The viewer's creation allowance. When it's spent, the rail explains why in the button's place
+   *  rather than leaving an unexplained gap. Undefined while still loading. */
+  projectQuota?: ProjectQuota
   onNewProject: () => void
   activeView: 'board' | 'providers' | 'actors' | 'settings'
   onShowProviders: () => void
@@ -131,8 +135,10 @@ export function Sidebar({
             </DndContext>
           )}
 
-        {/* Only site admins can create projects (the API enforces this; hide the affordance too). */}
-        {canCreateProject && (
+        {/* Creating a project spends a per-user allowance (site admins are unlimited). The API enforces
+            it; once it's spent the button is dimmed rather than removed, and explains itself on demand —
+            so the affordance never vanishes unexplained, but doesn't nag someone content at their limit. */}
+        {canCreateProject ? (
           <button
             onClick={onNewProject}
             title="New project"
@@ -144,7 +150,9 @@ export function Sidebar({
             <span className="text-base leading-none">+</span>
             {!compact && <span>New project</span>}
           </button>
-        )}
+        ) : projectQuota && !projectQuota.unlimited ? (
+          <ProjectLimitNotice quota={projectQuota} compact={compact} />
+        ) : null}
 
         {/* Archived projects: hidden from the active list, reachable here to view or unarchive. */}
         {!compact && archivedProjects.length > 0 && (
@@ -180,7 +188,8 @@ export function Sidebar({
 
         {/* Projects the viewer isn't a member of: kept out of the menu proper (they're someone else's
             project until you join), but reachable here so a site admin can still get into one. Empty
-            for everyone else, so this group simply doesn't exist for them. */}
+            for everyone else, so this group simply doesn't exist for them. These are the projects
+            whose creator an admin most needs to identify, so the tooltip names them. */}
         {!compact && otherProjects.length > 0 && (
           <div className="pt-2">
             <button
@@ -196,7 +205,10 @@ export function Sidebar({
                 <button
                   key={p.id}
                   onClick={() => onSelect(p.id)}
-                  title={`${p.name} — you're not a member`}
+                  title={
+                    `${p.name} — you're not a member`
+                    + (p.createdByDisplayName ? ` · created by ${p.createdByDisplayName}` : '')
+                  }
                   className={cx(
                     'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm',
                     active
@@ -267,6 +279,84 @@ export function Sidebar({
         </button>
       )}
     </aside>
+  )
+}
+
+/// Stands in for the "New project" button once the viewer can't create one, so the affordance doesn't
+/// just disappear. It stays a dimmed, smaller "+ New project" — someone settled at their limit sees only
+/// that, not a standing explanation they've already read — and reveals the reason on hover or click. Click
+/// pins it open so touch users (who have no hover) and anyone wanting to read slowly can keep it up.
+/// The wording lives in `projectLimitMessage` so this and the no-projects empty state can't drift apart.
+/// Collapsed to a rail there's no room for a panel, so the native tooltip carries the same text.
+function ProjectLimitNotice({ quota, compact }: { quota: ProjectQuota; compact: boolean }) {
+  const { heading, detail } = projectLimitMessage(quota)
+  const [pinned, setPinned] = useState(false)
+  const [hovered, setHovered] = useState(false)
+  const open = pinned || hovered
+
+  // Esc closes a pinned panel, matching OverflowMenu.
+  useEffect(() => {
+    if (!pinned) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setPinned(false)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [pinned])
+
+  if (compact) {
+    return (
+      <div
+        title={`${heading} — ${detail}`}
+        className="flex h-9 w-9 items-center justify-center rounded-md text-slate-300 dark:text-slate-600"
+      >
+        <span aria-hidden>+</span>
+        <span className="sr-only">{`New project unavailable. ${heading}`}</span>
+      </div>
+    )
+  }
+
+  return (
+    // Hover handlers sit on the wrapper, not the button: the panel is a descendant, so moving the
+    // pointer into it doesn't count as leaving and the panel doesn't flicker shut on the way down.
+    <div
+      className="relative"
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
+      <button
+        type="button"
+        // Not disabled, and deliberately not aria-disabled either: this control is genuinely interactive
+        // — it discloses why creation is unavailable — so marking it unavailable would tell a screen
+        // reader not to use the one thing that explains the situation. The unavailability lives in the
+        // accessible name instead, which still contains the visible "New project" text.
+        aria-label={`New project unavailable — ${heading}`}
+        aria-expanded={open}
+        onClick={() => setPinned((v) => !v)}
+        onFocus={() => setHovered(true)}
+        onBlur={() => setHovered(false)}
+        className="flex w-full cursor-help items-center gap-2 rounded-md px-2 py-1 text-xs text-slate-300 hover:text-slate-400 dark:text-slate-600 dark:hover:text-slate-500"
+      >
+        <span className="text-sm leading-none">+</span>
+        <span>New project</span>
+      </button>
+      {open && (
+        <>
+          {pinned && <div className="fixed inset-0 z-10" onClick={() => setPinned(false)} />}
+          {/* The outer box carries the offset as padding rather than a margin, so the gap between
+              button and panel is still inside the hover region. */}
+          <div className="absolute left-0 right-0 top-full z-20 pt-1">
+            <div
+              role="note"
+              className="rounded-md border border-slate-200 bg-white p-2.5 shadow-lg dark:border-slate-700 dark:bg-slate-800"
+            >
+              <p className="text-xs font-medium text-slate-600 dark:text-slate-300">{heading}</p>
+              <p className="mt-1 text-xs leading-relaxed text-slate-500 dark:text-slate-400">{detail}</p>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
   )
 }
 

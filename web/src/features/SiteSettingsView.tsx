@@ -1,7 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '../api/client'
-import { keys, useAuthConfig, useProjects, useSiteBranding, useSiteUsers, useUpdateSiteBranding, useUserMemberships } from '../api/hooks'
+import {
+  keys, useAuthConfig, useProjectPolicy, useProjects, useSetUserProjectLimit, useSiteBranding, useSiteUsers,
+  useUpdateProjectPolicy, useUpdateSiteBranding, useUserMemberships,
+} from '../api/hooks'
 import type { MemberRole, SiteUser } from '../api/types'
 import { Badge, Button, Card, cx, ErrorText, Field, Modal, Select, TextInput } from '../components/ui'
 import { OverflowMenu, type MenuAction } from '../components/OverflowMenu'
@@ -27,8 +30,12 @@ export function SiteSettingsView() {
   // Load users in both modes. Local adds password management; in OIDC users are JIT-provisioned, but
   // a site admin still manages roles, archival, project access, and pre-provisioning here.
   const { data: users } = useSiteUsers(true)
-  // The projects modal is lifted out of the row so it isn't rendered inside the users <table>.
+  // The site default each user's row falls back to when they carry no individual limit.
+  const { data: policy } = useProjectPolicy()
+  // The projects and project-limit modals are lifted out of the row so they aren't rendered inside
+  // the users <table>.
   const [managingUser, setManagingUser] = useState<SiteUser | null>(null)
+  const [limitUser, setLimitUser] = useState<SiteUser | null>(null)
 
   // Filter + sort happen in memory so the table stays responsive for large user lists.
   const [query, setQuery] = useState('')
@@ -79,6 +86,7 @@ export function SiteSettingsView() {
       </Card>
 
       <BrandingCard />
+      <ProjectCreationCard />
 
       <div className="flex items-center gap-2">
         <TextInput
@@ -112,7 +120,14 @@ export function SiteSettingsView() {
           </thead>
           <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
             {visibleUsers.map((u) => (
-              <UserRow key={u.id} user={u} isLocal={isLocal} onManageProjects={() => setManagingUser(u)} />
+              <UserRow
+                key={u.id}
+                user={u}
+                isLocal={isLocal}
+                siteDefault={policy?.projectLimit}
+                onManageProjects={() => setManagingUser(u)}
+                onManageLimit={() => setLimitUser(u)}
+              />
             ))}
             {visibleUsers.length === 0 && (
               <tr><td colSpan={3} className="px-3 py-4 text-sm text-slate-400">{users?.length ? 'No users match.' : 'No users yet.'}</td></tr>
@@ -124,6 +139,9 @@ export function SiteSettingsView() {
 
       {managingUser && (
         <ManageProjectsModal user={managingUser} onClose={() => setManagingUser(null)} />
+      )}
+      {limitUser && (
+        <ProjectLimitModal user={limitUser} siteDefault={policy?.projectLimit} onClose={() => setLimitUser(null)} />
       )}
     </div>
   )
@@ -160,7 +178,111 @@ function BrandingCard() {
   )
 }
 
-function UserRow({ user, isLocal, onManageProjects }: { user: SiteUser; isLocal: boolean; onManageProjects: () => void }) {
+/** Site-admin form for the default number of projects a non-admin may create. */
+function ProjectCreationCard() {
+  const { data: policy } = useProjectPolicy()
+  const update = useUpdateProjectPolicy()
+  const toast = useToast()
+  const [limit, setLimit] = useState('')
+  // Prefill from the loaded policy (and re-sync after a successful save).
+  useEffect(() => { if (policy) setLimit(String(policy.projectLimit)) }, [policy])
+
+  const parsed = Number(limit)
+  const valid = limit.trim() !== '' && Number.isInteger(parsed) && parsed >= 0 && parsed <= 1000
+  const dirty = !!policy && valid && parsed !== policy.projectLimit
+
+  return (
+    <Card className="space-y-2 p-4">
+      <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Project creation</h2>
+      <Field label="Default project limit">
+        <TextInput
+          type="number"
+          min={0}
+          max={1000}
+          value={limit}
+          onChange={(e) => setLimit(e.target.value)}
+          className="max-w-[8rem]"
+        />
+      </Field>
+      <p className="text-xs text-slate-400">
+        How many projects a user may create before they need an administrator to raise their limit. Set it
+        to <span className="font-mono">0</span> to restrict creation to site administrators. Archiving a
+        project does not free a slot. Site administrators are unlimited, and any individual limit set on a
+        user below overrides this.
+      </p>
+      <ErrorText error={update.error} />
+      <Button
+        variant="primary"
+        disabled={!dirty || update.isPending}
+        onClick={() => update.mutate({ projectLimit: parsed }, { onSuccess: () => toast.success('Project limit updated') })}
+      >
+        Save
+      </Button>
+    </Card>
+  )
+}
+
+/** Raise or lower one user's project allowance, or clear it back to the site default. */
+function ProjectLimitModal({ user, siteDefault, onClose }: { user: SiteUser; siteDefault?: number; onClose: () => void }) {
+  const setLimit = useSetUserProjectLimit()
+  const toast = useToast()
+  const [inherit, setInherit] = useState(user.projectLimit == null)
+  const [value, setValue] = useState(String(user.projectLimit ?? siteDefault ?? 3))
+
+  const parsed = Number(value)
+  const valid = inherit || (value.trim() !== '' && Number.isInteger(parsed) && parsed >= 0 && parsed <= 1000)
+  const effective = user.projectLimit ?? siteDefault
+
+  return (
+    <Modal title={`Project limit — ${user.displayName}`} onClose={onClose}>
+      <div className="space-y-3">
+        <p className="text-sm text-slate-500">
+          Created {user.projectsCreated}
+          {effective != null && ` of ${effective}`} project{user.projectsCreated === 1 ? '' : 's'}.
+          {user.isSiteAdmin && ' Site administrators are exempt from the limit.'}
+        </p>
+        <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
+          <input type="checkbox" checked={inherit} onChange={(e) => setInherit(e.target.checked)} />
+          Use the site default{siteDefault != null && ` (${siteDefault})`}
+        </label>
+        {!inherit && (
+          <Field label="Individual limit">
+            <TextInput
+              type="number"
+              min={0}
+              max={1000}
+              value={value}
+              onChange={(e) => setValue(e.target.value)}
+              className="max-w-[8rem]"
+              autoFocus
+            />
+          </Field>
+        )}
+        <p className="text-xs text-slate-400">
+          Lowering the limit below what they've already created never removes projects — it only stops new ones.
+        </p>
+        <ErrorText error={setLimit.error} />
+        <div className="flex justify-end gap-2 pt-1">
+          <Button variant="subtle" onClick={onClose}>Cancel</Button>
+          <Button
+            variant="primary"
+            disabled={!valid || setLimit.isPending}
+            onClick={() => setLimit.mutate(
+              { id: user.id, limit: inherit ? null : parsed },
+              { onSuccess: () => { toast.success(`Updated ${user.displayName}`); onClose() } },
+            )}
+          >
+            Save
+          </Button>
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
+function UserRow({ user, isLocal, siteDefault, onManageProjects, onManageLimit }: {
+  user: SiteUser; isLocal: boolean; siteDefault?: number; onManageProjects: () => void; onManageLimit: () => void
+}) {
   const qc = useQueryClient()
   const toast = useToast()
   const invalidate = () => qc.invalidateQueries({ queryKey: keys.users })
@@ -226,6 +348,11 @@ function UserRow({ user, isLocal, onManageProjects }: { user: SiteUser; isLocal:
   const actions: MenuAction[] = [
     { label: 'Edit', onClick: () => setEditing(true) },
     { label: 'Projects', onClick: onManageProjects },
+    {
+      label: 'Limit',
+      title: 'Set how many projects this user may create',
+      onClick: onManageLimit,
+    },
     ...(isLocal
       ? [{
           label: 'Reset password',
@@ -272,6 +399,14 @@ function UserRow({ user, isLocal, onManageProjects }: { user: SiteUser; isLocal:
             <span className="text-xs text-slate-400">active</span>
           )}
         </div>
+        {/* Project-creation usage. Admins are exempt, so only the count is meaningful for them. An
+            individual limit that differs from the site default is called out as an override. */}
+        {!user.isSiteAdmin && (
+          <div className="mt-1 text-xs text-slate-400">
+            {user.projectsCreated} of {user.projectLimit ?? siteDefault ?? '…'} projects
+            {user.projectLimit != null && <span className="ml-1 text-slate-400">(custom)</span>}
+          </div>
+        )}
       </td>
 
       {/* Actions: inline buttons on desktop; folded into a ⋯ menu on phones to keep the row compact. */}

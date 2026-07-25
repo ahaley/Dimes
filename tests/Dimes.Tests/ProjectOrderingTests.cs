@@ -40,9 +40,9 @@ public sealed class ProjectOrderingTests : IDisposable
     public async Task Reorder_OrdersByPersonalOrder_UnrankedFallBackToName()
     {
         var actorId = await SeedSiteAdminAsync("Admin");
-        var alpha = await _projects.CreateAsync(new CreateProjectRequest("Alpha", null, "ALPHA"));
-        var beta = await _projects.CreateAsync(new CreateProjectRequest("Beta", null, "BETA"));
-        var gamma = await _projects.CreateAsync(new CreateProjectRequest("Gamma", null, "GAMMA"));
+        var alpha = await _projects.CreateAsync(_db, new CreateProjectRequest("Alpha", null, "ALPHA"));
+        var beta = await _projects.CreateAsync(_db, new CreateProjectRequest("Beta", null, "BETA"));
+        var gamma = await _projects.CreateAsync(_db, new CreateProjectRequest("Gamma", null, "GAMMA"));
 
         // Personal order ranks gamma then alpha; beta is left unranked.
         await _projects.ReorderProjectsAsync(actorId, new ReorderProjectsRequest([gamma.Id, alpha.Id]));
@@ -56,9 +56,9 @@ public sealed class ProjectOrderingTests : IDisposable
     {
         var actor1 = await SeedSiteAdminAsync("One");
         var actor2 = await SeedSiteAdminAsync("Two");
-        var a = await _projects.CreateAsync(new CreateProjectRequest("Apple", null, "APP"));
-        var b = await _projects.CreateAsync(new CreateProjectRequest("Box", null, "BOX"));
-        var c = await _projects.CreateAsync(new CreateProjectRequest("Cat", null, "CAT"));
+        var a = await _projects.CreateAsync(_db, new CreateProjectRequest("Apple", null, "APP"));
+        var b = await _projects.CreateAsync(_db, new CreateProjectRequest("Box", null, "BOX"));
+        var c = await _projects.CreateAsync(_db, new CreateProjectRequest("Cat", null, "CAT"));
 
         await _projects.ReorderProjectsAsync(actor1, new ReorderProjectsRequest([c.Id, b.Id, a.Id]));
 

@@ -17,7 +17,15 @@ public record UpdateProjectRequest(string Name, string? Description, bool Source
 // reachable for a site admin, who sees every project. It lets a client gate an affordance on the
 // caller's authority in a project other than the one it's viewing (per-project members are readable
 // only to that project's members).
-public record ProjectDto(Guid Id, string Name, string? Description, DateTimeOffset CreatedAt, bool IsArchived, DateTimeOffset? ArchivedAt, bool SourceControlEnabled, bool HumanOnly, string? Key, MemberRole? MyRole = null);
+// CreatedBy* is the provenance of the project — who is answerable for it existing. Null for projects
+// created before creation was attributed. Only the display name is exposed (never the creator's email,
+// which stays admin-only PII), matching what the board already shows for authors and assignees.
+public record ProjectDto(Guid Id, string Name, string? Description, DateTimeOffset CreatedAt, bool IsArchived, DateTimeOffset? ArchivedAt, bool SourceControlEnabled, bool HumanOnly, string? Key, MemberRole? MyRole = null, Guid? CreatedByActorId = null, string? CreatedByDisplayName = null);
+
+// The caller's own project-creation allowance, for gating the "New project" affordance and showing how
+// much of it is left. Used counts every project they created, archived ones included. Site admins report
+// Unlimited (and Limit is meaningless for them).
+public record ProjectQuotaDto(int Used, int Limit, bool CanCreate, bool Unlimited);
 
 public record AddMemberRequest(string DisplayName, ActorType Type, string? Email, MemberRole Role, Guid? LlmProviderConfigId = null);
 public record UpdateMemberRequest(string DisplayName, string? Email, MemberRole Role, Guid? LlmProviderConfigId);
@@ -30,6 +38,12 @@ public record SetMemberRoleRequest(MemberRole Role);
 public record SiteBrandingDto(string Title);
 public record UpdateSiteBrandingRequest(string Title);
 
+// ----- Site project policy (site-admin only, both ways) -----
+// How many projects a non-admin may create when they carry no personal override. 0 restricts creation to
+// site administrators. Non-admins never read this — their own effective allowance comes from ProjectQuotaDto.
+public record ProjectPolicyDto(int ProjectLimit);
+public record UpdateProjectPolicyRequest(int ProjectLimit);
+
 // ----- Authentication -----
 // Mode is a deployment choice (Local | Oidc); the SPA reads it to render the right login UI.
 public record AuthConfigDto(string Mode);
@@ -37,11 +51,15 @@ public record LoginRequest(string Email, string Password);
 public record MeDto(Guid ActorId, string DisplayName, string? Email, bool IsSiteAdmin);
 
 // ----- Site administration (app-level user management; site-admin only) -----
-public record SiteUserDto(Guid Id, string DisplayName, string? Email, ActorType Type, bool IsSiteAdmin, bool HasLocalCredential, bool IsArchived, bool Deletable);
+// ProjectLimit is the user's personal creation override (null = inherit the site policy); ProjectsCreated
+// is how much of it they've used, so the admin table can show "2 / 3" before deciding whether to raise it.
+public record SiteUserDto(Guid Id, string DisplayName, string? Email, ActorType Type, bool IsSiteAdmin, bool HasLocalCredential, bool IsArchived, bool Deletable, int? ProjectLimit, int ProjectsCreated);
 // Password is optional: a user can be pre-provisioned (or OIDC-only) and given a password later.
 public record CreateLocalUserRequest(string DisplayName, string Email, string? Password, bool IsSiteAdmin);
 public record ResetPasswordRequest(string Password);
 public record SetSiteAdminRequest(bool IsSiteAdmin);
+// Null clears the personal override, putting the user back on the site-wide default.
+public record SetProjectLimitRequest(int? Limit);
 
 // A user's project assignments (managed from the Site Users screen).
 public record UserMembershipDto(Guid ProjectId, string ProjectName, MemberRole Role);

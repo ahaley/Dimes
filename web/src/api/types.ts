@@ -23,7 +23,14 @@ export type NotificationEventType =
 
 // myRole is your own role in the project, or null when you hold no membership in it (only a site
 // admin, who sees every project, ever gets a null).
-export interface Project { id: string; name: string; description?: string | null; createdAt: string; isArchived: boolean; archivedAt?: string | null; sourceControlEnabled: boolean; humanOnly: boolean; key?: string | null; myRole?: MemberRole | null }
+// createdBy* is the project's provenance — who is answerable for it existing. Null on projects created
+// before creation was attributed. Display name only; the creator's email is never exposed here.
+export interface Project {
+  id: string; name: string; description?: string | null; createdAt: string
+  isArchived: boolean; archivedAt?: string | null; sourceControlEnabled: boolean; humanOnly: boolean
+  key?: string | null; myRole?: MemberRole | null
+  createdByActorId?: string | null; createdByDisplayName?: string | null
+}
 export interface Member {
   actorId: string; projectId: string; displayName: string; type: ActorType
   email?: string | null; role: MemberRole; llmProviderConfigId?: string | null
@@ -109,13 +116,23 @@ export interface ExportInstruction { content: string; isDefault: boolean }
 // ----- Site branding -----
 export interface SiteBranding { title: string }
 
+// ----- Project creation quota -----
+// The caller's own allowance. `used` counts every project they created, archived ones included — archiving
+// deliberately does not free a slot. Site admins report `unlimited` (their `limit` is meaningless).
+export interface ProjectQuota { used: number; limit: number; canCreate: boolean; unlimited: boolean }
+// The site-wide default for users without an override. 0 restricts creation to site admins. Admin-only.
+export interface ProjectPolicy { projectLimit: number }
+
 // ----- Authentication -----
 export type AuthMode = 'Local' | 'Oidc'
 export interface AuthConfig { mode: AuthMode }
 export interface Me { actorId: string; displayName: string; email?: string | null; isSiteAdmin: boolean }
+// `projectLimit` is the user's personal creation override (null = inherit the site policy);
+// `projectsCreated` is how much of it they've used, so the admin table can show "2 / 3".
 export interface SiteUser {
   id: string; displayName: string; email?: string | null; type: ActorType
   isSiteAdmin: boolean; hasLocalCredential: boolean; isArchived: boolean; deletable: boolean
+  projectLimit?: number | null; projectsCreated: number
 }
 export interface UserMembership { projectId: string; projectName: string; role: MemberRole }
 

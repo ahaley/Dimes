@@ -56,7 +56,7 @@ public sealed class ProviderServiceTests : IDisposable
     [Fact]
     public async Task CreateLlmProvider_RequiresKeyForAnthropic_ButNotForKeylessLocal()
     {
-        var project = await _projects.CreateAsync(new CreateProjectRequest("P", null));
+        var project = await _projects.CreateAsync(_db, new CreateProjectRequest("P", null));
 
         // Anthropic always authenticates, so a missing key reference must fail at save.
         await Assert.ThrowsAsync<BadRequestException>(() => _projects.CreateLlmProviderAsync(project.Id,
@@ -72,7 +72,7 @@ public sealed class ProviderServiceTests : IDisposable
     [Fact]
     public async Task AgentCommentary_CreatesRecommendationComment_WithoutChangingState()
     {
-        var project = await _projects.CreateAsync(new CreateProjectRequest("P", null));
+        var project = await _projects.CreateAsync(_db, new CreateProjectRequest("P", null));
         var human = await _projects.AddMemberAsync(project.Id,
             new AddMemberRequest("Cory", ActorType.Human, null, MemberRole.Contributor));
         var llm = await _projects.CreateLlmProviderAsync(project.Id,
@@ -101,7 +101,7 @@ public sealed class ProviderServiceTests : IDisposable
     [Fact]
     public async Task AgentCommentary_NonAgentActor_IsRejected()
     {
-        var project = await _projects.CreateAsync(new CreateProjectRequest("P", null));
+        var project = await _projects.CreateAsync(_db, new CreateProjectRequest("P", null));
         var human = await _projects.AddMemberAsync(project.Id,
             new AddMemberRequest("Cory", ActorType.Human, null, MemberRole.Contributor));
         var change = await _changes.CreateAsync(project.Id, human.ActorId, new CreateChangeRequest("x", null, ChangeKind.Problem));
@@ -116,7 +116,7 @@ public sealed class ProviderServiceTests : IDisposable
     [Fact]
     public async Task AgentCommentary_NonMemberCaller_IsForbidden()
     {
-        var project = await _projects.CreateAsync(new CreateProjectRequest("P", null));
+        var project = await _projects.CreateAsync(_db, new CreateProjectRequest("P", null));
         var human = await _projects.AddMemberAsync(project.Id,
             new AddMemberRequest("Cory", ActorType.Human, null, MemberRole.Contributor));
         var llm = await _projects.CreateLlmProviderAsync(project.Id,
@@ -137,7 +137,7 @@ public sealed class ProviderServiceTests : IDisposable
     [Fact]
     public async Task ScmLink_PullsContext_IntoSnapshot()
     {
-        var project = await _projects.CreateAsync(new CreateProjectRequest("P", null));
+        var project = await _projects.CreateAsync(_db, new CreateProjectRequest("P", null));
         var human = await _projects.AddMemberAsync(project.Id,
             new AddMemberRequest("Cory", ActorType.Human, null, MemberRole.Contributor));
         var change = await _changes.CreateAsync(project.Id, human.ActorId, new CreateChangeRequest("x", null, ChangeKind.Feature));
@@ -157,7 +157,7 @@ public sealed class ProviderServiceTests : IDisposable
     [Fact]
     public async Task ScmLink_ExplicitSnapshot_WinsOverProvider()
     {
-        var project = await _projects.CreateAsync(new CreateProjectRequest("P", null));
+        var project = await _projects.CreateAsync(_db, new CreateProjectRequest("P", null));
         var human = await _projects.AddMemberAsync(project.Id,
             new AddMemberRequest("Cory", ActorType.Human, null, MemberRole.Contributor));
         var change = await _changes.CreateAsync(project.Id, human.ActorId, new CreateChangeRequest("x", null, ChangeKind.Feature));
@@ -174,7 +174,7 @@ public sealed class ProviderServiceTests : IDisposable
     [Fact]
     public async Task ScmLink_RejectsNonHttpScheme_BlockingHrefInjection()
     {
-        var project = await _projects.CreateAsync(new CreateProjectRequest("P", null));
+        var project = await _projects.CreateAsync(_db, new CreateProjectRequest("P", null));
         var human = await _projects.AddMemberAsync(project.Id,
             new AddMemberRequest("Cory", ActorType.Human, null, MemberRole.Contributor));
         var change = await _changes.CreateAsync(project.Id, human.ActorId, new CreateChangeRequest("x", null, ChangeKind.Feature));
@@ -194,7 +194,7 @@ public sealed class ProviderServiceTests : IDisposable
     [Fact]
     public async Task ScmLink_NonMember_IsForbidden()
     {
-        var project = await _projects.CreateAsync(new CreateProjectRequest("P", null));
+        var project = await _projects.CreateAsync(_db, new CreateProjectRequest("P", null));
         var human = await _projects.AddMemberAsync(project.Id,
             new AddMemberRequest("Cory", ActorType.Human, null, MemberRole.Contributor));
         var change = await _changes.CreateAsync(project.Id, human.ActorId, new CreateChangeRequest("x", null, ChangeKind.Feature));

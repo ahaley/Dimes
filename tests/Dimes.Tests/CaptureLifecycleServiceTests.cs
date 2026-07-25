@@ -40,7 +40,7 @@ public sealed class CaptureLifecycleServiceTests : IDisposable
 
     private async Task<(Guid ProjectId, Guid MaintainerId, Guid ContributorId, Guid SourceId)> SeedAsync()
     {
-        var project = await _projects.CreateAsync(new CreateProjectRequest("Demo", null));
+        var project = await _projects.CreateAsync(_db, new CreateProjectRequest("Demo", null));
         var maintainer = await _projects.AddMemberAsync(project.Id,
             new AddMemberRequest("Maud", ActorType.Human, "maud@x.com", MemberRole.Maintainer));
         var contributor = await _projects.AddMemberAsync(project.Id,
@@ -458,7 +458,7 @@ public sealed class CaptureLifecycleServiceTests : IDisposable
             null, new CreateLlmProviderRequest(LlmProviderType.Anthropic, "shared-claude", null, "claude-sonnet-4-6", "ANTHROPIC_KEY"));
         Assert.Null(global.ProjectId);
 
-        var project = await _projects.CreateAsync(new CreateProjectRequest("Fresh", null));
+        var project = await _projects.CreateAsync(_db, new CreateProjectRequest("Fresh", null));
         var available = await _projects.ListLlmProvidersAsync(project.Id);
 
         Assert.Contains(available, p => p.Id == global.Id && p.ProjectId == null);

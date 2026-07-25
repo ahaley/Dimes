@@ -51,7 +51,7 @@ public sealed class CaptureAssistServiceTests : IDisposable
     [Fact]
     public async Task Chat_ReturnsReply_AndReplaysPriorTurnsAsHistory()
     {
-        var project = await _projects.CreateAsync(new CreateProjectRequest("P", null));
+        var project = await _projects.CreateAsync(_db, new CreateProjectRequest("P", null));
         var llmConfig = await _projects.CreateLlmProviderAsync(project.Id,
             new CreateLlmProviderRequest(LlmProviderType.Anthropic, "claude", null, "claude-sonnet-4-6", "ANTHROPIC_KEY"));
         var agent = await _projects.AddMemberAsync(project.Id,
@@ -72,7 +72,7 @@ public sealed class CaptureAssistServiceTests : IDisposable
     [Fact]
     public async Task Chat_NonAgentActor_IsRejected()
     {
-        var project = await _projects.CreateAsync(new CreateProjectRequest("P", null));
+        var project = await _projects.CreateAsync(_db, new CreateProjectRequest("P", null));
         var human = await _projects.AddMemberAsync(project.Id,
             new AddMemberRequest("Cory", ActorType.Human, null, MemberRole.Contributor));
 
@@ -84,7 +84,7 @@ public sealed class CaptureAssistServiceTests : IDisposable
     [Fact]
     public async Task Chat_ConversationNotEndingOnUser_IsRejected()
     {
-        var project = await _projects.CreateAsync(new CreateProjectRequest("P", null));
+        var project = await _projects.CreateAsync(_db, new CreateProjectRequest("P", null));
         var llmConfig = await _projects.CreateLlmProviderAsync(project.Id,
             new CreateLlmProviderRequest(LlmProviderType.Anthropic, "claude", null, "claude-sonnet-4-6", "ANTHROPIC_KEY"));
         var agent = await _projects.AddMemberAsync(project.Id,
@@ -99,7 +99,7 @@ public sealed class CaptureAssistServiceTests : IDisposable
 
     private async Task<Guid> SeedAgentAsync(StubLlm llm)
     {
-        var project = await _projects.CreateAsync(new CreateProjectRequest("P", null));
+        var project = await _projects.CreateAsync(_db, new CreateProjectRequest("P", null));
         var llmConfig = await _projects.CreateLlmProviderAsync(project.Id,
             new CreateLlmProviderRequest(llm.Type, "claude", null, "claude-sonnet-4-6", "ANTHROPIC_KEY"));
         var agent = await _projects.AddMemberAsync(project.Id,

@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Navigate, Route, Routes, useLocation, useMatch, useNavigate } from 'react-router-dom'
 import { api, isConnectivityError } from './api/client'
-import { useMe, useMembers, useMyAssignmentCounts, useProjects, useSiteBranding } from './api/hooks'
+import { useMe, useMembers, useMyAssignmentCounts, useProjectQuota, useProjects, useSiteBranding } from './api/hooks'
 import { useProjectsLiveUpdates } from './api/realtime'
+import type { ProjectQuota } from './api/types'
+import { projectLimitMessage } from './projectQuota'
 import { Button, Card } from './components/ui'
 import { Sidebar } from './features/Sidebar'
 import { Workspace } from './features/Workspace'
@@ -74,6 +76,8 @@ export default function App() {
   // Include archived so the sidebar can surface them in a separate group; split for the active list.
   // Keep activeProjects undefined while loading so IndexRedirect can distinguish "loading" from "none".
   const { data: projects } = useProjects(!!me, true)
+  // How many projects this user may still create (site admins are unlimited) — gates the create affordance.
+  const { data: quota } = useProjectQuota(!!me)
   const activeProjects = projects?.filter((p) => !p.isArchived)
   const archivedProjects = projects?.filter((p) => p.isArchived) ?? []
   // The nav lists the projects you belong to. A site admin also *sees* the ones they aren't a member
@@ -193,6 +197,11 @@ export default function App() {
   const myRole = (members ?? []).find((m) => m.actorId === me.actorId)?.role
   const canManage = me.isSiteAdmin || myRole === 'Maintainer'
 
+  // Creating a project is bounded by a per-user quota rather than reserved to admins. The API enforces
+  // it; hide the affordance once the allowance is spent (or when the site limit is 0, which restricts
+  // creation to administrators). Undefined while the quota is still loading — treat that as "not yet".
+  const canCreateProject = quota?.canCreate ?? false
+
   const view: View =
     location.pathname.startsWith('/providers') ? 'providers'
       : location.pathname.startsWith('/actors') ? 'actors'
@@ -224,7 +233,8 @@ export default function App() {
         onSelect={(id) => navigate(`/projects/${id}`)}
         collapsed={collapsed}
         onToggleCollapse={toggleCollapsed}
-        canCreateProject={me.isSiteAdmin}
+        canCreateProject={canCreateProject}
+        projectQuota={quota}
         onNewProject={() => setShowCreateProject(true)}
         activeView={view}
         onShowProviders={() => navigate('/providers')}
@@ -274,7 +284,7 @@ export default function App() {
               element={(
                 <IndexRedirect
                   projects={myProjects?.length ? myProjects : activeProjects}
-                  canCreate={me.isSiteAdmin}
+                  quota={quota}
                   onNewProject={() => setShowCreateProject(true)}
                 />
               )}
@@ -331,22 +341,30 @@ export default function App() {
 }
 
 function IndexRedirect({
-  projects, canCreate, onNewProject,
-}: { projects: ReturnType<typeof useProjects>['data']; canCreate: boolean; onNewProject: () => void }) {
+  projects, quota, onNewProject,
+}: { projects: ReturnType<typeof useProjects>['data']; quota?: ProjectQuota; onNewProject: () => void }) {
   if (projects === undefined) {
     return <p className="text-sm text-slate-400">Loading…</p>
   }
   if (projects.length === 0) {
+    // Reachable while at the limit too: a user who created their allowance and archived it all has
+    // nothing to show but no slot left either. Share the sidebar's wording so both say the same thing.
+    const limited = quota && !quota.unlimited && !quota.canCreate ? projectLimitMessage(quota) : null
     return (
       <Card className="p-10 text-center text-slate-500 dark:text-slate-400">
-        {canCreate ? (
+        {quota?.canCreate ? (
           <>
             No projects yet —{' '}
             <button className="text-indigo-600 hover:underline" onClick={onNewProject}>create one</button>{' '}
             to get started.
           </>
+        ) : limited ? (
+          <>
+            <p className="font-medium text-slate-600 dark:text-slate-300">{limited.heading}</p>
+            <p className="mx-auto mt-1 max-w-md text-sm">{limited.detail}</p>
+          </>
         ) : (
-          <>No projects yet — ask a site administrator to create one and add you to it.</>
+          <>No projects yet.</>
         )}
       </Card>
     )

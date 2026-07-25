@@ -117,6 +117,22 @@ function GeneralSection({ projectId }: { projectId: string }) {
           </span>
         </label>
       </div>
+      {/* Provenance: who is answerable for this project existing. Read-only — the creator is set once,
+          at creation, and projects predating attribution have none. */}
+      {project && (
+        <div className="rounded-md border border-slate-200 p-3 dark:border-slate-700">
+          <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-400">Created</h4>
+          <p className="mt-2 text-sm text-slate-700 dark:text-slate-200">
+            {project.createdByDisplayName ?? 'Unknown'}
+            <span className="text-slate-400">
+              {' · '}{new Date(project.createdAt).toLocaleDateString(undefined, { dateStyle: 'medium' })}
+            </span>
+          </p>
+          {!project.createdByDisplayName && (
+            <p className="mt-1 text-xs text-slate-400">This project predates creator attribution.</p>
+          )}
+        </div>
+      )}
       <ErrorText error={save.error} />
       <div className="flex justify-end">
         <Button variant="primary" disabled={!name.trim() || !dirty || save.isPending} onClick={() => save.mutate()}>

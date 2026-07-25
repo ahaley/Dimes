@@ -108,6 +108,10 @@ public class DimesDbContext(DbContextOptions<DimesDbContext> options) : DbContex
         {
             // Project keys are globally unique (NULLs permitted pre-backfill, and distinct in a unique index).
             b.HasIndex(p => p.Key).IsUnique();
+            // The per-user creation quota counts this column, so index it.
+            b.HasIndex(p => p.CreatedByActorId);
+            b.HasOne(p => p.CreatedByActor).WithMany()
+                .HasForeignKey(p => p.CreatedByActorId).OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<ChangeRequest>(b =>

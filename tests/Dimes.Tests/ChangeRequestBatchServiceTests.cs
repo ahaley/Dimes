@@ -35,7 +35,7 @@ public sealed class ChangeRequestBatchServiceTests : IDisposable
 
     private async Task<(Guid ProjectId, Guid ActorId)> SeedAsync()
     {
-        var project = await _projects.CreateAsync(new CreateProjectRequest("Demo", null));
+        var project = await _projects.CreateAsync(_db, new CreateProjectRequest("Demo", null));
         var member = await _projects.AddMemberAsync(project.Id,
             new AddMemberRequest("Cory", ActorType.Human, "cory@x.com", MemberRole.Contributor));
         return (project.Id, member.ActorId);

@@ -6,6 +6,8 @@ export const keys = {
   me: ['me'] as const,
   authConfig: ['authConfig'] as const,
   siteBranding: ['site-branding'] as const,
+  projectQuota: ['project-quota'] as const,
+  projectPolicy: ['project-policy'] as const,
   users: ['users'] as const,
   projects: ['projects'] as const,
   members: (projectId: string) => ['members', projectId] as const,
@@ -43,6 +45,59 @@ export function useUpdateSiteBranding() {
   return useMutation({
     mutationFn: (body: { title: string }) => api.updateSiteBranding(body),
     onSuccess: () => qc.invalidateQueries({ queryKey: keys.siteBranding }),
+  })
+}
+
+/**
+ * The caller's own project-creation allowance. Unlike the site-wide config queries this is NOT
+ * `staleTime: Infinity` — creating a project consumes a slot, so it's invalidated after every create
+ * (see `useCreateProject`) and the "New project" affordance re-gates itself at the limit.
+ */
+export function useProjectQuota(enabled = true) {
+  return useQuery({ queryKey: keys.projectQuota, queryFn: api.getProjectQuota, enabled })
+}
+
+/**
+ * Create a project, then refresh both the project list and the caller's remaining allowance. A non-admin
+ * creator is bound in as Maintainer server-side, so their new project appears in their own list.
+ */
+export function useCreateProject() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (body: { name: string; description?: string | null; key: string }) => api.createProject(body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: keys.projects })
+      qc.invalidateQueries({ queryKey: keys.projectQuota })
+    },
+  })
+}
+
+/** Site-admin: the default number of projects a non-admin may create (0 restricts creation to admins). */
+export function useProjectPolicy() {
+  return useQuery({ queryKey: keys.projectPolicy, queryFn: api.getProjectPolicy, staleTime: Infinity })
+}
+
+/** Site-admin: change that default. Also refreshes the caller's own quota, which may inherit it. */
+export function useUpdateProjectPolicy() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (body: { projectLimit: number }) => api.updateProjectPolicy(body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: keys.projectPolicy })
+      qc.invalidateQueries({ queryKey: keys.projectQuota })
+    },
+  })
+}
+
+/** Site-admin: raise or lower one user's personal allowance; a null limit restores the site default. */
+export function useSetUserProjectLimit() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, limit }: { id: string; limit: number | null }) => api.setUserProjectLimit(id, { limit }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: keys.users })
+      qc.invalidateQueries({ queryKey: keys.projectQuota })
+    },
   })
 }
 

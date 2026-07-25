@@ -46,4 +46,46 @@ public class SiteSettingsService(DimesDbContext db)
         await db.SaveChangesAsync(ct);
         return new SiteBrandingDto(title);
     }
+
+    /// <summary>The site-wide project-creation default, or the built-in default when no row exists yet.
+    /// A user's personal <see cref="Actor.ProjectLimit"/> overrides this; site admins ignore both.</summary>
+    public async Task<ProjectPolicyDto> GetProjectPolicyAsync(CancellationToken ct = default)
+    {
+        var limit = await db.SiteSettings.AsNoTracking().Select(s => (int?)s.ProjectLimit).FirstOrDefaultAsync(ct);
+        return new ProjectPolicyDto(limit ?? SiteSettings.DefaultProjectLimit);
+    }
+
+    /// <summary>Set how many projects a non-admin may create by default. 0 restricts creation to site
+    /// administrators. Find-or-create the single row, matching <see cref="UpdateAsync"/>.</summary>
+    public async Task<ProjectPolicyDto> UpdateProjectPolicyAsync(
+        UpdateProjectPolicyRequest req, CancellationToken ct = default)
+    {
+        ValidateProjectLimit(req.ProjectLimit);
+
+        var row = await db.SiteSettings.FirstOrDefaultAsync(ct);
+        if (row is null)
+        {
+            db.SiteSettings.Add(new SiteSettings { ProjectLimit = req.ProjectLimit });
+        }
+        else
+        {
+            row.ProjectLimit = req.ProjectLimit;
+            row.UpdatedAt = DateTimeOffset.UtcNow;
+        }
+        await db.SaveChangesAsync(ct);
+        return new ProjectPolicyDto(req.ProjectLimit);
+    }
+
+    /// <summary>Shared range check for both the site default and a per-user override.</summary>
+    public static void ValidateProjectLimit(int limit)
+    {
+        if (limit < 0)
+        {
+            throw new BadRequestException("A project limit can't be negative. Use 0 to disallow creation.");
+        }
+        if (limit > SiteSettings.MaxProjectLimit)
+        {
+            throw new BadRequestException($"A project limit must be {SiteSettings.MaxProjectLimit} or fewer.");
+        }
+    }
 }

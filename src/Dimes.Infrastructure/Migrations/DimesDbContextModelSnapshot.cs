@@ -45,6 +45,9 @@ namespace Dimes.Infrastructure.Migrations
                     b.Property<Guid?>("LlmProviderConfigId")
                         .HasColumnType("TEXT");
 
+                    b.Property<int?>("ProjectLimit")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("ProjectOrderJson")
                         .HasColumnType("TEXT");
 
@@ -637,6 +640,9 @@ namespace Dimes.Infrastructure.Migrations
                     b.Property<long>("CreatedAt")
                         .HasColumnType("INTEGER");
 
+                    b.Property<Guid?>("CreatedByActorId")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("Description")
                         .HasColumnType("TEXT");
 
@@ -657,6 +663,8 @@ namespace Dimes.Infrastructure.Migrations
                         .HasColumnType("INTEGER");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("CreatedByActorId");
 
                     b.HasIndex("Key")
                         .IsUnique();
@@ -734,6 +742,9 @@ namespace Dimes.Infrastructure.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<long>("CreatedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("ProjectLimit")
                         .HasColumnType("INTEGER");
 
                     b.Property<string>("Title")
@@ -1136,6 +1147,16 @@ namespace Dimes.Infrastructure.Migrations
                         .IsRequired();
 
                     b.Navigation("Project");
+                });
+
+            modelBuilder.Entity("Dimes.Domain.Entities.Project", b =>
+                {
+                    b.HasOne("Dimes.Domain.Entities.Actor", "CreatedByActor")
+                        .WithMany()
+                        .HasForeignKey("CreatedByActorId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("CreatedByActor");
                 });
 
             modelBuilder.Entity("Dimes.Domain.Entities.ScmLink", b =>

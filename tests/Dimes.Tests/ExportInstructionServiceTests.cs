@@ -29,7 +29,7 @@ public sealed class ExportInstructionServiceTests : IDisposable
 
     private async Task<(Guid ProjectId, Guid MaintainerId, Guid ContributorId)> SeedProjectAsync()
     {
-        var project = await _projects.CreateAsync(new CreateProjectRequest("Demo", null));
+        var project = await _projects.CreateAsync(_db, new CreateProjectRequest("Demo", null));
         var maint = await _projects.AddMemberAsync(project.Id,
             new AddMemberRequest("Mae", ActorType.Human, "mae@x.com", MemberRole.Maintainer));
         var contrib = await _projects.AddMemberAsync(project.Id,
@@ -40,7 +40,7 @@ public sealed class ExportInstructionServiceTests : IDisposable
     [Fact]
     public async Task Create_SeedsTheDefaultExportInstruction()
     {
-        var project = await _projects.CreateAsync(new CreateProjectRequest("Fresh", null));
+        var project = await _projects.CreateAsync(_db, new CreateProjectRequest("Fresh", null));
 
         var row = Assert.Single(await _db.SystemInstructions.ToListAsync());
         Assert.Equal(project.Id, row.ProjectId);

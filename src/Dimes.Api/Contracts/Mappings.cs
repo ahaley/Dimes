@@ -39,8 +39,11 @@ public static class Mappings
     public static string SerializeEvents(IReadOnlyList<NotificationEventType> events) =>
         JsonSerializer.Serialize(events.Distinct().Select(e => e.ToString()).ToList());
 
+    /// <summary>Carries the creator's display name when the <see cref="Project.CreatedByActor"/> navigation
+    /// is loaded — callers that surface provenance must Include (or explicitly load) it.</summary>
     public static ProjectDto ToDto(this Project p, MemberRole? myRole = null) =>
-        new(p.Id, p.Name, p.Description, p.CreatedAt, p.IsArchived, p.ArchivedAt, p.SourceControlEnabled, p.HumanOnly, p.Key, myRole);
+        new(p.Id, p.Name, p.Description, p.CreatedAt, p.IsArchived, p.ArchivedAt, p.SourceControlEnabled, p.HumanOnly, p.Key, myRole,
+            p.CreatedByActorId, p.CreatedByActor?.DisplayName);
 
     public static MemberDto ToMemberDto(this Membership m) =>
         new(m.ActorId, m.ProjectId, m.Actor.DisplayName, m.Actor.Type, m.Actor.Email, m.Role, m.Actor.LlmProviderConfigId);

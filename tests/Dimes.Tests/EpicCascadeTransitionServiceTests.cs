@@ -37,7 +37,7 @@ public sealed class EpicCascadeTransitionServiceTests : IDisposable
 
     private async Task<(Guid ProjectId, Guid ActorId)> SeedAsync(MemberRole role)
     {
-        var project = await _projects.CreateAsync(new CreateProjectRequest("Demo", null));
+        var project = await _projects.CreateAsync(_db, new CreateProjectRequest("Demo", null));
         var member = await _projects.AddMemberAsync(project.Id,
             new AddMemberRequest("Cory", ActorType.Human, "cory@x.com", role));
         return (project.Id, member.ActorId);

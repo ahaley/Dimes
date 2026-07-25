@@ -7,7 +7,8 @@ using Microsoft.AspNetCore.Mvc;
 namespace Dimes.Api.Controllers;
 
 /// <summary>Site-admin-only user administration: list users, create local accounts, reset passwords,
-/// and grant/revoke site-admin. Per-project membership stays under /api/projects/{id}/members.</summary>
+/// grant/revoke site-admin, and adjust a user's project-creation limit. Per-project membership stays
+/// under /api/projects/{id}/members.</summary>
 [ApiController]
 [Route("api/admin/users")]
 [Authorize(DimesClaims.SiteAdminPolicy)]
@@ -56,6 +57,12 @@ public class UsersController(SiteAdminService admin) : ControllerBase
     [HttpPost("{id:guid}/site-admin")]
     public async Task<ActionResult<SiteUserDto>> SetSiteAdmin(Guid id, SetSiteAdminRequest req, CancellationToken ct)
         => Ok(await admin.SetSiteAdminAsync(id, req.IsSiteAdmin, ct));
+
+    /// <summary>Raise or lower one user's project-creation allowance; a null limit puts them back on the
+    /// site default. This is how a user who has hit their limit gets more, having asked out of band.</summary>
+    [HttpPut("{id:guid}/project-limit")]
+    public async Task<ActionResult<SiteUserDto>> SetProjectLimit(Guid id, SetProjectLimitRequest req, CancellationToken ct)
+        => Ok(await admin.SetProjectLimitAsync(id, req.Limit, ct));
 
     [HttpGet("{id:guid}/memberships")]
     public async Task<ActionResult<IReadOnlyList<UserMembershipDto>>> Memberships(Guid id, CancellationToken ct)

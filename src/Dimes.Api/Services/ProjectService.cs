@@ -66,8 +66,75 @@ public class ProjectService(DimesDbContext db, MembershipResolver members)
         }
     }
 
-    public async Task<ProjectDto> CreateAsync(CreateProjectRequest req, CancellationToken ct = default)
+    /// <summary>The caller's project-creation allowance: their personal <see cref="Actor.ProjectLimit"/>
+    /// if set, otherwise the site-wide <see cref="SiteSettings.ProjectLimit"/>, otherwise the built-in
+    /// default (no settings row exists until someone saves one — reads never create it). A limit of 0
+    /// means non-admins can't create projects at all, which is the behaviour before quotas existed.</summary>
+    private async Task<int> ResolveProjectLimitAsync(Guid actorId, CancellationToken ct)
     {
+        var personal = await db.Actors.Where(a => a.Id == actorId).Select(a => a.ProjectLimit).FirstOrDefaultAsync(ct);
+        if (personal is int limit)
+        {
+            return limit;
+        }
+        var siteLimit = await db.SiteSettings.AsNoTracking().Select(s => (int?)s.ProjectLimit).FirstOrDefaultAsync(ct);
+        return siteLimit ?? SiteSettings.DefaultProjectLimit;
+    }
+
+    /// <summary>Authority to create a project. Site admins are unrestricted; everyone else is capped by
+    /// their effective limit (see <see cref="ResolveProjectLimitAsync"/>). Counts every project the actor
+    /// has created, archived ones included — archive is a soft delete, so exempting archived projects
+    /// would let a user archive-and-recreate without bound. Freeing a slot is deliberately an
+    /// administrator's call: raise that user's individual limit.</summary>
+    public async Task EnsureCanCreateProjectAsync(
+        Guid callerActorId, bool callerIsSiteAdmin, CancellationToken ct = default)
+    {
+        if (callerIsSiteAdmin)
+        {
+            return;
+        }
+
+        var limit = await ResolveProjectLimitAsync(callerActorId, ct);
+        if (limit <= 0)
+        {
+            throw new ForbiddenException(
+                "Creating projects is restricted to site administrators on this site. Ask an administrator "
+                + "if you need a project of your own.");
+        }
+
+        var used = await db.Projects.CountAsync(p => p.CreatedByActorId == callerActorId, ct);
+        if (used >= limit)
+        {
+            throw new ForbiddenException(
+                $"You've created {used} of your {limit} allowed projects. Archiving one doesn't free a slot — "
+                + "ask an administrator to raise your project limit.");
+        }
+    }
+
+    /// <summary>The caller's own creation allowance, for gating the "New project" affordance and showing
+    /// how much of it is left. Self-scoped — no role gate. Site admins report as unlimited.</summary>
+    public async Task<ProjectQuotaDto> GetProjectQuotaAsync(
+        Guid actorId, bool isSiteAdmin, CancellationToken ct = default)
+    {
+        var used = await db.Projects.CountAsync(p => p.CreatedByActorId == actorId, ct);
+        if (isSiteAdmin)
+        {
+            return new ProjectQuotaDto(used, Limit: 0, CanCreate: true, Unlimited: true);
+        }
+
+        var limit = await ResolveProjectLimitAsync(actorId, ct);
+        return new ProjectQuotaDto(used, limit, CanCreate: limit > 0 && used < limit, Unlimited: false);
+    }
+
+    /// <summary>Create a project on behalf of <paramref name="callerActorId"/>, subject to their creation
+    /// quota. A non-admin creator is bound in as <see cref="MemberRole.Maintainer"/> so they can actually
+    /// run the project they just made; a site admin isn't, since they already hold authority everywhere and
+    /// typically create projects for other people — auto-joining them would add a spurious member.</summary>
+    public async Task<ProjectDto> CreateAsync(
+        CreateProjectRequest req, Guid callerActorId, bool callerIsSiteAdmin, CancellationToken ct = default)
+    {
+        await EnsureCanCreateProjectAsync(callerActorId, callerIsSiteAdmin, ct);
+
         if (string.IsNullOrWhiteSpace(req.Name))
         {
             throw new BadRequestException("Project name is required.");
@@ -90,8 +157,23 @@ public class ProjectService(DimesDbContext db, MembershipResolver members)
             key = ProjectKeys.DeriveUnique(req.Name, taken);
         }
 
-        var project = new Project { Name = req.Name.Trim(), Description = req.Description, Key = key };
+        var project = new Project
+        {
+            Name = req.Name.Trim(),
+            Description = req.Description,
+            Key = key,
+            CreatedByActorId = callerActorId,
+        };
         db.Projects.Add(project);
+        if (!callerIsSiteAdmin)
+        {
+            db.Memberships.Add(new Membership
+            {
+                ActorId = callerActorId,
+                ProjectId = project.Id,
+                Role = MemberRole.Maintainer,
+            });
+        }
         // Give the project its own editable copy of the export guidance up front, so it's customizable
         // from creation (the export still falls back to this same default if the row is later reset).
         db.SystemInstructions.Add(new SystemInstruction
@@ -101,7 +183,9 @@ public class ProjectService(DimesDbContext db, MembershipResolver members)
             Content = SystemInstructionDefaults.ExportWorkOrder,
         });
         await db.SaveChangesAsync(ct);
-        return project.ToDto();
+        // Load the creator for the DTO's provenance (the freshly-added row has no navigation populated).
+        await db.Entry(project).Reference(p => p.CreatedByActor).LoadAsync(ct);
+        return project.ToDto(callerIsSiteAdmin ? null : MemberRole.Maintainer);
     }
 
     /// <summary>Projects visible to an actor: site admins see all; everyone else sees only the
@@ -119,7 +203,8 @@ public class ProjectService(DimesDbContext db, MembershipResolver members)
             .Where(m => m.ActorId == actorId)
             .ToDictionaryAsync(m => m.ProjectId, m => m.Role, ct);
 
-        var query = db.Projects.AsQueryable();
+        // Include the creator so each project can show who is answerable for it existing.
+        var query = db.Projects.Include(p => p.CreatedByActor).AsQueryable();
         if (!isSiteAdmin)
         {
             query = query.Where(p => p.Memberships.Any(m => m.ActorId == actorId));
@@ -191,6 +276,8 @@ public class ProjectService(DimesDbContext db, MembershipResolver members)
         project.SourceControlEnabled = req.SourceControlEnabled;
         project.HumanOnly = req.HumanOnly;
         await db.SaveChangesAsync(ct);
+        // Editing a project must not blank out its provenance in the returned DTO.
+        await db.Entry(project).Reference(p => p.CreatedByActor).LoadAsync(ct);
         return project.ToDto();
     }
 
@@ -437,6 +524,7 @@ public class ProjectService(DimesDbContext db, MembershipResolver members)
                 a.LlmProviderConfig != null ? a.LlmProviderConfig.Name : null,
                 db.Memberships.Count(m => m.ActorId == a.Id),
                 db.Memberships.All(m => m.ActorId != a.Id)
+                    && db.Projects.All(p => p.CreatedByActorId != a.Id)
                     && db.ChangeRequests.All(c => c.CreatedByActorId != a.Id && c.AssigneeActorId != a.Id)
                     && db.Comments.All(c => c.AuthorActorId != a.Id)
                     && db.AuditEvents.All(e => e.ActorId != a.Id),
@@ -460,6 +548,7 @@ public class ProjectService(DimesDbContext db, MembershipResolver members)
             .ToListAsync(ct);
 
         var deletable = memberships.Count == 0
+            && !await db.Projects.AnyAsync(p => p.CreatedByActorId == id, ct)
             && !await db.ChangeRequests.AnyAsync(c => c.CreatedByActorId == id || c.AssigneeActorId == id, ct)
             && !await db.Comments.AnyAsync(c => c.AuthorActorId == id, ct)
             && !await db.AuditEvents.AnyAsync(e => e.ActorId == id, ct);
@@ -537,6 +626,7 @@ public class ProjectService(DimesDbContext db, MembershipResolver members)
             actor.LlmProviderConfigId, actor.LlmProviderConfig?.Name,
             await db.Memberships.CountAsync(m => m.ActorId == actor.Id, ct),
             !await db.Memberships.AnyAsync(m => m.ActorId == actor.Id, ct)
+                && !await db.Projects.AnyAsync(p => p.CreatedByActorId == actor.Id, ct)
                 && !await db.ChangeRequests.AnyAsync(c => c.CreatedByActorId == actor.Id || c.AssigneeActorId == actor.Id, ct)
                 && !await db.Comments.AnyAsync(c => c.AuthorActorId == actor.Id, ct)
                 && !await db.AuditEvents.AnyAsync(e => e.ActorId == actor.Id, ct),
@@ -553,6 +643,12 @@ public class ProjectService(DimesDbContext db, MembershipResolver members)
         if (await db.Memberships.AnyAsync(m => m.ActorId == id, ct))
         {
             throw new BadRequestException("Actor is still a member of a project. Remove the membership first.");
+        }
+        // Projects carry their creator for the quota count, under a Restrict FK — check it here so this
+        // surfaces as a friendly BadRequest rather than a raw DbUpdateException at SaveChanges.
+        if (await db.Projects.AnyAsync(p => p.CreatedByActorId == id, ct))
+        {
+            throw new BadRequestException("Actor created one or more projects and can't be deleted. Archive them instead.");
         }
         var referenced =
             await db.ChangeRequests.AnyAsync(c => c.CreatedByActorId == id || c.AssigneeActorId == id, ct)

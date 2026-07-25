@@ -2,7 +2,6 @@ using Dimes.Api.Auth;
 using Dimes.Api.Contracts;
 using Dimes.Api.Realtime;
 using Dimes.Api.Services;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Dimes.Api.Controllers;
@@ -12,16 +11,23 @@ namespace Dimes.Api.Controllers;
 public class ProjectsController(
     ProjectService projects, ObservationService observations, ICurrentActor currentActor, IBoardNotifier notifier) : ControllerBase
 {
-    /// <summary>Create a project. Restricted to site administrators — creation is an instance-level
-    /// action (there's no project yet to scope a per-project role to).</summary>
+    /// <summary>Create a project. Open to any authenticated user, bounded by their creation quota — site
+    /// admins are unrestricted, everyone else is capped by their personal limit or the site default (0
+    /// there restricts creation to administrators). The service enforces it and binds a non-admin creator
+    /// in as Maintainer, since there's no project yet to scope a per-project role to.</summary>
     [HttpPost]
-    [Authorize(DimesClaims.SiteAdminPolicy)]
     public async Task<ActionResult<ProjectDto>> Create(CreateProjectRequest req, CancellationToken ct)
     {
-        var project = await projects.CreateAsync(req, ct);
+        var project = await projects.CreateAsync(req, currentActor.ActorId, currentActor.IsSiteAdmin, ct);
         await notifier.ProjectsChangedAsync(ct); // refresh every client's sidebar list
         return CreatedAtAction(nameof(List), new { }, project);
     }
+
+    /// <summary>The caller's own project-creation allowance — gates the "New project" affordance and shows
+    /// how much of it is left. Self-scoped, so no role gate.</summary>
+    [HttpGet("quota")]
+    public async Task<ActionResult<ProjectQuotaDto>> Quota(CancellationToken ct)
+        => Ok(await projects.GetProjectQuotaAsync(currentActor.ActorId, currentActor.IsSiteAdmin, ct));
 
     [HttpGet]
     public async Task<ActionResult<IReadOnlyList<ProjectDto>>> List([FromQuery] bool includeArchived, CancellationToken ct)

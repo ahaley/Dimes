@@ -1,6 +1,6 @@
 import type {
   ActorDetail, ActorSummary, AssistConversation, AssistConversationStatus, AssistConversationSummary, AuthConfig, AuditEvent, CaptureProposal, ChangeKind, ChangeRequest, ChangeRequestDetail, ChangeStatus, ChatTurn, CaptureAssistReply, Comment, ExportInstruction, GenerateProposalsReply,
-  LlmProviderConfig, Me, Member, NotificationChannel, NotificationChannelType, NotificationEventType, NotificationPreference, Observation, ObservationSource, ObservationStatus, Priority, Project, ProjectAssignmentCount, ScmLink, SiteBranding, SiteUser, UserMembership, WorkOrderSummary,
+  LlmProviderConfig, Me, Member, NotificationChannel, NotificationChannelType, NotificationEventType, NotificationPreference, Observation, ObservationSource, ObservationStatus, Priority, Project, ProjectAssignmentCount, ProjectPolicy, ProjectQuota, ScmLink, SiteBranding, SiteUser, UserMembership, WorkOrderSummary,
 } from './types'
 
 /** Error carrying the HTTP status + ProblemDetails so the UI can show 403/409 guard failures nicely.
@@ -81,6 +81,8 @@ export const api = {
     request<Project[]>('GET', `/api/projects${includeArchived ? '?includeArchived=true' : ''}`),
   createProject: (body: { name: string; description?: string | null; key: string }) =>
     request<Project>('POST', '/api/projects', body),
+  // The caller's own creation allowance — gates the "New project" affordance.
+  getProjectQuota: () => request<ProjectQuota>('GET', '/api/projects/quota'),
   updateProject: (id: string, body: { name: string; description?: string | null; sourceControlEnabled: boolean; humanOnly: boolean }) =>
     request<Project>('PATCH', `/api/projects/${id}`, body),
   reorderProjects: (body: { orderedIds: string[] }) =>
@@ -241,6 +243,11 @@ export const api = {
   updateSiteBranding: (body: { title: string }) =>
     request<SiteBranding>('PUT', '/api/admin/branding', body),
 
+  // Site project-creation policy (site-admin only, both ways)
+  getProjectPolicy: () => request<ProjectPolicy>('GET', '/api/admin/project-policy'),
+  updateProjectPolicy: (body: { projectLimit: number }) =>
+    request<ProjectPolicy>('PUT', '/api/admin/project-policy', body),
+
   // Authentication
   getAuthConfig: () => request<AuthConfig>('GET', '/api/auth/config'),
   getMe: () => request<Me>('GET', '/api/auth/me'),
@@ -262,6 +269,9 @@ export const api = {
     request<void>('POST', `/api/admin/users/${id}/reset-password`, body),
   setSiteAdmin: (id: string, body: { isSiteAdmin: boolean }) =>
     request<SiteUser>('POST', `/api/admin/users/${id}/site-admin`, body),
+  // A null limit clears the personal override, putting the user back on the site default.
+  setUserProjectLimit: (id: string, body: { limit: number | null }) =>
+    request<SiteUser>('PUT', `/api/admin/users/${id}/project-limit`, body),
   archiveUser: (id: string) => request<void>('POST', `/api/admin/users/${id}/archive`),
   unarchiveUser: (id: string) => request<void>('POST', `/api/admin/users/${id}/unarchive`),
   deleteUser: (id: string) => request<void>('DELETE', `/api/admin/users/${id}`),

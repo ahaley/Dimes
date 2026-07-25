@@ -26,6 +26,13 @@ public class Project : Entity
     public bool IsArchived { get; set; }
     public DateTimeOffset? ArchivedAt { get; set; }
 
+    /// <summary>The actor who created this project — the row the per-user creation quota counts. Null for
+    /// projects created before quotas existed (they count against nobody). Kept even when the project is
+    /// archived: archive is a soft delete, so exempting archived projects would let a user
+    /// archive-and-recreate without bound.</summary>
+    public Guid? CreatedByActorId { get; set; }
+    public Actor? CreatedByActor { get; set; }
+
     public ICollection<Membership> Memberships { get; set; } = new List<Membership>();
     public ICollection<ChangeRequest> ChangeRequests { get; set; } = new List<ChangeRequest>();
     public ICollection<Observation> Observations { get; set; } = new List<Observation>();

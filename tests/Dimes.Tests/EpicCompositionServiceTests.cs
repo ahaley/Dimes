@@ -35,7 +35,7 @@ public sealed class EpicCompositionServiceTests : IDisposable
 
     private async Task<(Guid ProjectId, Guid ActorId)> SeedAsync(MemberRole role = MemberRole.Contributor)
     {
-        var project = await _projects.CreateAsync(new CreateProjectRequest("Demo", null));
+        var project = await _projects.CreateAsync(_db, new CreateProjectRequest("Demo", null));
         var member = await _projects.AddMemberAsync(project.Id,
             new AddMemberRequest("Cory", ActorType.Human, "cory@x.com", role));
         return (project.Id, member.ActorId);
@@ -102,7 +102,7 @@ public sealed class EpicCompositionServiceTests : IDisposable
         var (projectA, actorA) = await SeedAsync();
         var epic = await NewChangeAsync(projectA, actorA, ChangeKind.Epic, "Epic");
 
-        var projectB = await _projects.CreateAsync(new CreateProjectRequest("Other", null));
+        var projectB = await _projects.CreateAsync(_db, new CreateProjectRequest("Other", null));
         var memberB = await _projects.AddMemberAsync(projectB.Id,
             new AddMemberRequest("Dana", ActorType.Human, "dana@x.com", MemberRole.Contributor));
         var foreignChild = await NewChangeAsync(projectB.Id, memberB.ActorId, ChangeKind.Feature, "Foreign");

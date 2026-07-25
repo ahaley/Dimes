@@ -28,6 +28,11 @@ public class Actor : Entity
 
     public ICollection<Membership> Memberships { get; set; } = new List<Membership>();
 
+    /// <summary>Personal allowance for creating projects. Null inherits the site-wide
+    /// <see cref="SiteSettings.ProjectLimit"/>; a number wins over it (in either direction). Site admins
+    /// ignore it entirely — they're exempt from the quota.</summary>
+    public int? ProjectLimit { get; set; }
+
     /// <summary>This actor's personal ordering of their project list (a JSON array of project-id GUIDs).
     /// Drives the sidebar order and the default project (the top one). Per-user preference, independent of
     /// role; unknown/stale ids are ignored and unranked projects fall back to alphabetical.</summary>

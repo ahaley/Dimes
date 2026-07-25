@@ -1,7 +1,5 @@
 import { useState } from 'react'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { api } from '../api/client'
-import { keys } from '../api/hooks'
+import { useCreateProject, useProjectQuota } from '../api/hooks'
 import type { Project } from '../api/types'
 import { Button, ErrorText, Field, Modal, TextInput } from '../components/ui'
 
@@ -15,7 +13,7 @@ function suggestKey(name: string): string {
 }
 
 export function CreateProjectModal({ onClose, onCreated }: { onClose: () => void; onCreated: (p: Project) => void }) {
-  const qc = useQueryClient()
+  const { data: quota } = useProjectQuota()
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [key, setKey] = useState('')
@@ -27,13 +25,9 @@ export function CreateProjectModal({ onClose, onCreated }: { onClose: () => void
     if (!keyEdited) setKey(suggestKey(value))
   }
 
-  const create = useMutation({
-    mutationFn: () => api.createProject({ name, description: description || null, key }),
-    onSuccess: (p) => {
-      qc.invalidateQueries({ queryKey: keys.projects })
-      onCreated(p)
-    },
-  })
+  const create = useCreateProject()
+  const submit = () =>
+    create.mutate({ name, description: description || null, key }, { onSuccess: onCreated })
 
   const keyValid = KEY_RE.test(key)
 
@@ -58,11 +52,19 @@ export function CreateProjectModal({ onClose, onCreated }: { onClose: () => void
           <TextInput value={description} onChange={(e) => setDescription(e.target.value)} placeholder="optional" />
         </Field>
         <ErrorText error={create.error} />
-        <div className="flex justify-end gap-2 pt-1">
-          <Button variant="subtle" onClick={onClose}>Cancel</Button>
-          <Button variant="primary" disabled={!name.trim() || !keyValid || create.isPending} onClick={() => create.mutate()}>
-            Create
-          </Button>
+        <div className="flex items-center justify-between gap-2 pt-1">
+          {/* Non-admins create against a per-user allowance; archiving a project doesn't give a slot back. */}
+          <span className="text-xs text-slate-400">
+            {quota && !quota.unlimited
+              ? `${quota.used} of ${quota.limit} projects used`
+              : ''}
+          </span>
+          <div className="flex gap-2">
+            <Button variant="subtle" onClick={onClose}>Cancel</Button>
+            <Button variant="primary" disabled={!name.trim() || !keyValid || create.isPending} onClick={submit}>
+              Create
+            </Button>
+          </div>
         </div>
       </div>
     </Modal>
