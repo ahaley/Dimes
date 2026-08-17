@@ -93,6 +93,11 @@ public record CreateLlmProviderRequest(
 public record UpdateLlmProviderRequest(
     LlmProviderType Type, string Name, string? BaseUrl, string Model, string? ApiKeySecretRef, bool Enabled,
     LlmProviderSettingsDto? Settings = null);
+// Moving a provider between scopes is its own request, not a field on the update: a nullable ProjectId
+// there could not distinguish "make this website-wide" from "leave the scope alone". It is also a
+// different authority — the caller must administer both the source and the destination — so it gets its
+// own endpoint rather than riding along with a name or model edit. Null ProjectId = website-wide.
+public record MoveLlmProviderScopeRequest(Guid? ProjectId);
 // ApiKeySecretRef is a non-sensitive reference name (e.g. "ANTHROPIC_KEY"), not the secret itself —
 // safe to expose so the edit form can prefill it.
 public record LlmProviderConfigDto(

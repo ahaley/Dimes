@@ -767,6 +767,52 @@ public class ProjectService(DimesDbContext db, MembershipResolver members)
         return config.ToDto();
     }
 
+    /// <summary>Move a provider between scopes: to a project, or to website-wide (<paramref name="projectId"/>
+    /// null). Callers MUST first establish authority over both the source and the destination — see
+    /// <c>LlmProvidersController.MoveScope</c>.
+    ///
+    /// Narrowing the scope can strand a reference, so it is refused rather than allowed to break quietly.
+    /// An Agent actor points at a provider by id (<see cref="Actor.LlmProviderConfigId"/>), and the agent
+    /// picker only ever offers providers in scope for that project — but nothing re-checks an existing
+    /// assignment when the provider itself moves. Narrowing to a project the agent isn't a member of would
+    /// leave it holding a provider its project can no longer see. This mirrors
+    /// <see cref="DeleteLlmProviderAsync"/>, which likewise blocks while agents still reference the config.
+    /// Widening to website-wide is always safe: a global provider is available to every project.</summary>
+    public async Task<LlmProviderConfigDto> MoveLlmProviderScopeAsync(
+        Guid id, Guid? projectId, CancellationToken ct = default)
+    {
+        var config = await db.LlmProviderConfigs.FindAsync([id], ct)
+            ?? throw new NotFoundException($"LLM provider config '{id}' not found.");
+
+        if (config.ProjectId == projectId)
+        {
+            return config.ToDto(); // Already there — nothing to do.
+        }
+
+        if (projectId is Guid destination)
+        {
+            if (!await db.Projects.AnyAsync(p => p.Id == destination, ct))
+            {
+                throw new NotFoundException($"Project '{destination}' not found.");
+            }
+
+            var stranded = await db.Actors
+                .Where(a => a.LlmProviderConfigId == id)
+                .Where(a => !db.Memberships.Any(m => m.ActorId == a.Id && m.ProjectId == destination))
+                .CountAsync(ct);
+            if (stranded > 0)
+            {
+                throw new BadRequestException(
+                    $"Provider is in use by {stranded} agent(s) outside the destination project, which would " +
+                    "lose access to it. Reassign them before moving it.");
+            }
+        }
+
+        config.ProjectId = projectId;
+        await db.SaveChangesAsync(ct);
+        return config.ToDto();
+    }
+
     /// <summary>Per-type configuration requirements, checked at save so a misconfiguration surfaces
     /// immediately rather than at first call (the same choice as the Google Chat channel check).
     ///

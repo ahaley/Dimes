@@ -60,6 +60,32 @@ public class LlmProvidersController(
         return Ok(await projects.UpdateLlmProviderAsync(id, req, ct));
     }
 
+    /// <summary>Move a provider between scopes — to a project, or to website-wide (null ProjectId).
+    ///
+    /// Authority is two-sided, because a move both removes the provider from its current scope and adds it
+    /// to another: the caller must administer the source (<see cref="ProjectService.EnsureProviderAdminAsync"/>,
+    /// the same bar as editing or deleting it) *and* meet the bar for creating one in the destination — a
+    /// project's own admin gate, or site admin for website-wide. Checking only the source would let a
+    /// project Maintainer publish their provider site-wide.</summary>
+    [HttpPost("{id:guid}/scope")]
+    public async Task<ActionResult<LlmProviderConfigDto>> MoveScope(
+        Guid id, MoveLlmProviderScopeRequest req, CancellationToken ct)
+    {
+        await projects.EnsureProviderAdminAsync(id, currentActor.ActorId, currentActor.IsSiteAdmin, ct);
+
+        if (req.ProjectId is Guid destination)
+        {
+            await projects.EnsureProjectAdminAsync(destination, currentActor.ActorId, currentActor.IsSiteAdmin, ct);
+        }
+        else if (!currentActor.IsSiteAdmin)
+        {
+            throw new ForbiddenException(
+                "Only a site administrator can make an LLM provider website-wide.");
+        }
+
+        return Ok(await projects.MoveLlmProviderScopeAsync(id, req.ProjectId, ct));
+    }
+
     [HttpDelete("{id:guid}")]
     public async Task<IActionResult> Delete(Guid id, CancellationToken ct)
     {

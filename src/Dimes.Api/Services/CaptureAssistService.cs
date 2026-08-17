@@ -101,6 +101,7 @@ public class CaptureAssistService(
         var provider = providers.FirstOrDefault(p => p.Type == config.Type)
             ?? throw new BadRequestException($"No adapter is registered for provider type '{config.Type}'.");
 
+        config.RequireInScope(projectId);
         // Re-validates the base URL at call time as well as at save time — see ToConnectionAsync.
         return (provider, await config.ToConnectionAsync(secrets, ct));
     }

@@ -99,6 +99,39 @@ public sealed class ProviderServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task AgentCommentary_ProviderScopedToAnotherProject_IsRejected()
+    {
+        // The agent picker only ever offers in-scope providers and a scope move that would strand an agent is
+        // refused, so this should be unreachable — asserted anyway so the invariant is enforced where the
+        // provider is used rather than resting on the move guard staying correct.
+        var project = await _projects.CreateAsync(_db, new CreateProjectRequest("P", null));
+        var elsewhere = await _projects.CreateAsync(_db, new CreateProjectRequest("Other", null));
+        var human = await _projects.AddMemberAsync(project.Id,
+            new AddMemberRequest("Cory", ActorType.Human, null, MemberRole.Contributor));
+        var llm = await _projects.CreateLlmProviderAsync(project.Id,
+            new CreateLlmProviderRequest(LlmProviderType.Anthropic, "claude", null, "claude-sonnet-4-6", "ANTHROPIC_KEY"));
+        var agent = await _projects.AddMemberAsync(project.Id,
+            new AddMemberRequest("Aria", ActorType.Agent, null, MemberRole.Contributor, llm.Id));
+        var change = await _changes.CreateAsync(project.Id, human.ActorId,
+            new CreateChangeRequest("Improve logging", null, ChangeKind.Feature));
+
+        // Reach past the guarded path to leave the assignment dangling, as a direct DB edit would.
+        var config = await _db.LlmProviderConfigs.FindAsync(llm.Id);
+        config!.ProjectId = elsewhere.Id;
+        await _db.SaveChangesAsync();
+
+        var commentary = new CommentaryService(
+            _db, [new StubLlm(LlmProviderType.Anthropic, "x")], new StubSecrets(), new MembershipResolver(_db));
+
+        var ex = await Assert.ThrowsAsync<BadRequestException>(() =>
+            commentary.CommentOnChangeAsync(change.Id, agent.ActorId, human.ActorId, callerIsSiteAdmin: false));
+        Assert.Contains("scoped to a different project", ex.Message);
+
+        // Nothing was written — the refusal happens before the provider is called.
+        Assert.Empty((await _changes.GetDetailAsync(change.Id)).Comments);
+    }
+
+    [Fact]
     public async Task AgentCommentary_NonAgentActor_IsRejected()
     {
         var project = await _projects.CreateAsync(_db, new CreateProjectRequest("P", null));

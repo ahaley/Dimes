@@ -117,12 +117,18 @@ export const api = {
   listSources: (projectId: string) => request<ObservationSource[]>('GET', `/api/projects/${projectId}/sources`),
   createSource: (projectId: string, body: { type: 'Sdk' | 'Seq'; name: string; configJson?: string | null }) =>
     request<ObservationSource>('POST', `/api/projects/${projectId}/sources`, body),
+  // Website-wide providers only. Site-admin gated server-side, which the /providers route already is.
+  listGlobalLlmProviders: () => request<LlmProviderConfig[]>('GET', `/api/llm-providers`),
   createLlmProvider: (projectId: string, body: LlmProviderBody) =>
     request<LlmProviderConfig>('POST', `/api/projects/${projectId}/llm-providers`, body),
   createGlobalLlmProvider: (body: LlmProviderBody) =>
     request<LlmProviderConfig>('POST', `/api/llm-providers`, body),
   updateLlmProvider: (id: string, body: LlmProviderBody & { enabled: boolean }) =>
     request<LlmProviderConfig>('PATCH', `/api/llm-providers/${id}`, body),
+  // Scope is its own request, not an update field: a null projectId there couldn't be told apart from
+  // "leave the scope alone", and moving scope needs authority over both the source and the destination.
+  moveLlmProviderScope: (id: string, projectId: string | null) =>
+    request<LlmProviderConfig>('POST', `/api/llm-providers/${id}/scope`, { projectId }),
   deleteLlmProvider: (id: string) => request<void>('DELETE', `/api/llm-providers/${id}`),
   // Model discovery. POST because it carries a candidate configuration (saved or not) and makes an
   // outbound call on the referenced credential — it is a probe, not a fetch. Gated server-side with the

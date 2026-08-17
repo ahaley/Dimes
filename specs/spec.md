@@ -150,6 +150,12 @@ SCM linkage is a manual read-only repo/PR link (auto-sync parked).
   id. Enabling reasoning requires raising `MaxTokens` to match.
 - **An empty completion fails loudly**, carrying the vendor's stop reason, rather than
   being stored as a blank agent comment (`LlmHttp.RequireText`).
+- **Provider scope is website-wide or one project, and can be moved** between the two.
+  A move needs authority over *both* ends — the source's provider-admin bar and the
+  destination's create bar — since checking only the source would let a project
+  Maintainer publish their provider site-wide. Narrowing is refused while it would
+  strand an Agent whose project would lose access; the same invariant is asserted where
+  the provider is used, so it holds even if that guard is wrong.
 - **Base-URL policy is per provider type.** The OpenAI-compatible type must stay permissive
   (localhost / private LAN *is* the local-runner path); the vendor types additionally
   require the host to sit under that vendor's domain. Without that split, a

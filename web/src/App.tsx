@@ -93,9 +93,6 @@ export default function App() {
   const projectMatch = useMatch('/projects/:projectId/*')
   const projectId = projectMatch?.params.projectId
 
-  const [lastProjectId, setLastProjectId] = useState<string>()
-  useEffect(() => { if (projectId) setLastProjectId(projectId) }, [projectId])
-
   const [showSettings, setShowSettings] = useState(false)
   const [showCreateProject, setShowCreateProject] = useState(false)
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem(COLLAPSE_KEY) === '1')
@@ -314,7 +311,9 @@ export default function App() {
               element={<FocusView actingActorId={me.actorId} members={members ?? []} />}
             />
             {/* LLM providers + Actors are site-admin-only; guard the routes so a bookmark can't reach them. */}
-            <Route path="/providers" element={me.isSiteAdmin ? <LlmProvidersView projectId={projectId ?? lastProjectId} /> : <Navigate to="/" replace />} />
+            {/* Scope is chosen inside the view (defaulting to website-wide), not inherited from the
+                route — this view is app-level, and an inherited project was invisible to the reader. */}
+            <Route path="/providers" element={me.isSiteAdmin ? <LlmProvidersView /> : <Navigate to="/" replace />} />
             <Route path="/actors" element={me.isSiteAdmin ? <ActorsView /> : <Navigate to="/" replace />} />
             <Route path="/actors/:actorId" element={me.isSiteAdmin ? <ActorDetailView /> : <Navigate to="/" replace />} />
             <Route path="/settings" element={me.isSiteAdmin ? <SiteSettingsView /> : <Navigate to="/" replace />} />

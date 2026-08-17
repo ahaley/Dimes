@@ -125,6 +125,16 @@ process — they're parsed locally into a Google-signed token scoped to `*.googl
 ADC option already grants. The path must be rooted, and a non-path value is refused *without being echoed*,
 so a key pasted into that field never lands in a log.
 
+**Provider scope is explicit and movable.** A provider is website-wide (`ProjectId == null`, available to
+every project) or scoped to one project. `POST /api/llm-providers/{id}/scope` moves it, and authority is
+**two-sided** — the caller must administer the source (`EnsureProviderAdminAsync`) *and* clear the bar for
+creating in the destination (project admin, or site admin for website-wide); checking only the source would
+let a project Maintainer publish their provider site-wide. Narrowing a scope is **refused while it would
+strand an agent**: an Agent actor references a provider by id and nothing re-checks that assignment when the
+provider moves, so `RequireInScope` also asserts it at the point of use. The `/providers` view always opens
+on website-wide and picks scope explicitly — it sits under the site-admin Settings group, so inheriting the
+last-visited project made the owning project invisible.
+
 **Reasoning mode is always stated, never inherited.** `LlmCompletionRequest.Reasoning` (`Disabled` by
 default) exists because the vendor default isn't stable across models: omitting Anthropic's `thinking` field
 means "no thinking" on Sonnet 4.6 but "adaptive" on Sonnet 5 — and a request's token budget covers reasoning

@@ -1,33 +1,110 @@
 import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '../api/client'
-import { useLlmProviders } from '../api/hooks'
-import type { LlmModel, LlmProviderConfig, LlmProviderSettings, LlmProviderType } from '../api/types'
+import { useGlobalLlmProviders, useLlmProviders, useProjects } from '../api/hooks'
+import type { LlmModel, LlmProviderConfig, LlmProviderSettings, LlmProviderType, Project } from '../api/types'
 import { Badge, Button, Card, ErrorText, Field, Select, TextInput } from '../components/ui'
 
-/** App-level management of LLM providers (website-wide + project-scoped). */
-export function LlmProvidersView({ projectId }: { projectId: string | undefined }) {
+/** The scope a provider belongs to. '' is website-wide; anything else is a project id. */
+type Scope = string
+const WEBSITE_WIDE: Scope = ''
+
+/** How a project reads in the scope picker and section headings — matches the header-title convention
+ *  in App.tsx, and marks archived projects so an existing provider on one is still reachable. */
+function projectLabel(project: Project): string {
+  const name = project.key ? `${project.key} · ${project.name}` : project.name
+  return project.isArchived ? `${name} (archived)` : name
+}
+
+/** App-level management of LLM providers (website-wide + project-scoped).
+ *
+ * Scope is an explicit choice here rather than inherited from whichever project the admin last visited.
+ * This view sits under the sidebar's site-admin Settings group, not under a project, so an inherited
+ * project context was invisible — the project was never named, and a direct load of /providers (where no
+ * route match supplies one) fell through to an empty state. It now always opens on website-wide. */
+export function LlmProvidersView() {
+  const [scope, setScope] = useState<Scope>(WEBSITE_WIDE)
+  // Include archived so a provider scoped to one doesn't become unmanageable.
+  const { data: projects } = useProjects(true, true)
+  const selected = (projects ?? []).find((p) => p.id === scope)
+
   return (
     <div className="mx-auto max-w-2xl space-y-4">
       <div>
         <h1 className="text-lg font-semibold text-slate-800 dark:text-slate-100">LLM providers</h1>
         <p className="mt-1 text-sm text-slate-500">
-          Endpoints used for recommend-only agent commentary. A provider can be website-wide
-          (available to every project) or scoped to the current project.
+          Endpoints used for recommend-only agent commentary. A provider is either website-wide — available
+          to every project — or scoped to one project. Choose which set you&apos;re managing.
         </p>
       </div>
 
-      {projectId ? (
-        <>
-          <ProviderList projectId={projectId} />
-          <AddProviderForm projectId={projectId} />
-        </>
-      ) : (
-        <Card className="p-6 text-center text-sm text-slate-400">
-          Select or create a project to manage providers.
+      <Card className="p-4">
+        <Field label="Scope">
+          <Select value={scope} onChange={(e) => setScope(e.target.value)}>
+            <option value={WEBSITE_WIDE}>Website-wide</option>
+            {(projects ?? []).map((p) => (
+              <option key={p.id} value={p.id}>{projectLabel(p)}</option>
+            ))}
+          </Select>
+        </Field>
+      </Card>
+
+      {scope === WEBSITE_WIDE
+        ? <WebsiteWideScope />
+        : <ProjectScope projectId={scope} heading={selected ? projectLabel(selected) : 'This project'} />}
+    </div>
+  )
+}
+
+/** Website-wide providers: the whole list is in scope, so there is nothing inherited to show. */
+function WebsiteWideScope() {
+  const { data: providers } = useGlobalLlmProviders()
+  return (
+    <>
+      <ProviderList
+        heading="Website-wide · available to every project"
+        providers={providers}
+        empty="No website-wide providers yet."
+      />
+      <AddProviderForm scope={WEBSITE_WIDE} scopeLabel="website-wide" />
+    </>
+  )
+}
+
+/** One project's own providers, plus the website-wide ones it inherits shown read-only — so the list
+ *  answers "what can this project's agents actually use?" without implying they're managed here. */
+function ProjectScope({ projectId, heading }: { projectId: string; heading: string }) {
+  const { data: providers } = useLlmProviders(projectId)
+  const own = (providers ?? []).filter((p) => p.projectId !== null)
+  const inherited = (providers ?? []).filter((p) => p.projectId === null)
+
+  return (
+    <>
+      <ProviderList
+        heading={heading}
+        providers={providers === undefined ? undefined : own}
+        empty="No providers scoped to this project yet."
+      />
+      {inherited.length > 0 && (
+        <Card className="p-4">
+          <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+            Also available here, from website-wide
+          </h2>
+          <p className="mt-1 text-xs text-slate-400">
+            Manage these under the Website-wide scope.
+          </p>
+          <ul className="mt-2 space-y-1 text-sm text-slate-600 dark:text-slate-300">
+            {inherited.map((p) => (
+              <li key={p.id}>
+                {p.name} · <span className="text-slate-400">{TYPE_LABELS[p.type]} / {p.model}</span>
+                {!p.enabled && <> <Badge tone="red">disabled</Badge></>}
+              </li>
+            ))}
+          </ul>
         </Card>
       )}
-    </div>
+      <AddProviderForm scope={projectId} scopeLabel={heading} />
+    </>
   )
 }
 
@@ -330,25 +407,38 @@ function ProviderFields({
 
 // ----- Views --------------------------------------------------------------
 
-function ProviderList({ projectId }: { projectId: string }) {
-  const { data: providers } = useLlmProviders(projectId)
+/** The providers owned by the selected scope. The heading names that scope, so no row is left implicitly
+ *  belonging to something the reader can't see. */
+function ProviderList({
+  heading, providers, empty,
+}: {
+  heading: string
+  providers: LlmProviderConfig[] | undefined
+  empty: string
+}) {
   return (
-    <Card className="divide-y divide-slate-100 dark:divide-slate-800">
-      {(providers ?? []).map((p) => <ProviderRow key={p.id} provider={p} />)}
-      {providers?.length === 0 && <p className="p-4 text-sm text-slate-400">No providers configured yet.</p>}
+    <Card>
+      <h2 className="border-b border-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 dark:border-slate-800 dark:text-slate-200">
+        {heading}
+      </h2>
+      <div className="divide-y divide-slate-100 dark:divide-slate-800">
+        {(providers ?? []).map((p) => <ProviderRow key={p.id} provider={p} />)}
+        {providers?.length === 0 && <p className="p-4 text-sm text-slate-400">{empty}</p>}
+      </div>
     </Card>
   )
 }
 
-function AddProviderForm({ projectId }: { projectId: string }) {
+/** Adds into the selected scope. There is no website-wide checkbox any more — the scope picker above owns
+ *  that choice, and having it in two places was the thing that made scope hard to read. */
+function AddProviderForm({ scope, scopeLabel }: { scope: Scope; scopeLabel: string }) {
   const qc = useQueryClient()
   const [draft, setDraft] = useState<ProviderDraft>(emptyDraft)
-  const [websiteWide, setWebsiteWide] = useState(false)
 
   const add = useMutation({
     mutationFn: () => {
       const body = writeBody(draft)
-      return websiteWide ? api.createGlobalLlmProvider(body) : api.createLlmProvider(projectId, body)
+      return scope === WEBSITE_WIDE ? api.createGlobalLlmProvider(body) : api.createLlmProvider(scope, body)
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['providers'] })
@@ -358,15 +448,17 @@ function AddProviderForm({ projectId }: { projectId: string }) {
 
   return (
     <Card className="space-y-2 p-4">
-      <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Add provider</h2>
-      <ProviderFields draft={draft} onChange={setDraft} projectId={websiteWide ? null : projectId} />
-      <label className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300">
-        <input type="checkbox" checked={websiteWide} onChange={(e) => setWebsiteWide(e.target.checked)} />
-        Website-wide (available to all projects)
-      </label>
+      <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+        Add provider to {scopeLabel}
+      </h2>
+      <ProviderFields
+        draft={draft}
+        onChange={setDraft}
+        projectId={scope === WEBSITE_WIDE ? null : scope}
+      />
       <ErrorText error={add.error} />
       <Button variant="primary" disabled={!isSaveable(draft) || add.isPending} onClick={() => add.mutate()}>
-        {websiteWide ? 'Add website-wide provider' : 'Add provider'}
+        Add provider
       </Button>
     </Card>
   )
@@ -392,7 +484,11 @@ function ProviderRow({ provider }: { provider: LlmProviderConfig }) {
     return (
       <div className="flex flex-wrap items-center gap-2 p-3 text-sm text-slate-700 dark:text-slate-200">
         <span>{provider.name} · <span className="text-slate-400">{TYPE_LABELS[provider.type]} / {provider.model}</span></span>
-        {provider.projectId === null && <Badge tone="indigo">website-wide</Badge>}
+        {/* Badge both scopes, not just website-wide: an unbadged row previously meant "belongs to some
+            project", which is exactly the ambiguity being fixed. */}
+        <Badge tone={provider.projectId === null ? 'indigo' : 'slate'}>
+          {provider.projectId === null ? 'website-wide' : 'project'}
+        </Badge>
         {!provider.enabled && <Badge tone="red">disabled</Badge>}
         <span className="ml-auto flex items-center gap-1">
           <Button variant="subtle" onClick={() => setEditing(true)}>Edit</Button>
@@ -420,6 +516,49 @@ function ProviderRow({ provider }: { provider: LlmProviderConfig }) {
         <Button variant="subtle" onClick={() => setEditing(false)}>Cancel</Button>
         <Button variant="primary" disabled={!isSaveable(draft) || save.isPending} onClick={() => save.mutate()}>
           Save
+        </Button>
+      </div>
+      <MoveScope provider={provider} />
+    </div>
+  )
+}
+
+/** Moving a provider between scopes is its own endpoint and so its own control — saving the fields above
+ *  does not change scope, and a move can be refused (it would strand an agent whose project loses access),
+ *  which needs somewhere of its own to report. */
+function MoveScope({ provider }: { provider: LlmProviderConfig }) {
+  const qc = useQueryClient()
+  const { data: projects } = useProjects(true, true)
+  const current: Scope = provider.projectId ?? WEBSITE_WIDE
+  const [target, setTarget] = useState<Scope>(current)
+
+  const move = useMutation({
+    mutationFn: () => api.moveLlmProviderScope(provider.id, target === WEBSITE_WIDE ? null : target),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['providers'] }),
+  })
+
+  return (
+    <div className="space-y-1 border-t border-slate-100 pt-2 dark:border-slate-800">
+      <Field label="Scope">
+        <Select value={target} onChange={(e) => setTarget(e.target.value)}>
+          <option value={WEBSITE_WIDE}>Website-wide</option>
+          {(projects ?? []).map((p) => (
+            <option key={p.id} value={p.id}>{projectLabel(p)}</option>
+          ))}
+        </Select>
+      </Field>
+      <p className="text-xs text-slate-400">
+        Moving to a project is refused while an agent outside it still uses this provider — reassign those
+        agents first, so none is left pointing at a provider its project can&apos;t see.
+      </p>
+      <ErrorText error={move.error} />
+      <div className="flex justify-end">
+        <Button
+          variant="subtle"
+          disabled={target === current || move.isPending}
+          onClick={() => move.mutate()}
+        >
+          {move.isPending ? 'Moving…' : 'Move scope'}
         </Button>
       </div>
     </div>

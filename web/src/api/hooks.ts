@@ -204,6 +204,16 @@ export function useLlmProviders(projectId: string | undefined) {
   })
 }
 
+/** Website-wide providers. Keyed under the same 'providers' prefix as the per-project lists, so the
+ *  existing invalidateQueries({ queryKey: ['providers'] }) after a mutation refreshes both. */
+export function useGlobalLlmProviders(enabled = true) {
+  return useQuery({
+    queryKey: [...keys.providers('global')],
+    queryFn: () => api.listGlobalLlmProviders(),
+    enabled,
+  })
+}
+
 export function useSources(projectId: string | undefined) {
   return useQuery({
     queryKey: keys.sources(projectId ?? ''),
