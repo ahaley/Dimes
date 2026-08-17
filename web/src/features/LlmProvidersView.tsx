@@ -184,11 +184,18 @@ const DEFAULT_MODELS: Record<LlmProviderType, string> = {
  *
  * A model id belongs to one vendor, so keeping `claude-sonnet-4-6` after a switch to Vertex just produces
  * a config that saves fine and 400s on first use. But clearing unconditionally would discard an id the
- * operator had typed or discovered, so an edited value is left alone — they can see it no longer fits. */
+ * operator had typed or discovered, so an edited value is left alone — they can see it no longer fits.
+ *
+ * Switching *into* Vertex also restores its one-credential-source invariant. ADC and a reference are
+ * mutually exclusive, and both can be set on arrival — tick ADC under Vertex, switch to Anthropic, type a
+ * key reference, switch back. Left alone that reproduces the dead end `setUseAdc` exists to prevent: an
+ * unsaveable draft whose reference field is disabled and so can't be emptied. ADC yields rather than the
+ * reference, because the reference is the value the operator typed most recently and can see. */
 const withType = (draft: ProviderDraft, type: LlmProviderType): ProviderDraft => ({
   ...draft,
   type,
   model: draft.model.trim() === DEFAULT_MODELS[draft.type] ? DEFAULT_MODELS[type] : draft.model,
+  useAdc: type === 'GeminiVertex' && draft.apiKeySecretRef.trim() ? false : draft.useAdc,
 })
 
 /** What the base-URL field means per type — it is an override for the vendor types (restricted to that
@@ -313,6 +320,14 @@ function ProviderFields({
     onChange({ ...draft, [key]: value })
   const placeholders = TYPE_PLACEHOLDERS[draft.type]
 
+  // Turning ADC on clears the credentials reference, because the two are mutually exclusive both here
+  // (isSaveable) and server-side (ValidateTypeRequirements). Without the clear, ticking ADC on a provider
+  // that already had a reference was a dead end: the save became invalid while the field it was invalid
+  // for went disabled, so the value could not be removed and nothing said why. Clearing also keeps the
+  // greyed-out field honest — it shows what will actually be saved, rather than a value that is ignored.
+  const setUseAdc = (useAdc: boolean) =>
+    onChange({ ...draft, useAdc, apiKeySecretRef: useAdc ? '' : draft.apiKeySecretRef })
+
   return (
     <>
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -364,7 +379,7 @@ function ProviderFields({
             </Field>
           </div>
           <label className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300">
-            <input type="checkbox" checked={draft.useAdc} onChange={(e) => set('useAdc', e.target.checked)} />
+            <input type="checkbox" checked={draft.useAdc} onChange={(e) => setUseAdc(e.target.checked)} />
             Use Application Default Credentials (recommended — no secret is stored)
           </label>
           <p className="text-xs text-slate-400">
