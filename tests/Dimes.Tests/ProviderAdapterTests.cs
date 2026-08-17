@@ -279,6 +279,26 @@ public class ProviderAdapterTests
         Assert.Contains("SAFETY", ex.Message);
     }
 
+    /// <summary>Gemini spells the truncation reason <c>MAX_TOKENS</c> where Anthropic uses
+    /// <c>max_tokens</c>. LlmHttp matches it case-insensitively, so both spellings earn the "raise
+    /// MaxTokens" hint from one clause — this pins the Gemini casing so the redundant second clause that
+    /// once sat next to it stays removed.</summary>
+    [Fact]
+    public async Task Gemini_TruncatedBeforeAnyText_StillEarnsTheTokenBudgetHint()
+    {
+        var handler = new CapturingHandler(HttpStatusCode.OK,
+            """{"candidates":[{"content":{"role":"model","parts":[]},"finishReason":"MAX_TOKENS"}]}""");
+        var provider = new GeminiLlmProvider(new HttpClient(handler));
+
+        var ex = await Assert.ThrowsAsync<HttpRequestException>(() => provider.CompleteAsync(
+            new LlmCompletionRequest("sys", "hi"),
+            new LlmConnection(BaseUrl: null, Model: "gemini-x", ApiKey: "k"),
+            Ct));
+
+        Assert.Contains("MAX_TOKENS", ex.Message);
+        Assert.Contains("MaxTokens", ex.Message); // the actionable hint, not just the reason
+    }
+
     [Fact]
     public async Task Gemini_ErrorResponse_SurfacesApiMessage()
     {

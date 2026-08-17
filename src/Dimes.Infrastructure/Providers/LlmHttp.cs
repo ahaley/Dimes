@@ -78,11 +78,15 @@ internal static class LlmHttp
     }
 
     /// <summary>Every vendor spells "ran out of output budget" differently — Anthropic <c>max_tokens</c>,
-    /// OpenAI <c>length</c>, Gemini <c>MAX_TOKENS</c>. Matched loosely on purpose: a missed match only
-    /// costs the extra hint, while the reason itself is always reported.</summary>
+    /// Gemini <c>MAX_TOKENS</c>, OpenAI <c>length</c>. The first two differ only in case, so the one
+    /// <see cref="StringComparison.OrdinalIgnoreCase"/> match covers both; a separate <c>MAX_TOKENS</c>
+    /// clause used to sit alongside it and was unreachable. Don't add it back — it reads as though it is
+    /// what covers Gemini, which invites "fixing" the wrong branch later.
+    ///
+    /// Matched loosely on purpose: a missed match only costs the extra hint, while the reason itself is
+    /// always reported.</summary>
     private static bool LooksLikeTruncation(string? reason) =>
         reason is not null
         && (reason.Contains("max_tokens", StringComparison.OrdinalIgnoreCase)
-            || reason.Contains("MAX_TOKENS", StringComparison.OrdinalIgnoreCase)
             || reason.Equals("length", StringComparison.OrdinalIgnoreCase));
 }
