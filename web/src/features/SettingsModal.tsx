@@ -654,8 +654,14 @@ function NotificationChannelForm({
       </Field>
       <p className="text-xs text-slate-400">
         A lookup key, not the credentials themselves — you must separately set its value (the service-account
-        JSON) in configuration (<code className="font-mono">Secrets:{secretRef.trim() || '<name>'}</code>) or an
-        environment variable of the same name. Required, because Google Chat can't authenticate without it.
+        JSON) in configuration (<code className="font-mono">Secrets:Notification:{secretRef.trim() || '<name>'}</code>)
+        or the environment variable{' '}
+        <code className="font-mono">DIMES_NOTIFICATION_{secretRef.trim() || '<name>'}</code>. For a
+        credentials file, bind its path with{' '}
+        <code className="font-mono">SecretFiles:Notification:{secretRef.trim() || '<name>'}</code> instead.
+        The <code className="font-mono">Notification</code> section is required: a name here resolves only
+        among notification secrets, so it can never reach one bound for something else. Required, because
+        Google Chat can&apos;t authenticate without it.
       </p>
       <div>
         <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">Events</div>

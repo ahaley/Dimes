@@ -48,7 +48,7 @@ public static class LlmProviderConnectionExtensions
         return new LlmConnection(
             config.BaseUrl,
             config.Model,
-            secrets.Resolve(config.ApiKeySecretRef),
+            secrets.Resolve(SecretPurpose.LlmProvider, config.ApiKeySecretRef),
             LlmProviderSettings.Parse(config.SettingsJson));
     }
 }

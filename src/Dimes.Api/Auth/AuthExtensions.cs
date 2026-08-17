@@ -95,8 +95,13 @@ public static class AuthExtensions
             });
 
             // Resolve the client secret from the secret store (config Secrets:{ref} or env var).
+            // Operator purpose: this reference name comes from appsettings, never from a user, so it
+            // resolves against the unprefixed routes. That is also what keeps it unreachable from the
+            // Maintainer-facing forms, whose references are confined to their own section — see
+            // SecretPurpose.
             services.AddOptions<OpenIdConnectOptions>(AuthSchemes.Oidc)
-                .Configure<ISecretResolver>((o, secrets) => o.ClientSecret = secrets.Resolve(options.Oidc.ClientSecretRef));
+                .Configure<ISecretResolver>((o, secrets) =>
+                    o.ClientSecret = secrets.Resolve(SecretPurpose.Operator, options.Oidc.ClientSecretRef));
         }
 
         return services;

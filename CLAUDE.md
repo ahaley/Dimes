@@ -127,13 +127,27 @@ adapter gets its own `HttpClient`; they're registered as interface *sets*
 (`apiKeySecretRef`) and resolved via `ISecretResolver`, never stored plaintext. LLM commentary is
 recommend-only — it posts a `Comment` with `Kind = AgentRecommendation` and must never change state.
 
-**Secret references resolve four ways** (`ConfigurationSecretResolver`), in order: `Secrets:<name>` /
-`SecretFiles:<name>` in configuration, then env `<name>` / `<name>_FILE`. The `*File`/`_FILE` routes name a
-*path* and the resolver returns the file's contents, so callers never touch the filesystem — that exists
-for credentials operators hold as files (a Vertex service-account JSON, Docker/K8s secret mounts). Literal
-beats file within each tier so older references are unaffected. A configured-but-unreadable path throws
-rather than returning null, because "no secret configured" would send the operator hunting in the wrong
-place.
+**Secret references resolve four ways** (`ConfigurationSecretResolver`), in order: `Secrets:<section><name>` /
+`SecretFiles:<section><name>` in configuration, then env `<prefix><name>` / `<prefix><name>_FILE`. The
+`*File`/`_FILE` routes name a *path* and the resolver returns the file's contents, so callers never touch
+the filesystem — that exists for credentials operators hold as files (a Vertex service-account JSON,
+Docker/K8s secret mounts). Literal beats file within each tier, and configuration beats environment. A
+configured-but-unreadable path throws rather than returning null, because "no secret configured" would send
+the operator hunting in the wrong place.
+
+**The section/prefix is a privilege boundary, not tidiness** — every `Resolve` call states a
+`SecretPurpose`, and there is deliberately no single-argument overload because the omitted default would be
+the dangerous one. `Operator` (the OIDC client secret, named in appsettings) resolves *unprefixed*;
+everything a project Maintainer can type into a form is confined to its own section — `Secrets:Llm:<name>` /
+env `DIMES_LLM_<name>`, and likewise `Notification:` / `DIMES_NOTIFICATION_` and `Scm:` / `DIMES_SCM_`.
+Before this, one flat namespace meant "can configure an LLM provider" implied "can read every secret the
+process can see": a Maintainer could put the OIDC client secret's reference name on an `OpenAICompatible`
+config pointed at a host they control and the adapter would send it there as a bearer token. Containment
+holds because the prefix is a fixed leading segment a reference can only extend — config keys have no
+traversal, env names are suffixes — which is also why the reference itself is *not* charset-restricted.
+When a reference misses but the same name is bound unprefixed, the resolver logs a migration warning naming
+the setting to create; it does **not** surface that to the caller, because telling a Maintainer "that one
+exists" rebuilds the very oracle this removed.
 
 **Vertex additionally accepts a bare path as the value** — `GeminiVertexLlmProvider.ReadCredentialsJson`
 reads the key file when the resolved credential isn't JSON, so the file routes are optional for that type.

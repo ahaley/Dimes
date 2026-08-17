@@ -50,7 +50,14 @@ public sealed class ProviderServiceTests : IDisposable
 
     private sealed class StubSecrets : ISecretResolver
     {
-        public string? Resolve(string? secretRef) => secretRef is null ? null : "resolved";
+        // This fixture drives both the LLM and SCM paths, so it pins the invariant they share rather than
+        // one purpose: a reference that reached here came off a DB row a Maintainer can edit, so it must
+        // never resolve under Operator — that is the namespace holding the OIDC client secret.
+        public string? Resolve(SecretPurpose purpose, string? secretRef)
+        {
+            Assert.NotEqual(SecretPurpose.Operator, purpose);
+            return secretRef is null ? null : "resolved";
+        }
     }
 
     [Fact]

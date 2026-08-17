@@ -140,7 +140,11 @@ public sealed class NotificationDrainTests : IDisposable
 
     private sealed class FixedSecretResolver : ISecretResolver
     {
-        public string? Resolve(string? secretRef) => secretRef is null ? null : "{\"type\":\"service_account\"}";
+        public string? Resolve(SecretPurpose purpose, string? secretRef)
+        {
+            Assert.Equal(SecretPurpose.Notification, purpose);
+            return secretRef is null ? null : "{\"type\":\"service_account\"}";
+        }
     }
 
     public void Dispose()

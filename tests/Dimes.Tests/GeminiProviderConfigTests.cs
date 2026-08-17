@@ -30,7 +30,13 @@ public sealed class GeminiProviderConfigTests : IDisposable
 
     private sealed class StubSecrets : ISecretResolver
     {
-        public string? Resolve(string? secretRef) => secretRef is null ? null : "resolved";
+        // Asserts the purpose, not just the name — model discovery resolves a Maintainer-supplied
+        // reference, so it must stay confined to the LLM namespace.
+        public string? Resolve(SecretPurpose purpose, string? secretRef)
+        {
+            Assert.Equal(SecretPurpose.LlmProvider, purpose);
+            return secretRef is null ? null : "resolved";
+        }
     }
 
     /// <summary>An adapter that can enumerate models, standing in for the real HTTP catalog calls.</summary>

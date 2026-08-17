@@ -403,11 +403,12 @@ function ProviderFields({
       </Field>
       <p className="text-xs text-slate-400">
         A lookup name, not the credential itself. Bind it to a value in configuration
-        (<code className="font-mono">Secrets:{secretName(draft)}</code>) or an environment variable of the
-        same name — or, for a credential you hold as a file, to its path via{' '}
-        <code className="font-mono">SecretFiles:{secretName(draft)}</code> or a{' '}
-        <code className="font-mono">{secretName(draft)}_FILE</code> environment variable, and Dimes reads
-        the file.{' '}
+        (<code className="font-mono">Secrets:Llm:{secretName(draft)}</code>) or the environment variable{' '}
+        <code className="font-mono">DIMES_LLM_{secretName(draft)}</code> — or, for a credential you hold as
+        a file, to its path via <code className="font-mono">SecretFiles:Llm:{secretName(draft)}</code> or a{' '}
+        <code className="font-mono">DIMES_LLM_{secretName(draft)}_FILE</code> environment variable, and
+        Dimes reads the file. The <code className="font-mono">Llm</code> section is required: a name here
+        resolves only among LLM secrets, so it can never reach one bound for something else.{' '}
         {needsKeyRef(draft.type)
           ? 'Required for this provider type.'
           : draft.type === 'GeminiVertex'

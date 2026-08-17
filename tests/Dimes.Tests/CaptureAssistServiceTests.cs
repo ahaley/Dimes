@@ -42,7 +42,13 @@ public sealed class CaptureAssistServiceTests : IDisposable
 
     private sealed class StubSecrets : ISecretResolver
     {
-        public string? Resolve(string? secretRef) => secretRef is null ? null : "resolved";
+        // Asserts the purpose, not just the name. An LLM call site that resolved under Operator would be
+        // back inside the OIDC client secret's namespace — the boundary SecretPurpose exists to hold.
+        public string? Resolve(SecretPurpose purpose, string? secretRef)
+        {
+            Assert.Equal(SecretPurpose.LlmProvider, purpose);
+            return secretRef is null ? null : "resolved";
+        }
     }
 
     private CaptureAssistService Service(StubLlm llm) =>

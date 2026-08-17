@@ -35,7 +35,7 @@ public class ScmService(
             {
                 var config = await db.ScmProviderConfigs.FirstOrDefaultAsync(
                     c => c.ProjectId == change.ProjectId && c.Type == ScmProviderType.GitHub, ct);
-                var token = secrets.Resolve(config?.TokenSecretRef);
+                var token = secrets.Resolve(SecretPurpose.Scm, config?.TokenSecretRef);
                 try
                 {
                     var context = await provider.FetchContextAsync(req.Url, token, ct);

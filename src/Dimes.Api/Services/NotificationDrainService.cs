@@ -64,7 +64,8 @@ public sealed class NotificationDrainRunner(
             var provider = providers.FirstOrDefault(p => p.Type == channel.Type)
                 ?? throw new InvalidOperationException($"No adapter for channel type '{channel.Type}'.");
 
-            var connection = new NotificationConnection(channel.Target, secrets.Resolve(channel.SecretRef));
+            var connection = new NotificationConnection(
+                channel.Target, secrets.Resolve(SecretPurpose.Notification, channel.SecretRef));
             await provider.SendAsync(new NotificationMessage(delivery.Title, delivery.Body), connection, ct);
 
             delivery.Status = NotificationDeliveryStatus.Sent;
