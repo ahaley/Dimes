@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Dimes.Domain;
 using Dimes.Domain.Entities;
+using Dimes.Domain.Providers;
 
 namespace Dimes.Api.Contracts;
 
@@ -49,7 +50,22 @@ public static class Mappings
         new(m.ActorId, m.ProjectId, m.Actor.DisplayName, m.Actor.Type, m.Actor.Email, m.Role, m.Actor.LlmProviderConfigId);
 
     public static LlmProviderConfigDto ToDto(this LlmProviderConfig c) =>
-        new(c.Id, c.ProjectId, c.Type, c.Name, c.BaseUrl, c.Model, c.ApiKeySecretRef, c.Enabled);
+        new(c.Id, c.ProjectId, c.Type, c.Name, c.BaseUrl, c.Model, c.ApiKeySecretRef, c.Enabled,
+            c.SettingsJson is null ? null : LlmProviderSettings.Parse(c.SettingsJson).ToDto());
+
+    public static LlmProviderSettingsDto ToDto(this LlmProviderSettings s) =>
+        new(s.GcpProject, s.GcpLocation, s.UseApplicationDefaultCredentials);
+
+    /// <summary>A null settings block means "none supplied" and stores as a null column.</summary>
+    public static string? ToSettingsJson(this LlmProviderSettingsDto? dto) =>
+        dto is null
+            ? null
+            : new LlmProviderSettings
+            {
+                GcpProject = string.IsNullOrWhiteSpace(dto.GcpProject) ? null : dto.GcpProject.Trim(),
+                GcpLocation = string.IsNullOrWhiteSpace(dto.GcpLocation) ? null : dto.GcpLocation.Trim(),
+                UseApplicationDefaultCredentials = dto.UseApplicationDefaultCredentials,
+            }.ToJson();
 
     public static ObservationSourceDto ToDto(this ObservationSource s) =>
         new(s.Id, s.ProjectId, s.Type, s.Name, s.Enabled);

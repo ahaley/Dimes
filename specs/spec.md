@@ -115,14 +115,47 @@ SCM linkage is a manual read-only repo/PR link (auto-sync parked).
 
 ## Providers (behind thin interfaces)
 
-- **`LlmProvider` — two adapters:**
+- **`LlmProvider` — four adapters.** A vendor earns a native adapter only when its *auth
+  model* differs; everything else goes through the OpenAI-compatible escape hatch. Model
+  ids are never hardcoded — `LlmProviderConfig.Model` is free text, and the config UI
+  offers a **Discover models** probe (`ILlmModelCatalog`) so a newly released model is
+  selectable with no code change.
   - **Claude (Anthropic Messages API)** — primary. Default model **Sonnet 4.6**,
-    configurable to **Opus 4.8** / **Haiku 4.5**. Bring-your-own-key.
-  - **OpenAI-compatible endpoint** — covers OpenAI *and* local runners (Ollama / vLLM /
-    LM Studio) via a configurable base URL, so privacy-sensitive operators keep
-    observation text on-network.
+    configurable to any Claude model (Sonnet 5 / Opus 5 / Opus 4.8 / Haiku 4.5).
+    Bring-your-own-key.
+  - **OpenAI-compatible endpoint** — covers OpenAI, aggregators (OpenRouter / Groq /
+    Together / LiteLLM) *and* local runners (Ollama / vLLM / LM Studio) via a configurable
+    base URL, so privacy-sensitive operators keep observation text on-network. Also reaches
+    Gemini through Google's compatibility shim
+    (`https://generativelanguage.googleapis.com/v1beta/openai`), which needs no adapter at
+    all — the shim is a subset but covers everything Dimes asks of a model.
+  - **Gemini (Google AI)** — `x-goog-api-key` header, bring-your-own-key. Native because
+    the shim has no room for Gemini-only request options, and because the wire format
+    differs in two load-bearing ways: the system prompt is a top-level `systemInstruction`,
+    and the assistant role is spelled `model`.
+  - **Gemini (Vertex AI)** — the enterprise path: regional endpoint (data residency), VPC
+    Service Controls, CMEK, GCP billing/quota. Authenticates with a minted OAuth2 bearer.
+    **Application Default Credentials is the preferred configuration** — with Workload
+    Identity on GKE / Cloud Run no secret is stored at all, which beats any secret
+    reference. A service-account credentials JSON is the fallback for hosts without ADC.
+    Vertex does not implement `ILlmModelCatalog`; it serves the same Gemini model ids, so
+    discover them on a Google AI provider.
   - Recommend-only: cluster/dedupe observations, summarize candidates, suggest
     priority/dupes, comment on changes. **Never changes state.**
+- **Reasoning mode is per-call and always explicit** (`LlmCompletionRequest.Reasoning`,
+  default off). The vendor default isn't stable across models — omitting Anthropic's
+  `thinking` field means no thinking on Sonnet 4.6 and adaptive thinking on Sonnet 5 —
+  and reasoning is drawn from the same token budget as the answer, so an inherited
+  default could truncate a recommendation on a config whose only change was its model
+  id. Enabling reasoning requires raising `MaxTokens` to match.
+- **An empty completion fails loudly**, carrying the vendor's stop reason, rather than
+  being stored as a blank agent comment (`LlmHttp.RequireText`).
+- **Base-URL policy is per provider type.** The OpenAI-compatible type must stay permissive
+  (localhost / private LAN *is* the local-runner path); the vendor types additionally
+  require the host to sit under that vendor's domain. Without that split, a
+  provider-config admin could point a key-bearing vendor request at any host and harvest
+  the resolved credential. Both save time and call time validate — see
+  `ProviderUrlValidator`.
 - **`ScmProvider` — GitHub** (pass-1): read-only repo/PR link + context pull. No build
   actions. GitLab / Azure DevOps / Bitbucket parked.
 
@@ -140,7 +173,7 @@ Project ──┬─< ChangeRequest ──┬─< Comment            (author = A
           │        │
           │   ObservationSource (SDK | Seq | …)
           ├─< Membership (Actor × Role)        Role: Reporter | Contributor | Maintainer
-          ├─< LlmProviderConfig  (Anthropic | OpenAI-compatible)
+          ├─< LlmProviderConfig  (Anthropic | OpenAI-compatible | Gemini | Gemini-Vertex)
           └─< ScmProviderConfig  (GitHub)
 
 Actor (Human | Agent) — an Agent references an LlmProviderConfig
@@ -160,7 +193,9 @@ Actor (Human | Agent) — an Agent references an LlmProviderConfig
   `ToStatus`, `Action`, `Reason`, `Timestamp`.
 - **`ScmLink`** — `ChangeRequestId`, `Provider` (GitHub), repo/PR URL, context snapshot.
 - **`LlmProviderConfig` / `ScmProviderConfig`** — type, base URL/model, **secret
-  references** (encrypted at rest, never plaintext).
+  references** (encrypted at rest, never plaintext). `LlmProviderConfig.SettingsJson` is a
+  JSON column for knobs only some types need (Vertex project / location / ADC), so the next
+  adapter that needs one costs no migration on either provider's set.
 
 Decisions: lifecycle is code not data (`Status` enum + `LifecycleService`); JSON columns
 for varied signal shapes; lightweight `(ProjectId, Fingerprint)` clustering; Project is

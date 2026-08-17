@@ -721,9 +721,9 @@ public class ProjectService(DimesDbContext db, MembershipResolver members)
         {
             throw new BadRequestException("Provider name and model are required.");
         }
-        RequireApiKeyRef(req.Type, req.ApiKeySecretRef);
+        ValidateTypeRequirements(req.Type, req.ApiKeySecretRef, req.Settings);
 
-        await ProviderUrlValidator.ValidateAsync(req.BaseUrl, ct);
+        await ProviderUrlValidator.ValidateAsync(req.Type, req.BaseUrl, ct);
 
         var config = new LlmProviderConfig
         {
@@ -733,6 +733,7 @@ public class ProjectService(DimesDbContext db, MembershipResolver members)
             BaseUrl = req.BaseUrl,
             Model = req.Model,
             ApiKeySecretRef = req.ApiKeySecretRef,
+            SettingsJson = req.Settings.ToSettingsJson(),
         };
         db.LlmProviderConfigs.Add(config);
         await db.SaveChangesAsync(ct);
@@ -751,31 +752,68 @@ public class ProjectService(DimesDbContext db, MembershipResolver members)
         {
             throw new BadRequestException("Provider name and model are required.");
         }
-        RequireApiKeyRef(req.Type, req.ApiKeySecretRef);
+        ValidateTypeRequirements(req.Type, req.ApiKeySecretRef, req.Settings);
 
-        await ProviderUrlValidator.ValidateAsync(req.BaseUrl, ct);
+        await ProviderUrlValidator.ValidateAsync(req.Type, req.BaseUrl, ct);
 
         config.Type = req.Type;
         config.Name = req.Name;
         config.BaseUrl = req.BaseUrl;
         config.Model = req.Model;
         config.ApiKeySecretRef = req.ApiKeySecretRef;
+        config.SettingsJson = req.Settings.ToSettingsJson();
         config.Enabled = req.Enabled;
         await db.SaveChangesAsync(ct);
         return config.ToDto();
     }
 
-    /// <summary>An API key reference is required for providers whose endpoint always authenticates
-    /// (Anthropic), but must stay optional for an OpenAI-compatible endpoint pointed at a keyless local
-    /// runner (Ollama / vLLM / LM Studio) — the data-stays-local path the spec preserves. Like the Google
-    /// Chat check, this fails at save so a misconfiguration surfaces immediately rather than at first call.</summary>
-    private static void RequireApiKeyRef(LlmProviderType type, string? apiKeySecretRef)
+    /// <summary>Per-type configuration requirements, checked at save so a misconfiguration surfaces
+    /// immediately rather than at first call (the same choice as the Google Chat channel check).
+    ///
+    /// A credential reference is required for endpoints that always authenticate (Anthropic, Gemini) but
+    /// must stay optional for an OpenAI-compatible endpoint pointed at a keyless local runner (Ollama /
+    /// vLLM / LM Studio) — the data-stays-local path the spec preserves. Vertex is the interesting case:
+    /// it needs a GCP project and region, and its credential is optional *only* because Application
+    /// Default Credentials is the better answer where it is available.</summary>
+    private static void ValidateTypeRequirements(
+        LlmProviderType type, string? apiKeySecretRef, LlmProviderSettingsDto? settings)
     {
-        if (type == LlmProviderType.Anthropic && string.IsNullOrWhiteSpace(apiKeySecretRef))
+        var hasKeyRef = !string.IsNullOrWhiteSpace(apiKeySecretRef);
+
+        if ((type == LlmProviderType.Anthropic || type == LlmProviderType.Gemini) && !hasKeyRef)
         {
             throw new BadRequestException(
-                "An API key secret reference is required for Anthropic providers. It names a secret you " +
+                $"An API key secret reference is required for {type} providers. It names a secret you " +
                 "configure in Secrets:<name> or an environment variable — it is not the key itself.");
+        }
+
+        if (type != LlmProviderType.GeminiVertex)
+        {
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(settings?.GcpProject) || string.IsNullOrWhiteSpace(settings.GcpLocation))
+        {
+            throw new BadRequestException(
+                "Vertex AI providers require a GCP project and location (e.g. us-central1, europe-west4, " +
+                "or global). The location selects the regional endpoint, so it is also the data-residency " +
+                "control.");
+        }
+
+        if (settings.UseApplicationDefaultCredentials && hasKeyRef)
+        {
+            // Reject rather than silently ignore one of them: an operator who set both would otherwise
+            // have no way to tell which credential is actually in use.
+            throw new BadRequestException(
+                "Choose either Application Default Credentials or a service-account credentials secret " +
+                "for a Vertex AI provider, not both.");
+        }
+
+        if (!settings.UseApplicationDefaultCredentials && !hasKeyRef)
+        {
+            throw new BadRequestException(
+                "A Vertex AI provider needs either Application Default Credentials (preferred — no secret " +
+                "is stored) or a secret reference naming a service-account credentials JSON.");
         }
     }
 

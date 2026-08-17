@@ -1,7 +1,15 @@
 import type {
   ActorDetail, ActorSummary, AssistConversation, AssistConversationStatus, AssistConversationSummary, AuthConfig, AuditEvent, CaptureProposal, ChangeKind, ChangeRequest, ChangeRequestDetail, ChangeStatus, ChatTurn, CaptureAssistReply, Comment, ExportInstruction, GenerateProposalsReply,
-  LlmProviderConfig, Me, Member, NotificationChannel, NotificationChannelType, NotificationEventType, NotificationPreference, Observation, ObservationSource, ObservationStatus, Priority, Project, ProjectAssignmentCount, ProjectPolicy, ProjectQuota, ScmLink, SiteBranding, SiteUser, UserMembership, WorkOrderSummary,
+  LlmModel, LlmProviderConfig, LlmProviderSettings, Me, Member, NotificationChannel, NotificationChannelType, NotificationEventType, NotificationPreference, Observation, ObservationSource, ObservationStatus, Priority, Project, ProjectAssignmentCount, ProjectPolicy, ProjectQuota, ScmLink, SiteBranding, SiteUser, UserMembership, WorkOrderSummary,
 } from './types'
+
+/** The provider-config write shape, shared by create (project-scoped and website-wide) and update. */
+type LlmProviderBody = {
+  type: LlmProviderConfig['type']; name: string; baseUrl?: string | null; model: string
+  apiKeySecretRef?: string | null; settings?: LlmProviderSettings | null
+}
+/** Model discovery needs everything that identifies the endpoint, but no name or model. */
+type LlmModelProbe = Omit<LlmProviderBody, 'name' | 'model'>
 
 /** Error carrying the HTTP status + ProblemDetails so the UI can show 403/409 guard failures nicely.
  * status === 0 is a synthetic "couldn't reach the server" (fetch rejected before any HTTP response). */
@@ -109,18 +117,20 @@ export const api = {
   listSources: (projectId: string) => request<ObservationSource[]>('GET', `/api/projects/${projectId}/sources`),
   createSource: (projectId: string, body: { type: 'Sdk' | 'Seq'; name: string; configJson?: string | null }) =>
     request<ObservationSource>('POST', `/api/projects/${projectId}/sources`, body),
-  createLlmProvider: (
-    projectId: string,
-    body: { type: LlmProviderConfig['type']; name: string; baseUrl?: string | null; model: string; apiKeySecretRef?: string | null },
-  ) => request<LlmProviderConfig>('POST', `/api/projects/${projectId}/llm-providers`, body),
-  createGlobalLlmProvider: (
-    body: { type: LlmProviderConfig['type']; name: string; baseUrl?: string | null; model: string; apiKeySecretRef?: string | null },
-  ) => request<LlmProviderConfig>('POST', `/api/llm-providers`, body),
-  updateLlmProvider: (
-    id: string,
-    body: { type: LlmProviderConfig['type']; name: string; baseUrl?: string | null; model: string; apiKeySecretRef?: string | null; enabled: boolean },
-  ) => request<LlmProviderConfig>('PATCH', `/api/llm-providers/${id}`, body),
+  createLlmProvider: (projectId: string, body: LlmProviderBody) =>
+    request<LlmProviderConfig>('POST', `/api/projects/${projectId}/llm-providers`, body),
+  createGlobalLlmProvider: (body: LlmProviderBody) =>
+    request<LlmProviderConfig>('POST', `/api/llm-providers`, body),
+  updateLlmProvider: (id: string, body: LlmProviderBody & { enabled: boolean }) =>
+    request<LlmProviderConfig>('PATCH', `/api/llm-providers/${id}`, body),
   deleteLlmProvider: (id: string) => request<void>('DELETE', `/api/llm-providers/${id}`),
+  // Model discovery. POST because it carries a candidate configuration (saved or not) and makes an
+  // outbound call on the referenced credential — it is a probe, not a fetch. Gated server-side with the
+  // same authority as creating the provider, hence the project-scoped and website-wide variants.
+  listLlmModels: (projectId: string, body: LlmModelProbe) =>
+    request<LlmModel[]>('POST', `/api/projects/${projectId}/llm-providers/models`, body),
+  listGlobalLlmModels: (body: LlmModelProbe) =>
+    request<LlmModel[]>('POST', `/api/llm-providers/models`, body),
 
   // Notification channels (per-project outbound)
   listNotificationChannels: (projectId: string) =>

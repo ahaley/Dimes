@@ -12,7 +12,8 @@ namespace Dimes.Api.Controllers;
 /// Maintainer via <see cref="ProjectService.EnsureProviderAdminAsync"/>.</summary>
 [ApiController]
 [Route("api/llm-providers")]
-public class LlmProvidersController(ProjectService projects, ICurrentActor currentActor) : ControllerBase
+public class LlmProvidersController(
+    ProjectService projects, LlmModelCatalogService modelCatalog, ICurrentActor currentActor) : ControllerBase
 {
     [HttpGet]
     public async Task<ActionResult<IReadOnlyList<LlmProviderConfigDto>>> ListGlobal(CancellationToken ct)
@@ -35,6 +36,20 @@ public class LlmProvidersController(ProjectService projects, ICurrentActor curre
             throw new ForbiddenException("Only a site administrator can manage website-wide LLM providers.");
         }
         return Ok(await projects.CreateLlmProviderAsync(null, req, ct));
+    }
+
+    /// <summary>Discover the models an endpoint offers, for the website-wide provider form. POST because
+    /// it carries a candidate configuration and makes an outbound call — it is a probe, not a fetch.
+    /// Gated identically to creating a website-wide provider: this spends the referenced credential.</summary>
+    [HttpPost("models")]
+    public async Task<ActionResult<IReadOnlyList<LlmModelDto>>> ListModels(
+        ListLlmModelsRequest req, CancellationToken ct)
+    {
+        if (!currentActor.IsSiteAdmin)
+        {
+            throw new ForbiddenException("Only a site administrator can manage website-wide LLM providers.");
+        }
+        return Ok(await modelCatalog.ListModelsAsync(req, ct));
     }
 
     // Update/delete are by id and work for both project-scoped and global configs.

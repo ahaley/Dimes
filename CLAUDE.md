@@ -98,12 +98,55 @@ commentary is just a non-human actor driving an existing transition — parked a
 new states. Per-project roles live in `Membership` (one role per actor per project).
 
 ### Providers (behind thin interfaces)
-`ILlmProvider` has two adapters (Anthropic Messages API as primary, OpenAI-compatible for OpenAI +
-local runners like Ollama/vLLM). `IScmProvider` has GitHub (read-only repo/PR links). Each adapter
-gets its own `HttpClient`; they're registered as interface *sets* (`AddTransient<ILlmProvider>(...)`)
-so callers select by provider type. Secrets are referenced (`apiKeySecretRef`) and resolved via
-`ISecretResolver`, never stored plaintext. LLM commentary is recommend-only — it posts a `Comment`
-with `Kind = AgentRecommendation` and must never change state.
+`ILlmProvider` has four adapters: Anthropic Messages API (primary), OpenAI-compatible (OpenAI,
+aggregators, local runners like Ollama/vLLM — *and* Gemini via Google's compatibility shim, no adapter
+needed), Gemini (Google AI, `x-goog-api-key`), and Gemini via Vertex AI (minted OAuth2 bearer).
+**A vendor only earns a native adapter when its auth model differs from a plain bearer token** — that
+is the rule to apply before adding a fifth. `IScmProvider` has GitHub (read-only repo/PR links). Each
+adapter gets its own `HttpClient`; they're registered as interface *sets*
+(`AddTransient<ILlmProvider>(...)`) so callers select by provider type. Secrets are referenced
+(`apiKeySecretRef`) and resolved via `ISecretResolver`, never stored plaintext. LLM commentary is
+recommend-only — it posts a `Comment` with `Kind = AgentRecommendation` and must never change state.
+
+**Secret references resolve four ways** (`ConfigurationSecretResolver`), in order: `Secrets:<name>` /
+`SecretFiles:<name>` in configuration, then env `<name>` / `<name>_FILE`. The `*File`/`_FILE` routes name a
+*path* and the resolver returns the file's contents, so callers never touch the filesystem — that exists
+for credentials operators hold as files (a Vertex service-account JSON, Docker/K8s secret mounts). Literal
+beats file within each tier so older references are unaffected. A configured-but-unreadable path throws
+rather than returning null, because "no secret configured" would send the operator hunting in the wrong
+place.
+
+**Vertex additionally accepts a bare path as the value** — `GeminiVertexLlmProvider.ReadCredentialsJson`
+reads the key file when the resolved credential isn't JSON, so the file routes are optional for that type.
+Do **not** generalize this to the bearer-token adapters: the reference *name* comes from the provider form,
+so a Maintainer can name any environment variable, and a token-shaped credential is sent verbatim to the
+configured endpoint (any host, for `OpenAICompatible`). Vertex is safe because the contents never leave the
+process — they're parsed locally into a Google-signed token scoped to `*.googleapis.com`, the same trust the
+ADC option already grants. The path must be rooted, and a non-path value is refused *without being echoed*,
+so a key pasted into that field never lands in a log.
+
+**Reasoning mode is always stated, never inherited.** `LlmCompletionRequest.Reasoning` (`Disabled` by
+default) exists because the vendor default isn't stable across models: omitting Anthropic's `thinking` field
+means "no thinking" on Sonnet 4.6 but "adaptive" on Sonnet 5 — and a request's token budget covers reasoning
+*and* the answer, so changing only a config's model id could start spending the budget on reasoning and
+return nothing. Both call sites set it explicitly. `OpenAICompatible` ignores it (no field the many vendors
+behind that shim agree on); the Gemini adapters ignore it too.
+
+**An empty completion is an error, not an empty comment.** `LlmHttp.RequireText` fails with the vendor's
+stop reason instead of storing a blank `AgentRecommendation` — the adapters used to coalesce a missing
+completion to `string.Empty`, which is indistinguishable from the model having nothing to say. `LlmHttp` also
+surfaces vendor error bodies; never go back to `EnsureSuccessStatusCode()`, which discards the one actionable
+detail (bad key, unknown model, rejected parameter).
+
+Two things to keep straight when touching providers:
+- **Model ids are never hardcoded.** `LlmProviderConfig.Model` is free text, and `ILlmModelCatalog` is
+  an *optional* capability (test with `provider is ILlmModelCatalog`) that powers the "Discover models"
+  probe. Adding support for a newly released model should require no code change at all.
+- **`ProviderUrlValidator` is per provider type.** OpenAI-compatible stays permissive because
+  localhost/private-LAN runners are the point of it; the vendor types are pinned to the vendor's domain
+  so a stored key can't be redirected to an attacker's host. Build connections through
+  `LlmProviderConfig.ToConnectionAsync` — it pairs the call-time re-validation with the secret
+  resolution so the two can't drift apart.
 
 ### Persistence conventions
 - Enums are stored as **strings** (human-readable, ordinal-stable). Note the consequence: a DB

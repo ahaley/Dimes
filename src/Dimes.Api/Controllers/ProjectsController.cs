@@ -9,7 +9,8 @@ namespace Dimes.Api.Controllers;
 [ApiController]
 [Route("api/projects")]
 public class ProjectsController(
-    ProjectService projects, ObservationService observations, ICurrentActor currentActor, IBoardNotifier notifier) : ControllerBase
+    ProjectService projects, ObservationService observations, LlmModelCatalogService modelCatalog,
+    ICurrentActor currentActor, IBoardNotifier notifier) : ControllerBase
 {
     /// <summary>Create a project. Open to any authenticated user, bounded by their creation quota — site
     /// admins are unrestricted, everyone else is capped by their personal limit or the site default (0
@@ -134,6 +135,16 @@ public class ProjectsController(
     {
         await projects.EnsureProjectAdminAsync(projectId, currentActor.ActorId, currentActor.IsSiteAdmin, ct);
         return Ok(await projects.CreateLlmProviderAsync(projectId, req, ct));
+    }
+
+    /// <summary>Discover the models an endpoint offers, for the project-scoped provider form. Gated
+    /// identically to the sibling create — it makes an outbound call on the referenced credential.</summary>
+    [HttpPost("{projectId:guid}/llm-providers/models")]
+    public async Task<ActionResult<IReadOnlyList<LlmModelDto>>> ListLlmModels(
+        Guid projectId, ListLlmModelsRequest req, CancellationToken ct)
+    {
+        await projects.EnsureProjectAdminAsync(projectId, currentActor.ActorId, currentActor.IsSiteAdmin, ct);
+        return Ok(await modelCatalog.ListModelsAsync(req, ct));
     }
 
     // ----- Notification channels (per-project outbound) -----

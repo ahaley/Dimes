@@ -13,7 +13,7 @@ export type ChangeStatus =
   | 'Captured' | 'Triaged' | 'Approved' | 'InDevelopment' | 'InReview' | 'Done' | 'Rejected' | 'Duplicate'
 export type Priority = 'None' | 'Low' | 'Medium' | 'High' | 'Critical'
 export type CommentKind = 'Human' | 'AgentRecommendation'
-export type LlmProviderType = 'Anthropic' | 'OpenAICompatible'
+export type LlmProviderType = 'Anthropic' | 'OpenAICompatible' | 'Gemini' | 'GeminiVertex'
 export type ScmProviderType = 'GitHub'
 export type AuditEntityType = 'ChangeRequest' | 'Observation'
 export type WorkOrderItemStatus = 'Pending' | 'Reported' | 'Blocked' | 'Confirmed'
@@ -82,10 +82,17 @@ export interface WorkOrderSummary {
   id: string; fileName: string; exportedAt: string; exportedByActorId: string
   itemCount: number; reportedCount: number; blockedCount: number; pendingChangeIds: string[]
 }
+// Provider-specific knobs only some types need (Vertex project/region/ADC); null otherwise.
+export interface LlmProviderSettings {
+  gcpProject?: string | null; gcpLocation?: string | null; useApplicationDefaultCredentials: boolean
+}
 export interface LlmProviderConfig {
   id: string; projectId?: string | null; type: LlmProviderType; name: string
   baseUrl?: string | null; model: string; apiKeySecretRef?: string | null; enabled: boolean
+  settings?: LlmProviderSettings | null
 }
+// One model an endpoint reports as reachable — see the "Discover" affordance on the provider form.
+export interface LlmModel { id: string; displayName?: string | null }
 // ----- Notification channels (per-project outbound) -----
 // secretRef is a non-sensitive reference name (e.g. "GCHAT_CREDS"), safe to prefill in the edit form.
 export interface NotificationChannel {

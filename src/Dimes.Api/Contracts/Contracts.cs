@@ -84,11 +84,27 @@ public record ActorDetailDto(
     IReadOnlyList<UserMembershipDto> Memberships);
 
 // ----- LLM provider configs -----
-public record CreateLlmProviderRequest(LlmProviderType Type, string Name, string? BaseUrl, string Model, string? ApiKeySecretRef);
-public record UpdateLlmProviderRequest(LlmProviderType Type, string Name, string? BaseUrl, string Model, string? ApiKeySecretRef, bool Enabled);
+// Settings carries the knobs only some provider types need (Vertex project/location/ADC) and is null
+// otherwise; it maps to the LlmProviderSettings JSON column.
+public record LlmProviderSettingsDto(string? GcpProject, string? GcpLocation, bool UseApplicationDefaultCredentials);
+public record CreateLlmProviderRequest(
+    LlmProviderType Type, string Name, string? BaseUrl, string Model, string? ApiKeySecretRef,
+    LlmProviderSettingsDto? Settings = null);
+public record UpdateLlmProviderRequest(
+    LlmProviderType Type, string Name, string? BaseUrl, string Model, string? ApiKeySecretRef, bool Enabled,
+    LlmProviderSettingsDto? Settings = null);
 // ApiKeySecretRef is a non-sensitive reference name (e.g. "ANTHROPIC_KEY"), not the secret itself —
 // safe to expose so the edit form can prefill it.
-public record LlmProviderConfigDto(Guid Id, Guid? ProjectId, LlmProviderType Type, string Name, string? BaseUrl, string Model, string? ApiKeySecretRef, bool Enabled);
+public record LlmProviderConfigDto(
+    Guid Id, Guid? ProjectId, LlmProviderType Type, string Name, string? BaseUrl, string Model,
+    string? ApiKeySecretRef, bool Enabled, LlmProviderSettingsDto? Settings);
+
+// Model discovery: probe an endpoint with the values on the config form (saved or not) and report the
+// models that credential can actually reach, so the UI never carries a hardcoded list that goes stale on
+// a vendor release. Mirrors the shape of a create request minus the naming fields.
+public record ListLlmModelsRequest(
+    LlmProviderType Type, string? BaseUrl, string? ApiKeySecretRef, LlmProviderSettingsDto? Settings = null);
+public record LlmModelDto(string Id, string? DisplayName);
 
 // ----- Notification channels (outbound; per-project) -----
 // SecretRef is a non-sensitive reference name (e.g. "GCHAT_CREDS"), not the secret itself — safe to

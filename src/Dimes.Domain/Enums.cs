@@ -107,10 +107,27 @@ public enum CommentKind
     AgentRecommendation,
 }
 
+/// <summary>Which LLM adapter serves a config. <see cref="OpenAICompatible"/> is the deliberate escape
+/// hatch — it covers OpenAI, aggregators (OpenRouter / Groq / Together / LiteLLM) and local runners
+/// (Ollama / vLLM / LM Studio), so a vendor only earns a native adapter when its *auth model* differs
+/// from a plain bearer token. That is the case for both Gemini paths:
+/// <see cref="Gemini"/> authenticates with an <c>x-goog-api-key</c> header, and
+/// <see cref="GeminiVertex"/> with a minted OAuth2 bearer (service account or workload identity).
+///
+/// Note that Gemini is *also* reachable through <see cref="OpenAICompatible"/> via Google's
+/// compatibility shim (<c>https://generativelanguage.googleapis.com/v1beta/openai</c>); the native
+/// adapters exist for correct role mapping, a first-class system instruction, and room for
+/// Gemini-specific request options the shim does not expose.</summary>
 public enum LlmProviderType
 {
     Anthropic,
     OpenAICompatible,
+    /// <summary>Gemini via the Google AI (AI Studio) API — bring-your-own API key.</summary>
+    Gemini,
+    /// <summary>Gemini via Vertex AI — the enterprise path (regional endpoints/data residency, VPC-SC,
+    /// GCP billing and quota). Authenticates with a service-account credentials JSON or, preferably,
+    /// Application Default Credentials so no secret is stored at all.</summary>
+    GeminiVertex,
 }
 
 public enum ScmProviderType

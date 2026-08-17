@@ -14,8 +14,12 @@ public static class ProviderRegistration
 
         services.AddHttpClient<AnthropicLlmProvider>();
         services.AddHttpClient<OpenAiCompatibleLlmProvider>();
+        services.AddHttpClient<GeminiLlmProvider>();
+        services.AddHttpClient<GeminiVertexLlmProvider>();
         services.AddTransient<ILlmProvider>(sp => sp.GetRequiredService<AnthropicLlmProvider>());
         services.AddTransient<ILlmProvider>(sp => sp.GetRequiredService<OpenAiCompatibleLlmProvider>());
+        services.AddTransient<ILlmProvider>(sp => sp.GetRequiredService<GeminiLlmProvider>());
+        services.AddTransient<ILlmProvider>(sp => sp.GetRequiredService<GeminiVertexLlmProvider>());
 
         services.AddHttpClient<GitHubScmProvider>();
         services.AddTransient<IScmProvider>(sp => sp.GetRequiredService<GitHubScmProvider>());

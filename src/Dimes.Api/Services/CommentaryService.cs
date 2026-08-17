@@ -48,12 +48,8 @@ public class CommentaryService(
         var provider = providers.FirstOrDefault(p => p.Type == config.Type)
             ?? throw new BadRequestException($"No adapter is registered for provider type '{config.Type}'.");
 
-        // Re-validate at call time, not just at save time: a hostname that passed validation when the
-        // provider was configured could now resolve to a cloud metadata endpoint (DNS rebinding). This
-        // closes that TOCTOU window right before the outbound request is made.
-        await ProviderUrlValidator.ValidateAsync(config.BaseUrl, ct);
-
-        var connection = new LlmConnection(config.BaseUrl, config.Model, secrets.Resolve(config.ApiKeySecretRef));
+        // Re-validates the base URL at call time as well as at save time — see ToConnectionAsync.
+        var connection = await config.ToConnectionAsync(secrets, ct);
         var result = await provider.CompleteAsync(BuildPrompt(change), connection, ct);
 
         var comment = new Comment
@@ -79,6 +75,9 @@ public class CommentaryService(
             $"Kind: {change.Kind}\n" +
             $"Status: {change.Status}\n\n" +
             $"Description:\n{change.Description ?? "(none)"}";
-        return new LlmCompletionRequest(system, user);
+        // Reasoning off, stated explicitly rather than inherited: triage commentary is a short summary on a
+        // small token budget, and reasoning is drawn from that same budget (see LlmReasoning). Leaving it to
+        // the vendor default would silently turn reasoning on for some models and truncate the comment.
+        return new LlmCompletionRequest(system, user, Reasoning: LlmReasoning.Disabled);
     }
 }

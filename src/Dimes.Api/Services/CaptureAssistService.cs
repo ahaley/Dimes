@@ -69,7 +69,11 @@ public class CaptureAssistService(
 
         var (provider, connection) = await ResolveAgentProviderAsync(projectId, req.AgentActorId, ct);
 
-        var completion = new LlmCompletionRequest(BuildProposalSystemPrompt(), req.Markdown, MaxTokens: 2048);
+        // Reasoning off for now — decomposing a brief is the one call here that might justify turning it on,
+        // but that is a measured choice (and would need a larger MaxTokens, since reasoning shares the
+        // budget), not a default to drift into. See LlmReasoning.
+        var completion = new LlmCompletionRequest(
+            BuildProposalSystemPrompt(), req.Markdown, MaxTokens: 2048, Reasoning: LlmReasoning.Disabled);
         var result = await provider.CompleteAsync(completion, connection, ct);
         return new GenerateProposalsReplyDto(ParseProposals(result.Text));
     }
@@ -97,13 +101,8 @@ public class CaptureAssistService(
         var provider = providers.FirstOrDefault(p => p.Type == config.Type)
             ?? throw new BadRequestException($"No adapter is registered for provider type '{config.Type}'.");
 
-        // Re-validate at call time, not just at save time: a hostname that passed validation when the
-        // provider was configured could now resolve to a cloud metadata endpoint (DNS rebinding). This
-        // closes that TOCTOU window right before the outbound request is made.
-        await ProviderUrlValidator.ValidateAsync(config.BaseUrl, ct);
-
-        var connection = new LlmConnection(config.BaseUrl, config.Model, secrets.Resolve(config.ApiKeySecretRef));
-        return (provider, connection);
+        // Re-validates the base URL at call time as well as at save time — see ToConnectionAsync.
+        return (provider, await config.ToConnectionAsync(secrets, ct));
     }
 
     private static string BuildProposalSystemPrompt() =>
