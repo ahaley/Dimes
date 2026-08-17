@@ -51,7 +51,12 @@ public sealed class OpenAiCompatibleLlmProvider(HttpClient http) : ILlmProvider,
     /// <summary>Enumerate models via <c>GET {baseUrl}/models</c>. Every endpoint worth pointing this
     /// adapter at implements it — OpenAI, aggregators, Ollama, vLLM, LM Studio — and unlike the vendor
     /// adapters it is unpaged in practice. A runner that lacks the route simply fails the call, which the
-    /// caller reports as "this endpoint can't list models" rather than treating it as fatal.</summary>
+    /// caller reports as "this endpoint can't list models" rather than treating it as fatal.
+    ///
+    /// Errors go through <see cref="LlmHttp.EnsureSuccessAsync"/> for the same reason completions do, and
+    /// it matters more here: <c>LlmModelCatalogService</c> puts the exception message straight into the 400
+    /// the operator reads on the provider form, so a bare status code turns "invalid API key" into
+    /// "401 (Unauthorized)" on the one screen where the mistake is actually being made.</summary>
     public async Task<IReadOnlyList<LlmModelInfo>> ListModelsAsync(
         LlmConnection connection, CancellationToken ct = default)
     {
@@ -63,7 +68,7 @@ public sealed class OpenAiCompatibleLlmProvider(HttpClient http) : ILlmProvider,
         }
 
         using var response = await http.SendAsync(message, ct);
-        response.EnsureSuccessStatusCode();
+        await LlmHttp.EnsureSuccessAsync(response, "OpenAI-compatible endpoint", ct);
 
         var body = await response.Content.ReadFromJsonAsync<ModelListResponse>(ct);
         return (body?.Data ?? []).Select(m => new LlmModelInfo(m.Id)).ToList();

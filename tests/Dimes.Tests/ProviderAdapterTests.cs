@@ -295,6 +295,36 @@ public class ProviderAdapterTests
         Assert.Contains("API key not valid", ex.Message);
     }
 
+    /// <summary>Model discovery is the interactive surface — LlmModelCatalogService puts the exception
+    /// message straight into the 400 the operator reads on the provider form — so a failed listing must
+    /// carry the vendor's own text, exactly as a failed completion does. Both adapters previously used
+    /// EnsureSuccessStatusCode here, which reports "401 (Unauthorized)" and discards the reason.</summary>
+    [Fact]
+    public async Task Anthropic_ListModelsError_SurfacesApiMessage_NotABareStatusCode()
+    {
+        var handler = new CapturingHandler(HttpStatusCode.Unauthorized,
+            """{"error":{"type":"authentication_error","message":"invalid x-api-key"}}""");
+        var provider = new AnthropicLlmProvider(new HttpClient(handler));
+
+        var ex = await Assert.ThrowsAsync<HttpRequestException>(() => provider.ListModelsAsync(
+            new LlmConnection(BaseUrl: null, Model: string.Empty, ApiKey: "bad"), Ct));
+
+        Assert.Contains("invalid x-api-key", ex.Message);
+    }
+
+    [Fact]
+    public async Task OpenAiCompatible_ListModelsError_SurfacesApiMessage_NotABareStatusCode()
+    {
+        var handler = new CapturingHandler(HttpStatusCode.NotFound,
+            """{"error":{"message":"Unknown route /models"}}""");
+        var provider = new OpenAiCompatibleLlmProvider(new HttpClient(handler));
+
+        var ex = await Assert.ThrowsAsync<HttpRequestException>(() => provider.ListModelsAsync(
+            new LlmConnection(BaseUrl: "https://runner.local/v1", Model: string.Empty, ApiKey: null), Ct));
+
+        Assert.Contains("Unknown route /models", ex.Message);
+    }
+
     [Fact]
     public async Task Gemini_ListModels_KeepsGenerativeModels_AndStripsResourcePrefix()
     {

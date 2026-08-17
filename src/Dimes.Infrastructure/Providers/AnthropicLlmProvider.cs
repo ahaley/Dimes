@@ -57,7 +57,12 @@ public sealed class AnthropicLlmProvider(HttpClient http) : ILlmProvider, ILlmMo
         reasoning == LlmReasoning.Adaptive ? "adaptive" : "disabled";
 
     /// <summary>Enumerate the models this key can reach (<c>GET /v1/models</c>), so the config UI can
-    /// offer live ids rather than a list that goes stale with every release.</summary>
+    /// offer live ids rather than a list that goes stale with every release.
+    ///
+    /// Errors go through <see cref="LlmHttp.EnsureSuccessAsync"/> for the same reason completions do, and
+    /// it matters more here: <c>LlmModelCatalogService</c> puts the exception message straight into the 400
+    /// the operator reads on the provider form, so a bare status code turns "invalid x-api-key" into
+    /// "401 (Unauthorized)" on the one screen where the mistake is actually being made.</summary>
     public async Task<IReadOnlyList<LlmModelInfo>> ListModelsAsync(
         LlmConnection connection, CancellationToken ct = default)
     {
@@ -78,7 +83,7 @@ public sealed class AnthropicLlmProvider(HttpClient http) : ILlmProvider, ILlmMo
             message.Headers.TryAddWithoutValidation("anthropic-version", AnthropicVersion);
 
             using var response = await http.SendAsync(message, ct);
-            response.EnsureSuccessStatusCode();
+            await LlmHttp.EnsureSuccessAsync(response, "Anthropic", ct);
 
             var body = await response.Content.ReadFromJsonAsync<ModelListResponse>(ct);
             models.AddRange((body?.Data ?? []).Select(m => new LlmModelInfo(m.Id, m.DisplayName)));
