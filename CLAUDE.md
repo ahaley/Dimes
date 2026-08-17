@@ -24,8 +24,22 @@ the TypeScript `sdk`.
 dotnet build Dimes.slnx
 dotnet test                                  # all xUnit tests
 dotnet test --filter FullyQualifiedName~LifecycleServiceTests   # one test class
+dotnet test -- --coverage                    # coverage (MTP extension; args after -- go to the runner)
 dotnet run --project src/Dimes.Api --urls http://localhost:5080 # run the API (port the web dev proxy expects)
 ```
+Tests are **xunit.v3**, which self-hosts on Microsoft Testing Platform rather than VSTest. Two
+consequences worth knowing, because both fail loudly and confusingly if lost:
+`"test": { "runner": "Microsoft.Testing.Platform" }` in `global.json` is what lets `dotnet test` run an
+MTP project at all (the .NET 10 SDK refuses the old VSTest path), and the test project must be an
+`OutputType=Exe`. A v3 project needs none of the VSTest packages — no `Microsoft.NET.Test.Sdk`,
+`xunit.runner.visualstudio`, or `coverlet.collector`; leaving them in selects the VSTest path and breaks
+the run. The `xUnit1051` analyzer (thread `TestContext.Current.CancellationToken` through every call that
+takes one) is suppressed in the test project: it fires ~1,300 times and would bury real warnings.
+Adopting it is a worthwhile separate pass.
+
+**A running API locks its own build output.** `dotnet build` fails with MSB3021/3027 ("file is locked
+by: Dimes.Api") while an instance is running from `src/Dimes.Api/bin`. Stop it first, or build with
+`-p:BaseOutputPath=<elsewhere>` to leave that directory alone.
 Migrations run automatically on API startup (`db.Database.Migrate()` in `Program.cs`), so a fresh
 checkout needs no manual DB step. The SQLite file defaults to `src/Dimes.Api/data/dimes.db`.
 

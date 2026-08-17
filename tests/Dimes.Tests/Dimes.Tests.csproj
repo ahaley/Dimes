@@ -5,6 +5,16 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
+    <!-- Required by xunit.v3: a v3 test project self-hosts its runner, so it must be an executable
+         rather than a library. The package does not set this for you — it errors out if it is missing.
+         The entry point is generated; there is no Main in this project. -->
+    <OutputType>Exe</OutputType>
+    <!-- xUnit1051 wants TestContext.Current.CancellationToken threaded into every call that takes one, so
+         a cancelled run stops promptly. It fires 1284 times here — every service call in every test — and
+         that volume buries the warnings that matter (there are two real CS8604s in this build). Adopting
+         it is a worthwhile but separate, mechanical pass over every test file; suppressed until then
+         rather than left as noise nobody reads. -->
+    <NoWarn>$(NoWarn);xUnit1051</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
@@ -12,13 +22,16 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="coverlet.collector" Version="6.0.4" />
     <!-- Drives the real HTTP pipeline in-process, so endpoint authorization (which lives in attributes
          and the fallback policy, not in any service) can actually be tested. -->
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.9" />
-    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
-    <PackageReference Include="xunit" Version="2.9.3" />
-    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
+    <!-- xunit.v3 supersedes the deprecated xunit v2 package. It brings its own Microsoft Testing Platform
+         runner, so the VSTest pieces a v2 project needed are gone: Microsoft.NET.Test.Sdk (the VSTest
+         host), xunit.runner.visualstudio (the VSTest adapter), and coverlet.collector (a VSTest data
+         collector, replaced by the MTP coverage extension below). Leaving them in place is not harmless —
+         they select the VSTest path, which the .NET 10 SDK then refuses to run. -->
+    <PackageReference Include="xunit.v3" Version="4.0.0" />
+    <PackageReference Include="Microsoft.Testing.Extensions.CodeCoverage" Version="18.3.1" />
   </ItemGroup>
 
   <ItemGroup>
