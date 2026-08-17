@@ -43,16 +43,16 @@ public sealed class AuthTests : IDisposable
     [Fact]
     public async Task Jit_CreatesActorWithoutMembership_ThenReusesByEmail()
     {
-        var first = await JitProvisioning.ProvisionAsync(_db, "New.User@X.com", "New User");
+        var first = await JitProvisioning.ProvisionAsync(_db, "New.User@X.com", "New User", Ct);
 
         Assert.Equal(ActorType.Human, first.Type);
         Assert.Equal("new.user@x.com", first.Email); // normalized
-        Assert.False(await _db.Memberships.AnyAsync(m => m.ActorId == first.Id)); // no project access
+        Assert.False(await _db.Memberships.AnyAsync(m => m.ActorId == first.Id, cancellationToken: Ct)); // no project access
 
         // Same identity (different casing) reuses the actor rather than duplicating.
-        var second = await JitProvisioning.ProvisionAsync(_db, "new.user@x.com", "New User");
+        var second = await JitProvisioning.ProvisionAsync(_db, "new.user@x.com", "New User", Ct);
         Assert.Equal(first.Id, second.Id);
-        Assert.Single(await _db.Actors.Where(a => a.Email == "new.user@x.com").ToListAsync());
+        Assert.Single(await _db.Actors.Where(a => a.Email == "new.user@x.com").ToListAsync(cancellationToken: Ct));
     }
 
     [Fact]
@@ -65,12 +65,12 @@ public sealed class AuthTests : IDisposable
         });
         var bootstrapper = new AuthBootstrapper(_db, options, _hasher);
 
-        await bootstrapper.SeedAsync();
-        await bootstrapper.SeedAsync(); // run twice — must not duplicate.
+        await bootstrapper.SeedAsync(Ct);
+        await bootstrapper.SeedAsync(Ct); // run twice — must not duplicate.
 
-        var admin = Assert.Single(await _db.Actors.Where(a => a.Email == "admin@x.com").ToListAsync());
+        var admin = Assert.Single(await _db.Actors.Where(a => a.Email == "admin@x.com").ToListAsync(cancellationToken: Ct));
         Assert.True(admin.IsSiteAdmin);
-        var creds = await _db.LocalCredentials.Where(c => c.ActorId == admin.Id).ToListAsync();
+        var creds = await _db.LocalCredentials.Where(c => c.ActorId == admin.Id).ToListAsync(cancellationToken: Ct);
         var credential = Assert.Single(creds);
         Assert.Equal(PasswordVerificationResult.Success, _hasher.VerifyHashedPassword(admin, credential.PasswordHash, "letmein"));
     }
@@ -79,18 +79,18 @@ public sealed class AuthTests : IDisposable
     public async Task Bootstrapper_PromotesExistingActor()
     {
         _db.Actors.Add(new Actor { DisplayName = "Existing", Type = ActorType.Human, Email = "boss@x.com" });
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(Ct);
 
         var options = Options.Create(new AuthOptions
         {
             Mode = AuthMode.Oidc, // no local credential expected in OIDC mode
             SiteAdmin = new SiteAdminOptions { Email = "boss@x.com" },
         });
-        await new AuthBootstrapper(_db, options, _hasher).SeedAsync();
+        await new AuthBootstrapper(_db, options, _hasher).SeedAsync(Ct);
 
-        var boss = Assert.Single(await _db.Actors.Where(a => a.Email == "boss@x.com").ToListAsync());
+        var boss = Assert.Single(await _db.Actors.Where(a => a.Email == "boss@x.com").ToListAsync(cancellationToken: Ct));
         Assert.True(boss.IsSiteAdmin);
-        Assert.False(await _db.LocalCredentials.AnyAsync(c => c.ActorId == boss.Id));
+        Assert.False(await _db.LocalCredentials.AnyAsync(c => c.ActorId == boss.Id, cancellationToken: Ct));
     }
 
     [Fact]
@@ -98,13 +98,13 @@ public sealed class AuthTests : IDisposable
     {
         var actor = new Actor { DisplayName = "Cory", Type = ActorType.Human, Email = "cory@x.com", IsSiteAdmin = true };
         _db.Actors.Add(actor);
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(Ct);
 
         var resolved = new CurrentActor(AccessorWith(actor.Id, isSiteAdmin: true), _db);
         Assert.True(resolved.IsAuthenticated);
         Assert.Equal(actor.Id, resolved.ActorId);
         Assert.True(resolved.IsSiteAdmin);
-        Assert.Equal(actor.Id, (await resolved.GetAsync()).Id);
+        Assert.Equal(actor.Id, (await resolved.GetAsync(Ct)).Id);
 
         var anonymous = new CurrentActor(new HttpContextAccessor { HttpContext = new DefaultHttpContext() }, _db);
         Assert.False(anonymous.IsAuthenticated);

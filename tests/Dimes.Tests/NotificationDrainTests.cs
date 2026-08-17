@@ -58,14 +58,14 @@ public sealed class NotificationDrainTests : IDisposable
     {
         var (channel, delivery) = await SeedAsync();
 
-        var count = await Runner().RunOnceAsync();
+        var count = await Runner().RunOnceAsync(Ct);
 
         Assert.Equal(1, count);
         Assert.Single(_provider.Sent);
         Assert.Equal("Change awaiting approval", _provider.Sent[0].Title);
 
-        await _db.Entry(delivery).ReloadAsync();
-        await _db.Entry(channel).ReloadAsync();
+        await _db.Entry(delivery).ReloadAsync(Ct);
+        await _db.Entry(channel).ReloadAsync(Ct);
         Assert.Equal(NotificationDeliveryStatus.Sent, delivery.Status);
         Assert.Equal(1, delivery.Attempts);
         Assert.True(channel.LastDeliveryOk);
@@ -78,10 +78,10 @@ public sealed class NotificationDrainTests : IDisposable
         _provider.FailWith = "space not found";
         var (channel, delivery) = await SeedAsync();
 
-        await Runner().RunOnceAsync();
+        await Runner().RunOnceAsync(Ct);
 
-        await _db.Entry(delivery).ReloadAsync();
-        await _db.Entry(channel).ReloadAsync();
+        await _db.Entry(delivery).ReloadAsync(Ct);
+        await _db.Entry(channel).ReloadAsync(Ct);
         // Not terminal yet: it stays Pending, scheduled for a future retry.
         Assert.Equal(NotificationDeliveryStatus.Pending, delivery.Status);
         Assert.Equal(1, delivery.Attempts);
@@ -99,11 +99,11 @@ public sealed class NotificationDrainTests : IDisposable
         var (_, delivery) = await SeedAsync();
         // One attempt short of the cap — the next failure is terminal.
         delivery.Attempts = NotificationDrainRunner.MaxAttempts - 1;
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(Ct);
 
-        await Runner().RunOnceAsync();
+        await Runner().RunOnceAsync(Ct);
 
-        await _db.Entry(delivery).ReloadAsync();
+        await _db.Entry(delivery).ReloadAsync(Ct);
         Assert.Equal(NotificationDeliveryStatus.Failed, delivery.Status);
         Assert.Equal(NotificationDrainRunner.MaxAttempts, delivery.Attempts);
     }
@@ -113,11 +113,11 @@ public sealed class NotificationDrainTests : IDisposable
     {
         var (_, delivery) = await SeedAsync(nextAttemptAt: DateTimeOffset.UtcNow.AddMinutes(10));
 
-        var count = await Runner().RunOnceAsync();
+        var count = await Runner().RunOnceAsync(Ct);
 
         Assert.Equal(0, count);
         Assert.Empty(_provider.Sent);
-        await _db.Entry(delivery).ReloadAsync();
+        await _db.Entry(delivery).ReloadAsync(Ct);
         Assert.Equal(0, delivery.Attempts);
     }
 

@@ -9,12 +9,6 @@
          rather than a library. The package does not set this for you — it errors out if it is missing.
          The entry point is generated; there is no Main in this project. -->
     <OutputType>Exe</OutputType>
-    <!-- xUnit1051 wants TestContext.Current.CancellationToken threaded into every call that takes one, so
-         a cancelled run stops promptly. It fires 1284 times here — every service call in every test — and
-         that volume buries the warnings that matter (there are two real CS8604s in this build). Adopting
-         it is a worthwhile but separate, mechanical pass over every test file; suppressed until then
-         rather than left as noise nobody reads. -->
-    <NoWarn>$(NoWarn);xUnit1051</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
@@ -36,6 +30,9 @@
 
   <ItemGroup>
     <Using Include="Xunit" />
+    <!-- Makes `Ct` (the ambient test cancellation token) available in every test file without an import;
+         see TestCancellation.cs for why it is aliased rather than spelled out at ~640 call sites. -->
+    <Using Include="Dimes.Tests.TestCancellation" Static="true" />
   </ItemGroup>
 
   <ItemGroup>

@@ -73,7 +73,7 @@ public sealed class EpicCascadeTransitionServiceTests : IDisposable
 
         // Captured → Approved is gated to Maintainer (satisfied) and is an illegal single step for the
         // Captured/InReview children — they must be forced to the exact state regardless.
-        await _changes.TransitionAsync(epic.Id, actorId, new TransitionChangeRequest(ChangeStatus.Approved, null, null));
+        await _changes.TransitionAsync(epic.Id, actorId, new TransitionChangeRequest(ChangeStatus.Approved, null, null), Ct);
 
         Assert.Equal(ChangeStatus.Approved, await StatusOf(epic.Id));
         Assert.Equal(ChangeStatus.Approved, await StatusOf(a.Id));
@@ -81,8 +81,12 @@ public sealed class EpicCascadeTransitionServiceTests : IDisposable
         Assert.Equal(ChangeStatus.Approved, await StatusOf(c.Id)); // pulled back from InReview
 
         // One cascade audit per child that actually moved, plus the Epic's own transition audit.
-        Assert.Equal(3, await _db.AuditEvents.CountAsync(e => e.Action == "EpicCascade"));
-        Assert.Equal(1, await _db.AuditEvents.CountAsync(e => e.Action == "ChangeTransition" && e.EntityId == epic.Id));
+        Assert.Equal(3, await _db.AuditEvents.CountAsync(e => e.Action == "EpicCascade", cancellationToken: Ct));
+        Assert.Equal(
+            1,
+            await _db.AuditEvents.CountAsync(
+                e => e.Action == "ChangeTransition" && e.EntityId == epic.Id,
+                cancellationToken: Ct));
     }
 
     [Fact]
@@ -92,11 +96,11 @@ public sealed class EpicCascadeTransitionServiceTests : IDisposable
         var epic = await ChangeAsync(projectId, actorId, ChangeKind.Epic, ChangeStatus.InReview);
         var child = await ChangeAsync(projectId, actorId, ChangeKind.Feature, ChangeStatus.InReview, epic.Id);
 
-        await _changes.TransitionAsync(epic.Id, actorId, new TransitionChangeRequest(ChangeStatus.Done, null, null));
-        Assert.NotNull((await _db.ChangeRequests.FindAsync(child.Id))!.CompletedAt);
+        await _changes.TransitionAsync(epic.Id, actorId, new TransitionChangeRequest(ChangeStatus.Done, null, null), Ct);
+        Assert.NotNull((await _db.ChangeRequests.FindAsync(new object?[] { child.Id }, Ct))!.CompletedAt);
 
-        await _changes.TransitionAsync(epic.Id, actorId, new TransitionChangeRequest(ChangeStatus.InDevelopment, null, null));
-        Assert.Null((await _db.ChangeRequests.FindAsync(child.Id))!.CompletedAt);
+        await _changes.TransitionAsync(epic.Id, actorId, new TransitionChangeRequest(ChangeStatus.InDevelopment, null, null), Ct);
+        Assert.Null((await _db.ChangeRequests.FindAsync(new object?[] { child.Id }, Ct))!.CompletedAt);
         Assert.Equal(ChangeStatus.InDevelopment, await StatusOf(child.Id));
     }
 
@@ -108,8 +112,12 @@ public sealed class EpicCascadeTransitionServiceTests : IDisposable
         var child = await ChangeAsync(projectId, actorId, ChangeKind.Feature, ChangeStatus.Captured, epic.Id);
         var target = await ChangeAsync(projectId, actorId, ChangeKind.Feature, ChangeStatus.Captured);
 
-        await _changes.TransitionAsync(epic.Id, actorId, new TransitionChangeRequest(ChangeStatus.Duplicate, null, target.Id));
-        var dup = (await _db.ChangeRequests.FindAsync(child.Id))!;
+        await _changes.TransitionAsync(
+            epic.Id,
+            actorId,
+            new TransitionChangeRequest(ChangeStatus.Duplicate, null, target.Id),
+            Ct);
+        var dup = (await _db.ChangeRequests.FindAsync(new object?[] { child.Id }, Ct))!;
         Assert.Equal(ChangeStatus.Duplicate, dup.Status);
         Assert.Equal(target.Id, dup.DuplicateOfId);
     }
@@ -120,10 +128,10 @@ public sealed class EpicCascadeTransitionServiceTests : IDisposable
         var (projectId, actorId) = await SeedAsync(MemberRole.Maintainer);
         var standalone = await ChangeAsync(projectId, actorId, ChangeKind.Feature, ChangeStatus.Captured);
 
-        await _changes.TransitionAsync(standalone.Id, actorId, new TransitionChangeRequest(ChangeStatus.Triaged, null, null));
+        await _changes.TransitionAsync(standalone.Id, actorId, new TransitionChangeRequest(ChangeStatus.Triaged, null, null), Ct);
 
         Assert.Equal(ChangeStatus.Triaged, await StatusOf(standalone.Id));
-        Assert.Equal(0, await _db.AuditEvents.CountAsync(e => e.Action == "EpicCascade"));
+        Assert.Equal(0, await _db.AuditEvents.CountAsync(e => e.Action == "EpicCascade", cancellationToken: Ct));
     }
 
     public void Dispose()

@@ -74,7 +74,7 @@ public sealed class ChangeCsvExportTests : IDisposable
         await AddAsync("Captured first", ChangeStatus.Captured, 2);
         await AddAsync("Approved thing", ChangeStatus.Approved, 7);
 
-        var csv = (await _changes.ExportChangesCsvAsync(_project.Id)).Csv;
+        var csv = (await _changes.ExportChangesCsvAsync(_project.Id, Ct)).Csv;
 
         var titles = Rows(csv).Select(r => r.Split(',')[1]).ToArray();
         Assert.Equal(
@@ -90,7 +90,7 @@ public sealed class ChangeCsvExportTests : IDisposable
         await AddAsync("Rejected one", ChangeStatus.Rejected, 2);
         await AddAsync("Duplicate one", ChangeStatus.Duplicate, 3);
 
-        var csv = (await _changes.ExportChangesCsvAsync(_project.Id)).Csv;
+        var csv = (await _changes.ExportChangesCsvAsync(_project.Id, Ct)).Csv;
 
         Assert.Single(Rows(csv));
         Assert.Contains("Live one", csv);
@@ -104,7 +104,7 @@ public sealed class ChangeCsvExportTests : IDisposable
         await SeedProjectAsync();
         await AddAsync("A feature", ChangeStatus.InDevelopment, 42, assignee: _actor.Id);
 
-        var csv = (await _changes.ExportChangesCsvAsync(_project.Id)).Csv;
+        var csv = (await _changes.ExportChangesCsvAsync(_project.Id, Ct)).Csv;
 
         Assert.StartsWith("Key,Title,Status,Kind,Priority,Recipient,CreatedAt,CompletedAt\r\n", csv);
         var cells = Rows(csv).Single().Split(',');
@@ -123,7 +123,7 @@ public sealed class ChangeCsvExportTests : IDisposable
         await AddAsync("Not yet numbered", ChangeStatus.Captured, null);
         await AddAsync("Numbered", ChangeStatus.Captured, 1);
 
-        var csv = (await _changes.ExportChangesCsvAsync(_project.Id)).Csv;
+        var csv = (await _changes.ExportChangesCsvAsync(_project.Id, Ct)).Csv;
 
         var rows = Rows(csv);
         Assert.Equal("DIMES-1", rows[0].Split(',')[0]);
@@ -137,7 +137,7 @@ public sealed class ChangeCsvExportTests : IDisposable
         await SeedProjectAsync(key: null!);
         await AddAsync("Keyless", ChangeStatus.Captured, 3);
 
-        var csv = (await _changes.ExportChangesCsvAsync(_project.Id)).Csv;
+        var csv = (await _changes.ExportChangesCsvAsync(_project.Id, Ct)).Csv;
 
         // "3" alone would read as a key and mislead.
         Assert.Equal(string.Empty, Rows(csv).Single().Split(',')[0]);
@@ -149,7 +149,7 @@ public sealed class ChangeCsvExportTests : IDisposable
         await SeedProjectAsync();
         await AddAsync("Nobody's", ChangeStatus.Captured, 1);
 
-        var csv = (await _changes.ExportChangesCsvAsync(_project.Id)).Csv;
+        var csv = (await _changes.ExportChangesCsvAsync(_project.Id, Ct)).Csv;
 
         var cells = Rows(csv).Single().Split(',');
         Assert.Equal("Unassigned", cells[5]);   // the word the create modal and detail view already use
@@ -167,7 +167,7 @@ public sealed class ChangeCsvExportTests : IDisposable
         await AddAsync("@import evil", ChangeStatus.Captured, 3);
         await AddAsync("-1 regression", ChangeStatus.Captured, 4);
 
-        var csv = (await _changes.ExportChangesCsvAsync(_project.Id)).Csv;
+        var csv = (await _changes.ExportChangesCsvAsync(_project.Id, Ct)).Csv;
 
         Assert.Contains("'=cmd|'/c calc'!A1", csv);
         Assert.Contains("'+1 to this", csv);
@@ -184,7 +184,7 @@ public sealed class ChangeCsvExportTests : IDisposable
         await AddAsync("The \"quoted\" one", ChangeStatus.Captured, 2);
         await AddAsync("Line one\nline two", ChangeStatus.Captured, 3);
 
-        var csv = (await _changes.ExportChangesCsvAsync(_project.Id)).Csv;
+        var csv = (await _changes.ExportChangesCsvAsync(_project.Id, Ct)).Csv;
 
         Assert.Contains("\"Fix a, b and c\"", csv);
         Assert.Contains("\"The \"\"quoted\"\" one\"", csv);
@@ -198,7 +198,7 @@ public sealed class ChangeCsvExportTests : IDisposable
     {
         await SeedProjectAsync();
 
-        var export = await _changes.ExportChangesCsvAsync(_project.Id);
+        var export = await _changes.ExportChangesCsvAsync(_project.Id, Ct);
 
         Assert.StartsWith("demo-changes-", export.FileName);
         Assert.EndsWith(".csv", export.FileName);
@@ -209,7 +209,7 @@ public sealed class ChangeCsvExportTests : IDisposable
     {
         await SeedProjectAsync();
 
-        await Assert.ThrowsAsync<NotFoundException>(() => _changes.ExportChangesCsvAsync(Guid.NewGuid()));
+        await Assert.ThrowsAsync<NotFoundException>(() => _changes.ExportChangesCsvAsync(Guid.NewGuid(), Ct));
     }
 
     public void Dispose()

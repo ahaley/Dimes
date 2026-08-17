@@ -21,7 +21,7 @@ public class ProviderUrlValidatorTests
     public async Task ValidateAsync_AllowsSafeOrLocalTargets(string? baseUrl)
     {
         // Does not throw. OpenAI-compatible is the permissive type: local runners are the point of it.
-        await ProviderUrlValidator.ValidateAsync(LlmProviderType.OpenAICompatible, baseUrl);
+        await ProviderUrlValidator.ValidateAsync(LlmProviderType.OpenAICompatible, baseUrl, Ct);
     }
 
     [Theory]
@@ -31,7 +31,7 @@ public class ProviderUrlValidatorTests
     public async Task ValidateAsync_RejectsLinkLocalMetadataTargets(string baseUrl)
     {
         await Assert.ThrowsAsync<BadRequestException>(
-            () => ProviderUrlValidator.ValidateAsync(LlmProviderType.OpenAICompatible, baseUrl));
+            () => ProviderUrlValidator.ValidateAsync(LlmProviderType.OpenAICompatible, baseUrl, Ct));
     }
 
     [Theory]
@@ -43,7 +43,7 @@ public class ProviderUrlValidatorTests
     public async Task ValidateAsync_RejectsNonHttpSchemes(string baseUrl)
     {
         await Assert.ThrowsAsync<BadRequestException>(
-            () => ProviderUrlValidator.ValidateAsync(LlmProviderType.OpenAICompatible, baseUrl));
+            () => ProviderUrlValidator.ValidateAsync(LlmProviderType.OpenAICompatible, baseUrl, Ct));
     }
 
     /// <summary>The vendor-hosted types allow an override only within the vendor's domain. Without this a
@@ -57,7 +57,7 @@ public class ProviderUrlValidatorTests
     [InlineData(LlmProviderType.GeminiVertex, "https://aiplatform.googleapis.com")]
     public async Task ValidateAsync_AllowsVendorHostOverrides(LlmProviderType type, string baseUrl)
     {
-        await ProviderUrlValidator.ValidateAsync(type, baseUrl);
+        await ProviderUrlValidator.ValidateAsync(type, baseUrl, Ct);
     }
 
     [Theory]
@@ -70,6 +70,6 @@ public class ProviderUrlValidatorTests
     [InlineData(LlmProviderType.Anthropic, "https://notanthropic.com")]
     public async Task ValidateAsync_RejectsOffVendorHostsForVendorTypes(LlmProviderType type, string baseUrl)
     {
-        await Assert.ThrowsAsync<BadRequestException>(() => ProviderUrlValidator.ValidateAsync(type, baseUrl));
+        await Assert.ThrowsAsync<BadRequestException>(() => ProviderUrlValidator.ValidateAsync(type, baseUrl, Ct));
     }
 }

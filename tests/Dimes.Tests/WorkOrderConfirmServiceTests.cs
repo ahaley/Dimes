@@ -105,7 +105,7 @@ public sealed class WorkOrderConfirmServiceTests : IDisposable
 
         await Transition(change.Id, ChangeStatus.InReview);
 
-        await _db.Entry(item).ReloadAsync();
+        await _db.Entry(item).ReloadAsync(Ct);
         Assert.Equal(WorkOrderItemStatus.Confirmed, item.Status);
     }
 
@@ -119,7 +119,7 @@ public sealed class WorkOrderConfirmServiceTests : IDisposable
         await Transition(change.Id, ChangeStatus.InReview);
 
         // Blocked was never a claim of completion, so there's nothing to confirm.
-        await _db.Entry(item).ReloadAsync();
+        await _db.Entry(item).ReloadAsync(Ct);
         Assert.Equal(WorkOrderItemStatus.Blocked, item.Status);
     }
 
@@ -135,7 +135,7 @@ public sealed class WorkOrderConfirmServiceTests : IDisposable
 
         // The cascade moves the child's status, so it must settle the child's claim too — otherwise the
         // card keeps prompting for a change that already moved.
-        await _db.Entry(childItem).ReloadAsync();
+        await _db.Entry(childItem).ReloadAsync(Ct);
         Assert.Equal(WorkOrderItemStatus.Confirmed, childItem.Status);
     }
 
@@ -151,7 +151,7 @@ public sealed class WorkOrderConfirmServiceTests : IDisposable
 
         // A settled claim stays settled: a stale report must not re-prompt after someone reopens the
         // change for more work.
-        await _db.Entry(item).ReloadAsync();
+        await _db.Entry(item).ReloadAsync(Ct);
         Assert.Equal(WorkOrderItemStatus.Confirmed, item.Status);
     }
 
@@ -164,7 +164,7 @@ public sealed class WorkOrderConfirmServiceTests : IDisposable
 
         await Transition(change.Id, ChangeStatus.Rejected);
 
-        await _db.Entry(item).ReloadAsync();
+        await _db.Entry(item).ReloadAsync(Ct);
         Assert.Equal(WorkOrderItemStatus.Reported, item.Status);
     }
 
@@ -175,7 +175,7 @@ public sealed class WorkOrderConfirmServiceTests : IDisposable
         var change = await ChangeAsync("Add CSV export", ChangeStatus.InDevelopment);
         await ClaimAsync(change, WorkOrderItemStatus.Reported);
 
-        var listed = Assert.Single(await _changes.ListAsync(_projectId, ChangeStatus.InDevelopment));
+        var listed = Assert.Single(await _changes.ListAsync(_projectId, ChangeStatus.InDevelopment, Ct));
 
         Assert.Equal(WorkOrderItemStatus.Reported, listed.WorkOrderStatus);
         Assert.NotNull(listed.WorkOrderReportedAt);
@@ -189,9 +189,9 @@ public sealed class WorkOrderConfirmServiceTests : IDisposable
         var first = await ClaimAsync(change, WorkOrderItemStatus.Reported);
         first.ReportedAt = DateTimeOffset.UtcNow.AddHours(-2);
         await ClaimAsync(change, WorkOrderItemStatus.Blocked);
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(Ct);
 
-        var listed = Assert.Single(await _changes.ListAsync(_projectId, ChangeStatus.InDevelopment));
+        var listed = Assert.Single(await _changes.ListAsync(_projectId, ChangeStatus.InDevelopment, Ct));
 
         // Re-export leaves an item in each order; the most recent word wins.
         Assert.Equal(WorkOrderItemStatus.Blocked, listed.WorkOrderStatus);
@@ -203,7 +203,7 @@ public sealed class WorkOrderConfirmServiceTests : IDisposable
         await SetupAsync();
         await ChangeAsync("Add CSV export", ChangeStatus.InDevelopment);
 
-        var listed = Assert.Single(await _changes.ListAsync(_projectId, ChangeStatus.InDevelopment));
+        var listed = Assert.Single(await _changes.ListAsync(_projectId, ChangeStatus.InDevelopment, Ct));
 
         Assert.Null(listed.WorkOrderStatus);
     }

@@ -38,7 +38,8 @@ public class ProviderAdapterTests
 
         var result = await provider.CompleteAsync(
             new LlmCompletionRequest("sys", "hi"),
-            new LlmConnection(BaseUrl: null, Model: "claude-sonnet-4-6", ApiKey: "k-123"));
+            new LlmConnection(BaseUrl: null, Model: "claude-sonnet-4-6", ApiKey: "k-123"),
+            Ct);
 
         Assert.Equal("Hello from Claude", result.Text);
         Assert.Equal("https://api.anthropic.com/v1/messages", handler.Request!.RequestUri!.ToString());
@@ -58,7 +59,8 @@ public class ProviderAdapterTests
         await provider.CompleteAsync(
             new LlmCompletionRequest("sys", "third", History:
                 [new LlmMessage("user", "first"), new LlmMessage("assistant", "second")]),
-            new LlmConnection(BaseUrl: null, Model: "claude-sonnet-4-6", ApiKey: "k"));
+            new LlmConnection(BaseUrl: null, Model: "claude-sonnet-4-6", ApiKey: "k"),
+            Ct);
 
         // History is replayed in order, ahead of the final user message; the system prompt is a
         // top-level field (not a message), so it should not appear inside the messages array.
@@ -79,7 +81,8 @@ public class ProviderAdapterTests
         await provider.CompleteAsync(
             new LlmCompletionRequest("sysline", "latest", History:
                 [new LlmMessage("user", "earlier"), new LlmMessage("assistant", "reply")]),
-            new LlmConnection(BaseUrl: "http://localhost:11434/v1", Model: "llama3", ApiKey: null));
+            new LlmConnection(BaseUrl: "http://localhost:11434/v1", Model: "llama3", ApiKey: null),
+            Ct);
 
         var body = handler.RequestBody!;
         var sysAt = body.IndexOf("sysline", StringComparison.Ordinal);
@@ -98,7 +101,8 @@ public class ProviderAdapterTests
 
         var result = await provider.CompleteAsync(
             new LlmCompletionRequest("sys", "hi"),
-            new LlmConnection(BaseUrl: "http://localhost:11434/v1", Model: "llama3", ApiKey: "tok"));
+            new LlmConnection(BaseUrl: "http://localhost:11434/v1", Model: "llama3", ApiKey: "tok"),
+            Ct);
 
         Assert.Equal("Hi from local", result.Text);
         Assert.Equal("http://localhost:11434/v1/chat/completions", handler.Request!.RequestUri!.ToString());
@@ -115,7 +119,8 @@ public class ProviderAdapterTests
 
         await provider.CompleteAsync(
             new LlmCompletionRequest("sys", "hi", Reasoning: LlmReasoning.Disabled),
-            new LlmConnection(BaseUrl: null, Model: "claude-sonnet-4-6", ApiKey: "k"));
+            new LlmConnection(BaseUrl: null, Model: "claude-sonnet-4-6", ApiKey: "k"),
+            Ct);
 
         // Omitting the field means "no thinking" on some models and "adaptive" on others, and reasoning is
         // drawn from the same token budget as the answer — so the intent is always stated.
@@ -131,7 +136,8 @@ public class ProviderAdapterTests
 
         await provider.CompleteAsync(
             new LlmCompletionRequest("sys", "hi", Reasoning: LlmReasoning.Adaptive),
-            new LlmConnection(BaseUrl: null, Model: "claude-sonnet-5", ApiKey: "k"));
+            new LlmConnection(BaseUrl: null, Model: "claude-sonnet-5", ApiKey: "k"),
+            Ct);
 
         Assert.Contains("\"thinking\":{\"type\":\"adaptive\"}", handler.RequestBody);
     }
@@ -153,7 +159,8 @@ public class ProviderAdapterTests
 
         var result = await provider.CompleteAsync(
             new LlmCompletionRequest("sys", "hi"),
-            new LlmConnection(BaseUrl: null, Model: "claude-sonnet-5", ApiKey: "k"));
+            new LlmConnection(BaseUrl: null, Model: "claude-sonnet-5", ApiKey: "k"),
+            Ct);
 
         Assert.Equal("Looks reasonable. Suggest Medium priority.", result.Text);
     }
@@ -169,7 +176,8 @@ public class ProviderAdapterTests
 
         var ex = await Assert.ThrowsAsync<HttpRequestException>(() => provider.CompleteAsync(
             new LlmCompletionRequest("sys", "hi", MaxTokens: 1024, Reasoning: LlmReasoning.Adaptive),
-            new LlmConnection(BaseUrl: null, Model: "claude-sonnet-5", ApiKey: "k")));
+            new LlmConnection(BaseUrl: null, Model: "claude-sonnet-5", ApiKey: "k"),
+            Ct));
 
         Assert.Contains("max_tokens", ex.Message);
         Assert.Contains("MaxTokens", ex.Message); // the actionable hint
@@ -186,7 +194,8 @@ public class ProviderAdapterTests
 
         var ex = await Assert.ThrowsAsync<HttpRequestException>(() => provider.CompleteAsync(
             new LlmCompletionRequest("sys", "hi"),
-            new LlmConnection(BaseUrl: null, Model: "some-model", ApiKey: "k")));
+            new LlmConnection(BaseUrl: null, Model: "some-model", ApiKey: "k"),
+            Ct));
 
         Assert.Contains("disabled is not supported", ex.Message);
     }
@@ -200,7 +209,8 @@ public class ProviderAdapterTests
 
         var ex = await Assert.ThrowsAsync<HttpRequestException>(() => provider.CompleteAsync(
             new LlmCompletionRequest("sys", "hi"),
-            new LlmConnection(BaseUrl: "http://localhost:11434/v1", Model: "llama3", ApiKey: null)));
+            new LlmConnection(BaseUrl: "http://localhost:11434/v1", Model: "llama3", ApiKey: null),
+            Ct));
 
         Assert.Contains("length", ex.Message);
         Assert.Contains("MaxTokens", ex.Message);
@@ -215,7 +225,8 @@ public class ProviderAdapterTests
 
         var result = await provider.CompleteAsync(
             new LlmCompletionRequest("sys", "hi"),
-            new LlmConnection(BaseUrl: null, Model: "gemini-x", ApiKey: "k-123"));
+            new LlmConnection(BaseUrl: null, Model: "gemini-x", ApiKey: "k-123"),
+            Ct);
 
         // All text parts of the candidate are concatenated, not just the first.
         Assert.Equal("Hello from Gemini", result.Text);
@@ -234,10 +245,8 @@ public class ProviderAdapterTests
             """{"candidates":[{"content":{"parts":[{"text":"ok"}]}}]}""");
         var provider = new GeminiLlmProvider(new HttpClient(handler));
 
-        await provider.CompleteAsync(
-            new LlmCompletionRequest("sysline", "latest", History:
-                [new LlmMessage("user", "earlier"), new LlmMessage("assistant", "reply")]),
-            new LlmConnection(BaseUrl: null, Model: "gemini-x", ApiKey: "k"));
+        await provider.CompleteAsync(new LlmCompletionRequest("sysline", "latest", History:
+                [new LlmMessage("user", "earlier"), new LlmMessage("assistant", "reply")]), new LlmConnection(BaseUrl: null, Model: "gemini-x", ApiKey: "k"), Ct);
 
         var body = handler.RequestBody!;
         // Gemini spells the assistant side "model"; sending "assistant" is rejected outright, so this
@@ -264,7 +273,8 @@ public class ProviderAdapterTests
 
         var ex = await Assert.ThrowsAsync<HttpRequestException>(() => provider.CompleteAsync(
             new LlmCompletionRequest("sys", "hi"),
-            new LlmConnection(BaseUrl: null, Model: "gemini-x", ApiKey: "k")));
+            new LlmConnection(BaseUrl: null, Model: "gemini-x", ApiKey: "k"),
+            Ct));
 
         Assert.Contains("SAFETY", ex.Message);
     }
@@ -278,7 +288,8 @@ public class ProviderAdapterTests
 
         var ex = await Assert.ThrowsAsync<HttpRequestException>(() => provider.CompleteAsync(
             new LlmCompletionRequest("sys", "hi"),
-            new LlmConnection(BaseUrl: null, Model: "gemini-x", ApiKey: "bad")));
+            new LlmConnection(BaseUrl: null, Model: "gemini-x", ApiKey: "bad"),
+            Ct));
 
         // A bare status code leaves the operator guessing; the API's own message names the fix.
         Assert.Contains("API key not valid", ex.Message);
@@ -296,8 +307,7 @@ public class ProviderAdapterTests
             """);
         var provider = new GeminiLlmProvider(new HttpClient(handler));
 
-        var models = await provider.ListModelsAsync(
-            new LlmConnection(BaseUrl: null, Model: string.Empty, ApiKey: "k"));
+        var models = await provider.ListModelsAsync(new LlmConnection(BaseUrl: null, Model: string.Empty, ApiKey: "k"), Ct);
 
         // Embedding-only models would just 400 if selected for commentary, so they are filtered out; the
         // id offered is the leaf, which is what goes in LlmProviderConfig.Model.
@@ -315,11 +325,9 @@ public class ProviderAdapterTests
 
         // Vertex addresses a model by project + region; without them there is no URL to build. Failing
         // here (rather than assembling a malformed one) is why the save-time check has a runtime twin.
-        await Assert.ThrowsAsync<InvalidOperationException>(() => provider.CompleteAsync(
-            new LlmCompletionRequest("sys", "hi"),
-            new LlmConnection(
+        await Assert.ThrowsAsync<InvalidOperationException>(() => provider.CompleteAsync(new LlmCompletionRequest("sys", "hi"), new LlmConnection(
                 BaseUrl: null, Model: "gemini-x", ApiKey: "{}",
-                Settings: new LlmProviderSettings { GcpLocation = "us-central1" })));
+                Settings: new LlmProviderSettings { GcpLocation = "us-central1" }), Ct));
 
         Assert.Null(handler.Request);
     }
@@ -400,7 +408,7 @@ public class ProviderAdapterTests
             """{"title":"Fix bug","body":"Steps to repro","state":"open"}""");
         var provider = new GitHubScmProvider(new HttpClient(handler));
 
-        var context = await provider.FetchContextAsync("https://github.com/acme/widget/pull/42", token: "ghp_x");
+        var context = await provider.FetchContextAsync("https://github.com/acme/widget/pull/42", token: "ghp_x", ct: Ct);
 
         Assert.NotNull(context);
         Assert.Equal("Fix bug", context!.Title);
@@ -416,7 +424,7 @@ public class ProviderAdapterTests
         var handler = new CapturingHandler(HttpStatusCode.OK, "{}");
         var provider = new GitHubScmProvider(new HttpClient(handler));
 
-        var context = await provider.FetchContextAsync("https://example.com/not-github", token: null);
+        var context = await provider.FetchContextAsync("https://example.com/not-github", token: null, ct: Ct);
 
         Assert.Null(context);
         Assert.Null(handler.Request); // never hit the network

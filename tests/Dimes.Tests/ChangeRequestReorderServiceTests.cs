@@ -55,10 +55,9 @@ public sealed class ChangeRequestReorderServiceTests : IDisposable
         // New order: C, A, B (reverse-ish of the newest-first default).
         var newOrder = new List<Guid> { ids[2], ids[0], ids[1] };
 
-        await _changes.ReorderAsync(projectId, actorId,
-            new ReorderChangesRequest(ChangeStatus.Captured, newOrder));
+        await _changes.ReorderAsync(projectId, actorId, new ReorderChangesRequest(ChangeStatus.Captured, newOrder), Ct);
 
-        var listed = await _changes.ListAsync(projectId, ChangeStatus.Captured);
+        var listed = await _changes.ListAsync(projectId, ChangeStatus.Captured, Ct);
         Assert.Equal(newOrder, listed.Select(c => c.Id).ToList());
         Assert.Equal([1, 2, 3], listed.Select(c => c.SortOrder).ToArray());
         Assert.Contains(_notifier.Events, e => e.Kind == "reordered");
@@ -71,10 +70,13 @@ public sealed class ChangeRequestReorderServiceTests : IDisposable
         // Drop one id → set no longer matches the column exactly.
         var partial = new List<Guid> { ids[0], ids[1] };
 
-        await Assert.ThrowsAsync<BadRequestException>(() => _changes.ReorderAsync(projectId, actorId,
-            new ReorderChangesRequest(ChangeStatus.Captured, partial)));
+        await Assert.ThrowsAsync<BadRequestException>(() => _changes.ReorderAsync(
+            projectId,
+            actorId,
+            new ReorderChangesRequest(ChangeStatus.Captured, partial),
+            Ct));
 
-        var listed = await _changes.ListAsync(projectId, ChangeStatus.Captured);
+        var listed = await _changes.ListAsync(projectId, ChangeStatus.Captured, Ct);
         Assert.All(listed, c => Assert.Equal(0, c.SortOrder)); // untouched
     }
 

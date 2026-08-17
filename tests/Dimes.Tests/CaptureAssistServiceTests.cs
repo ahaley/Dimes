@@ -51,16 +51,25 @@ public sealed class CaptureAssistServiceTests : IDisposable
     [Fact]
     public async Task Chat_ReturnsReply_AndReplaysPriorTurnsAsHistory()
     {
-        var project = await _projects.CreateAsync(_db, new CreateProjectRequest("P", null));
-        var llmConfig = await _projects.CreateLlmProviderAsync(project.Id,
-            new CreateLlmProviderRequest(LlmProviderType.Anthropic, "claude", null, "claude-sonnet-4-6", "ANTHROPIC_KEY"));
-        var agent = await _projects.AddMemberAsync(project.Id,
-            new AddMemberRequest("Aria", ActorType.Agent, null, MemberRole.Assistant, llmConfig.Id));
+        var project = await _projects.CreateAsync(_db, new CreateProjectRequest("P", null), ct: Ct);
+        var llmConfig = await _projects.CreateLlmProviderAsync(
+            project.Id,
+            new CreateLlmProviderRequest(
+                LlmProviderType.Anthropic,
+                "claude",
+                null,
+                "claude-sonnet-4-6",
+                "ANTHROPIC_KEY"),
+            Ct);
+        var agent = await _projects.AddMemberAsync(
+            project.Id,
+            new AddMemberRequest("Aria", ActorType.Agent, null, MemberRole.Assistant, llmConfig.Id),
+            Ct);
 
         var stub = new StubLlm(LlmProviderType.Anthropic, "How will users trigger the export?");
         var reply = await Service(stub).ChatAsync(project.Id, new CaptureAssistChatRequest(
             agent.ActorId, "rough idea about CSV export",
-            [new ChatTurn("user", "I want CSV export"), new ChatTurn("assistant", "Tell me more"), new ChatTurn("user", "From the board")]));
+            [new ChatTurn("user", "I want CSV export"), new ChatTurn("assistant", "Tell me more"), new ChatTurn("user", "From the board")]), Ct);
 
         Assert.Equal("How will users trigger the export?", reply.Reply);
         // Last user turn is the prompt; the two earlier turns are replayed as history.
@@ -72,27 +81,42 @@ public sealed class CaptureAssistServiceTests : IDisposable
     [Fact]
     public async Task Chat_NonAgentActor_IsRejected()
     {
-        var project = await _projects.CreateAsync(_db, new CreateProjectRequest("P", null));
-        var human = await _projects.AddMemberAsync(project.Id,
-            new AddMemberRequest("Cory", ActorType.Human, null, MemberRole.Contributor));
+        var project = await _projects.CreateAsync(_db, new CreateProjectRequest("P", null), ct: Ct);
+        var human = await _projects.AddMemberAsync(
+            project.Id,
+            new AddMemberRequest("Cory", ActorType.Human, null, MemberRole.Contributor),
+            Ct);
 
         var stub = new StubLlm(LlmProviderType.Anthropic, "x");
         await Assert.ThrowsAsync<BadRequestException>(() => Service(stub).ChatAsync(
-            project.Id, new CaptureAssistChatRequest(human.ActorId, null, [new ChatTurn("user", "hi")])));
+            project.Id,
+            new CaptureAssistChatRequest(human.ActorId, null, [new ChatTurn("user", "hi")]),
+            Ct));
     }
 
     [Fact]
     public async Task Chat_ConversationNotEndingOnUser_IsRejected()
     {
-        var project = await _projects.CreateAsync(_db, new CreateProjectRequest("P", null));
-        var llmConfig = await _projects.CreateLlmProviderAsync(project.Id,
-            new CreateLlmProviderRequest(LlmProviderType.Anthropic, "claude", null, "claude-sonnet-4-6", "ANTHROPIC_KEY"));
-        var agent = await _projects.AddMemberAsync(project.Id,
-            new AddMemberRequest("Aria", ActorType.Agent, null, MemberRole.Assistant, llmConfig.Id));
+        var project = await _projects.CreateAsync(_db, new CreateProjectRequest("P", null), ct: Ct);
+        var llmConfig = await _projects.CreateLlmProviderAsync(
+            project.Id,
+            new CreateLlmProviderRequest(
+                LlmProviderType.Anthropic,
+                "claude",
+                null,
+                "claude-sonnet-4-6",
+                "ANTHROPIC_KEY"),
+            Ct);
+        var agent = await _projects.AddMemberAsync(
+            project.Id,
+            new AddMemberRequest("Aria", ActorType.Agent, null, MemberRole.Assistant, llmConfig.Id),
+            Ct);
 
         var stub = new StubLlm(LlmProviderType.Anthropic, "x");
         await Assert.ThrowsAsync<BadRequestException>(() => Service(stub).ChatAsync(
-            project.Id, new CaptureAssistChatRequest(agent.ActorId, null, [new ChatTurn("assistant", "hi")])));
+            project.Id,
+            new CaptureAssistChatRequest(agent.ActorId, null, [new ChatTurn("assistant", "hi")]),
+            Ct));
     }
 
     // ----- Freestyle Mode: markdown brief -> structured proposals (tolerant parse of the LLM reply) -----
@@ -117,8 +141,10 @@ public sealed class CaptureAssistServiceTests : IDisposable
             """[{"title":"Add CSV export","description":"Download the board as CSV.","kind":"Feature","priority":"High"}]""");
         var projectId = await SeedAgentAsync(stub);
 
-        var reply = await Service(stub).GenerateProposalsAsync(projectId,
-            new GenerateProposalsRequest(_lastAgentId, "Add CSV export to the board."));
+        var reply = await Service(stub).GenerateProposalsAsync(
+            projectId,
+            new GenerateProposalsRequest(_lastAgentId, "Add CSV export to the board."),
+            Ct);
 
         var p = Assert.Single(reply.Proposals);
         Assert.Equal("Add CSV export", p.Title);
@@ -134,8 +160,10 @@ public sealed class CaptureAssistServiceTests : IDisposable
             "Sure! Here are the changes:\n```json\n[{\"title\":\"Fix slow inbox\",\"kind\":\"Problem\",\"priority\":\"Medium\"}]\n```\nLet me know!");
         var projectId = await SeedAgentAsync(stub);
 
-        var reply = await Service(stub).GenerateProposalsAsync(projectId,
-            new GenerateProposalsRequest(_lastAgentId, "The inbox is slow."));
+        var reply = await Service(stub).GenerateProposalsAsync(
+            projectId,
+            new GenerateProposalsRequest(_lastAgentId, "The inbox is slow."),
+            Ct);
 
         var p = Assert.Single(reply.Proposals);
         Assert.Equal("Fix slow inbox", p.Title);
@@ -151,8 +179,10 @@ public sealed class CaptureAssistServiceTests : IDisposable
             """[{"title":"Keep me","kind":"Nonsense","priority":"Whatever"},{"title":"","kind":"Feature"}]""");
         var projectId = await SeedAgentAsync(stub);
 
-        var reply = await Service(stub).GenerateProposalsAsync(projectId,
-            new GenerateProposalsRequest(_lastAgentId, "Some brief."));
+        var reply = await Service(stub).GenerateProposalsAsync(
+            projectId,
+            new GenerateProposalsRequest(_lastAgentId, "Some brief."),
+            Ct);
 
         var p = Assert.Single(reply.Proposals); // the blank-title entry is dropped
         Assert.Equal("Keep me", p.Title);
@@ -169,8 +199,10 @@ public sealed class CaptureAssistServiceTests : IDisposable
             """[{"title":"From a signal","kind":"ObservationDriven","priority":"Low"}]""");
         var projectId = await SeedAgentAsync(stub);
 
-        var reply = await Service(stub).GenerateProposalsAsync(projectId,
-            new GenerateProposalsRequest(_lastAgentId, "Some brief."));
+        var reply = await Service(stub).GenerateProposalsAsync(
+            projectId,
+            new GenerateProposalsRequest(_lastAgentId, "Some brief."),
+            Ct);
 
         var p = Assert.Single(reply.Proposals);
         Assert.Equal(ChangeKind.Feature, p.Kind);
@@ -185,8 +217,10 @@ public sealed class CaptureAssistServiceTests : IDisposable
             """[{"title":"Weird enums","kind":"100","priority":"42"}]""");
         var projectId = await SeedAgentAsync(stub);
 
-        var reply = await Service(stub).GenerateProposalsAsync(projectId,
-            new GenerateProposalsRequest(_lastAgentId, "Some brief."));
+        var reply = await Service(stub).GenerateProposalsAsync(
+            projectId,
+            new GenerateProposalsRequest(_lastAgentId, "Some brief."),
+            Ct);
 
         var p = Assert.Single(reply.Proposals);
         Assert.Equal(ChangeKind.Feature, p.Kind);
@@ -199,8 +233,10 @@ public sealed class CaptureAssistServiceTests : IDisposable
         var stub = new StubLlm(LlmProviderType.Anthropic, "I couldn't find anything actionable, sorry.");
         var projectId = await SeedAgentAsync(stub);
 
-        var reply = await Service(stub).GenerateProposalsAsync(projectId,
-            new GenerateProposalsRequest(_lastAgentId, "Some brief."));
+        var reply = await Service(stub).GenerateProposalsAsync(
+            projectId,
+            new GenerateProposalsRequest(_lastAgentId, "Some brief."),
+            Ct);
 
         Assert.Empty(reply.Proposals);
     }
@@ -211,8 +247,7 @@ public sealed class CaptureAssistServiceTests : IDisposable
         var stub = new StubLlm(LlmProviderType.Anthropic, "[]");
         var projectId = await SeedAgentAsync(stub);
 
-        var reply = await Service(stub).GenerateProposalsAsync(projectId,
-            new GenerateProposalsRequest(_lastAgentId, "   "));
+        var reply = await Service(stub).GenerateProposalsAsync(projectId, new GenerateProposalsRequest(_lastAgentId, "   "), Ct);
 
         Assert.Empty(reply.Proposals);
         Assert.Null(stub.Seen); // short-circuited before reaching the provider

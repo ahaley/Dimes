@@ -51,12 +51,16 @@ public sealed class EpicCompositionServiceTests : IDisposable
         var epic = await NewChangeAsync(projectId, actorId, ChangeKind.Epic, "Epic");
         var child = await NewChangeAsync(projectId, actorId, ChangeKind.Feature, "Child");
 
-        var updated = await _changes.AddChildAsync(epic.Id, actorId, child.Id);
+        var updated = await _changes.AddChildAsync(epic.Id, actorId, child.Id, Ct);
 
         Assert.Equal(epic.Id, updated.ParentChangeRequestId);
-        Assert.Equal(1, await _db.AuditEvents.CountAsync(e => e.Action == "AddedToEpic" && e.EntityId == child.Id));
+        Assert.Equal(
+            1,
+            await _db.AuditEvents.CountAsync(
+                e => e.Action == "AddedToEpic" && e.EntityId == child.Id,
+                cancellationToken: Ct));
 
-        var detail = await _changes.GetDetailAsync(epic.Id);
+        var detail = await _changes.GetDetailAsync(epic.Id, Ct);
         Assert.Single(detail.Children);
         Assert.Equal(child.Id, detail.Children[0].Id);
     }
@@ -67,13 +71,17 @@ public sealed class EpicCompositionServiceTests : IDisposable
         var (projectId, actorId) = await SeedAsync();
         var epic = await NewChangeAsync(projectId, actorId, ChangeKind.Epic, "Epic");
         var child = await NewChangeAsync(projectId, actorId, ChangeKind.Feature, "Child");
-        await _changes.AddChildAsync(epic.Id, actorId, child.Id);
+        await _changes.AddChildAsync(epic.Id, actorId, child.Id, Ct);
 
-        var updated = await _changes.RemoveChildAsync(epic.Id, actorId, child.Id);
+        var updated = await _changes.RemoveChildAsync(epic.Id, actorId, child.Id, Ct);
 
         Assert.Null(updated.ParentChangeRequestId);
-        Assert.Equal(1, await _db.AuditEvents.CountAsync(e => e.Action == "RemovedFromEpic" && e.EntityId == child.Id));
-        Assert.Empty((await _changes.GetDetailAsync(epic.Id)).Children);
+        Assert.Equal(
+            1,
+            await _db.AuditEvents.CountAsync(
+                e => e.Action == "RemovedFromEpic" && e.EntityId == child.Id,
+                cancellationToken: Ct));
+        Assert.Empty((await _changes.GetDetailAsync(epic.Id, Ct)).Children);
     }
 
     [Fact]
@@ -83,7 +91,7 @@ public sealed class EpicCompositionServiceTests : IDisposable
         var notEpic = await NewChangeAsync(projectId, actorId, ChangeKind.Feature, "Not an epic");
         var child = await NewChangeAsync(projectId, actorId, ChangeKind.Feature, "Child");
 
-        await Assert.ThrowsAsync<BadRequestException>(() => _changes.AddChildAsync(notEpic.Id, actorId, child.Id));
+        await Assert.ThrowsAsync<BadRequestException>(() => _changes.AddChildAsync(notEpic.Id, actorId, child.Id, Ct));
     }
 
     [Fact]
@@ -93,7 +101,7 @@ public sealed class EpicCompositionServiceTests : IDisposable
         var epic = await NewChangeAsync(projectId, actorId, ChangeKind.Epic, "Epic");
         var otherEpic = await NewChangeAsync(projectId, actorId, ChangeKind.Epic, "Other epic");
 
-        await Assert.ThrowsAsync<BadRequestException>(() => _changes.AddChildAsync(epic.Id, actorId, otherEpic.Id));
+        await Assert.ThrowsAsync<BadRequestException>(() => _changes.AddChildAsync(epic.Id, actorId, otherEpic.Id, Ct));
     }
 
     [Fact]
@@ -102,14 +110,16 @@ public sealed class EpicCompositionServiceTests : IDisposable
         var (projectA, actorA) = await SeedAsync();
         var epic = await NewChangeAsync(projectA, actorA, ChangeKind.Epic, "Epic");
 
-        var projectB = await _projects.CreateAsync(_db, new CreateProjectRequest("Other", null));
-        var memberB = await _projects.AddMemberAsync(projectB.Id,
-            new AddMemberRequest("Dana", ActorType.Human, "dana@x.com", MemberRole.Contributor));
+        var projectB = await _projects.CreateAsync(_db, new CreateProjectRequest("Other", null), ct: Ct);
+        var memberB = await _projects.AddMemberAsync(
+            projectB.Id,
+            new AddMemberRequest("Dana", ActorType.Human, "dana@x.com", MemberRole.Contributor),
+            Ct);
         var foreignChild = await NewChangeAsync(projectB.Id, memberB.ActorId, ChangeKind.Feature, "Foreign");
 
         // The actor isn't a member of project B → membership guard trips first; either way it must not compose.
-        await Assert.ThrowsAnyAsync<Exception>(() => _changes.AddChildAsync(epic.Id, actorA, foreignChild.Id));
-        Assert.Null((await _db.ChangeRequests.FindAsync(foreignChild.Id))!.ParentChangeRequestId);
+        await Assert.ThrowsAnyAsync<Exception>(() => _changes.AddChildAsync(epic.Id, actorA, foreignChild.Id, Ct));
+        Assert.Null((await _db.ChangeRequests.FindAsync(new object?[] { foreignChild.Id }, Ct))!.ParentChangeRequestId);
     }
 
     [Fact]
@@ -119,9 +129,9 @@ public sealed class EpicCompositionServiceTests : IDisposable
         var epic1 = await NewChangeAsync(projectId, actorId, ChangeKind.Epic, "Epic 1");
         var epic2 = await NewChangeAsync(projectId, actorId, ChangeKind.Epic, "Epic 2");
         var child = await NewChangeAsync(projectId, actorId, ChangeKind.Feature, "Child");
-        await _changes.AddChildAsync(epic1.Id, actorId, child.Id);
+        await _changes.AddChildAsync(epic1.Id, actorId, child.Id, Ct);
 
-        await Assert.ThrowsAsync<BadRequestException>(() => _changes.AddChildAsync(epic2.Id, actorId, child.Id));
+        await Assert.ThrowsAsync<BadRequestException>(() => _changes.AddChildAsync(epic2.Id, actorId, child.Id, Ct));
     }
 
     [Fact]
@@ -131,10 +141,17 @@ public sealed class EpicCompositionServiceTests : IDisposable
         var change = await NewChangeAsync(projectId, actorId, ChangeKind.Feature, "Work");
 
         var updated = await _changes.UpdateDetailsAsync(
-            change.Id, actorId, new UpdateChangeDetailsRequest("Work", null, ChangeKind.Chore, Priority.None));
+            change.Id,
+            actorId,
+            new UpdateChangeDetailsRequest("Work", null, ChangeKind.Chore, Priority.None),
+            Ct);
 
         Assert.Equal(ChangeKind.Chore, updated.Kind);
-        Assert.Equal(1, await _db.AuditEvents.CountAsync(e => e.Action == "DetailsEdited" && e.EntityId == change.Id));
+        Assert.Equal(
+            1,
+            await _db.AuditEvents.CountAsync(
+                e => e.Action == "DetailsEdited" && e.EntityId == change.Id,
+                cancellationToken: Ct));
     }
 
     [Fact]
@@ -144,7 +161,10 @@ public sealed class EpicCompositionServiceTests : IDisposable
         var epic = await NewChangeAsync(projectId, actorId, ChangeKind.Epic, "Empty epic");
 
         var updated = await _changes.UpdateDetailsAsync(
-            epic.Id, actorId, new UpdateChangeDetailsRequest("Empty epic", null, ChangeKind.Feature, Priority.None));
+            epic.Id,
+            actorId,
+            new UpdateChangeDetailsRequest("Empty epic", null, ChangeKind.Feature, Priority.None),
+            Ct);
 
         Assert.Equal(ChangeKind.Feature, updated.Kind);
     }
@@ -155,11 +175,14 @@ public sealed class EpicCompositionServiceTests : IDisposable
         var (projectId, actorId) = await SeedAsync(MemberRole.Maintainer);
         var epic = await NewChangeAsync(projectId, actorId, ChangeKind.Epic, "Epic");
         var child = await NewChangeAsync(projectId, actorId, ChangeKind.Feature, "Child");
-        await _changes.AddChildAsync(epic.Id, actorId, child.Id);
+        await _changes.AddChildAsync(epic.Id, actorId, child.Id, Ct);
 
         await Assert.ThrowsAsync<BadRequestException>(() => _changes.UpdateDetailsAsync(
-            epic.Id, actorId, new UpdateChangeDetailsRequest("Epic", null, ChangeKind.Feature, Priority.None)));
-        Assert.Equal(ChangeKind.Epic, (await _db.ChangeRequests.FindAsync(epic.Id))!.Kind);
+            epic.Id,
+            actorId,
+            new UpdateChangeDetailsRequest("Epic", null, ChangeKind.Feature, Priority.None),
+            Ct));
+        Assert.Equal(ChangeKind.Epic, (await _db.ChangeRequests.FindAsync(new object?[] { epic.Id }, Ct))!.Kind);
     }
 
     [Fact]
@@ -168,11 +191,14 @@ public sealed class EpicCompositionServiceTests : IDisposable
         var (projectId, actorId) = await SeedAsync(MemberRole.Maintainer);
         var epic = await NewChangeAsync(projectId, actorId, ChangeKind.Epic, "Epic");
         var child = await NewChangeAsync(projectId, actorId, ChangeKind.Feature, "Child");
-        await _changes.AddChildAsync(epic.Id, actorId, child.Id);
+        await _changes.AddChildAsync(epic.Id, actorId, child.Id, Ct);
 
         await Assert.ThrowsAsync<BadRequestException>(() => _changes.UpdateDetailsAsync(
-            child.Id, actorId, new UpdateChangeDetailsRequest("Child", null, ChangeKind.Epic, Priority.None)));
-        Assert.Equal(ChangeKind.Feature, (await _db.ChangeRequests.FindAsync(child.Id))!.Kind);
+            child.Id,
+            actorId,
+            new UpdateChangeDetailsRequest("Child", null, ChangeKind.Epic, Priority.None),
+            Ct));
+        Assert.Equal(ChangeKind.Feature, (await _db.ChangeRequests.FindAsync(new object?[] { child.Id }, Ct))!.Kind);
     }
 
     [Fact]
@@ -185,18 +211,24 @@ public sealed class EpicCompositionServiceTests : IDisposable
         var promoted = new Dimes.Domain.Entities.ChangeRequest
         { ProjectId = projectId, Title = "From signal", Kind = ChangeKind.ObservationDriven, CreatedByActorId = actorId, Number = 100 };
         _db.ChangeRequests.Add(promoted);
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(Ct);
 
         // Can't strip observation-driven provenance off a promoted change...
         await Assert.ThrowsAsync<BadRequestException>(() => _changes.UpdateDetailsAsync(
-            promoted.Id, actorId, new UpdateChangeDetailsRequest("From signal", null, ChangeKind.Feature, Priority.None)));
-        Assert.Equal(ChangeKind.ObservationDriven, (await _db.ChangeRequests.FindAsync(promoted.Id))!.Kind);
+            promoted.Id,
+            actorId,
+            new UpdateChangeDetailsRequest("From signal", null, ChangeKind.Feature, Priority.None),
+            Ct));
+        Assert.Equal(ChangeKind.ObservationDriven, (await _db.ChangeRequests.FindAsync(new object?[] { promoted.Id }, Ct))!.Kind);
 
         // ...and an ordinary change can't fabricate it.
         var ordinary = await NewChangeAsync(projectId, actorId, ChangeKind.Feature, "Ordinary");
         await Assert.ThrowsAsync<BadRequestException>(() => _changes.UpdateDetailsAsync(
-            ordinary.Id, actorId, new UpdateChangeDetailsRequest("Ordinary", null, ChangeKind.ObservationDriven, Priority.None)));
-        Assert.Equal(ChangeKind.Feature, (await _db.ChangeRequests.FindAsync(ordinary.Id))!.Kind);
+            ordinary.Id,
+            actorId,
+            new UpdateChangeDetailsRequest("Ordinary", null, ChangeKind.ObservationDriven, Priority.None),
+            Ct));
+        Assert.Equal(ChangeKind.Feature, (await _db.ChangeRequests.FindAsync(new object?[] { ordinary.Id }, Ct))!.Kind);
     }
 
     [Fact]
@@ -210,9 +242,9 @@ public sealed class EpicCompositionServiceTests : IDisposable
         var child = new Dimes.Domain.Entities.ChangeRequest
         { ProjectId = projectId, Title = "Child", Kind = ChangeKind.Feature, CreatedByActorId = actorId, Number = 2 };
         _db.ChangeRequests.AddRange(epic, child);
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(Ct);
 
-        await Assert.ThrowsAsync<ForbiddenException>(() => _changes.AddChildAsync(epic.Id, actorId, child.Id));
+        await Assert.ThrowsAsync<ForbiddenException>(() => _changes.AddChildAsync(epic.Id, actorId, child.Id, Ct));
     }
 
     public void Dispose()

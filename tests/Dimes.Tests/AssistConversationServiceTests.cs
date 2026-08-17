@@ -54,8 +54,15 @@ public sealed class AssistConversationServiceTests : IDisposable
     {
         var seed = await SeedAsync();
 
-        var convo = await _assist.StartAsync(seed.ProjectId, seed.RequesterId,
-            new StartAssistConversationRequest(seed.AssistantId, "Rough draft", "CSV export", "Can you help me scope this?"));
+        var convo = await _assist.StartAsync(
+            seed.ProjectId,
+            seed.RequesterId,
+            new StartAssistConversationRequest(
+                seed.AssistantId,
+                "Rough draft",
+                "CSV export",
+                "Can you help me scope this?"),
+            Ct);
 
         Assert.Equal(AssistConversationStatus.AwaitingAssistant, convo.Status);
         var message = Assert.Single(convo.Messages);
@@ -68,7 +75,7 @@ public sealed class AssistConversationServiceTests : IDisposable
         Assert.Equal(seed.AssistantId, obs.TargetActorId);
 
         // It came from an auto-provisioned internal source.
-        var source = await _db.ObservationSources.FindAsync(obs.SourceId);
+        var source = await _db.ObservationSources.FindAsync(new object?[] { obs.SourceId }, Ct);
         Assert.Equal(ObservationSourceType.Internal, source!.Type);
     }
 
@@ -76,11 +83,18 @@ public sealed class AssistConversationServiceTests : IDisposable
     public async Task AssistantReply_FlipsStatus_AndDismissesInboxObservation()
     {
         var seed = await SeedAsync();
-        var convo = await _assist.StartAsync(seed.ProjectId, seed.RequesterId,
-            new StartAssistConversationRequest(seed.AssistantId, null, null, "Need help"));
+        var convo = await _assist.StartAsync(
+            seed.ProjectId,
+            seed.RequesterId,
+            new StartAssistConversationRequest(seed.AssistantId, null, null, "Need help"),
+            Ct);
 
-        var updated = await _assist.PostMessageAsync(seed.ProjectId, convo.Id, seed.AssistantId,
-            new PostAssistMessageRequest("Happy to help — what's the goal?"));
+        var updated = await _assist.PostMessageAsync(
+            seed.ProjectId,
+            convo.Id,
+            seed.AssistantId,
+            new PostAssistMessageRequest("Happy to help — what's the goal?"),
+            Ct);
 
         Assert.Equal(AssistConversationStatus.AwaitingRequester, updated.Status);
         Assert.Equal(2, updated.Messages.Count);
@@ -93,18 +107,29 @@ public sealed class AssistConversationServiceTests : IDisposable
     public async Task RequesterReply_AfterAssistantAnswered_RaisesFreshBubbleUp()
     {
         var seed = await SeedAsync();
-        var convo = await _assist.StartAsync(seed.ProjectId, seed.RequesterId,
-            new StartAssistConversationRequest(seed.AssistantId, null, null, "Need help"));
+        var convo = await _assist.StartAsync(
+            seed.ProjectId,
+            seed.RequesterId,
+            new StartAssistConversationRequest(seed.AssistantId, null, null, "Need help"),
+            Ct);
 
         // Assistant answers: status flips to AwaitingRequester and the original bubble-up is dismissed.
-        await _assist.PostMessageAsync(seed.ProjectId, convo.Id, seed.AssistantId,
-            new PostAssistMessageRequest("Sure — what's the goal?"));
+        await _assist.PostMessageAsync(
+            seed.ProjectId,
+            convo.Id,
+            seed.AssistantId,
+            new PostAssistMessageRequest("Sure — what's the goal?"),
+            Ct);
 
         // Requester follows up. The prior observation is no longer New, so a fresh bubble-up must be
         // raised. Regression: the new observation wasn't added to the context, so saving the
         // conversation's ObservationId update tripped a FOREIGN KEY constraint.
-        var updated = await _assist.PostMessageAsync(seed.ProjectId, convo.Id, seed.RequesterId,
-            new PostAssistMessageRequest("The goal is a CSV export button."));
+        var updated = await _assist.PostMessageAsync(
+            seed.ProjectId,
+            convo.Id,
+            seed.RequesterId,
+            new PostAssistMessageRequest("The goal is a CSV export button."),
+            Ct);
 
         Assert.Equal(AssistConversationStatus.AwaitingAssistant, updated.Status);
         Assert.Equal(3, updated.Messages.Count);
@@ -120,11 +145,14 @@ public sealed class AssistConversationServiceTests : IDisposable
     public async Task PostMessage_ByNonParticipant_IsForbidden()
     {
         var seed = await SeedAsync();
-        var convo = await _assist.StartAsync(seed.ProjectId, seed.RequesterId,
-            new StartAssistConversationRequest(seed.AssistantId, null, null, "Need help"));
+        var convo = await _assist.StartAsync(
+            seed.ProjectId,
+            seed.RequesterId,
+            new StartAssistConversationRequest(seed.AssistantId, null, null, "Need help"),
+            Ct);
 
         await Assert.ThrowsAsync<ForbiddenException>(() =>
-            _assist.PostMessageAsync(seed.ProjectId, convo.Id, seed.ReporterId, new PostAssistMessageRequest("butting in")));
+            _assist.PostMessageAsync(seed.ProjectId, convo.Id, seed.ReporterId, new PostAssistMessageRequest("butting in"), Ct));
     }
 
     [Fact]
@@ -133,8 +161,11 @@ public sealed class AssistConversationServiceTests : IDisposable
         var seed = await SeedAsync();
 
         await Assert.ThrowsAsync<BadRequestException>(() =>
-            _assist.StartAsync(seed.ProjectId, seed.RequesterId,
-                new StartAssistConversationRequest(seed.AgentId, null, null, "Need help")));
+            _assist.StartAsync(
+                seed.ProjectId,
+                seed.RequesterId,
+                new StartAssistConversationRequest(seed.AgentId, null, null, "Need help"),
+                Ct));
     }
 
     [Fact]
@@ -145,18 +176,29 @@ public sealed class AssistConversationServiceTests : IDisposable
         // A Reporter can't clear the bubble-up observation through the lifecycle guard, so they're
         // ineligible as a human assistant.
         await Assert.ThrowsAsync<BadRequestException>(() =>
-            _assist.StartAsync(seed.ProjectId, seed.RequesterId,
-                new StartAssistConversationRequest(seed.ReporterId, null, null, "Need help")));
+            _assist.StartAsync(
+                seed.ProjectId,
+                seed.RequesterId,
+                new StartAssistConversationRequest(seed.ReporterId, null, null, "Need help"),
+                Ct));
     }
 
     [Fact]
     public async Task PendingList_ForAssistant_ShowsAwaitingRequests()
     {
         var seed = await SeedAsync();
-        await _assist.StartAsync(seed.ProjectId, seed.RequesterId,
-            new StartAssistConversationRequest(seed.AssistantId, null, "CSV export", "Need help"));
+        await _assist.StartAsync(
+            seed.ProjectId,
+            seed.RequesterId,
+            new StartAssistConversationRequest(seed.AssistantId, null, "CSV export", "Need help"),
+            Ct);
 
-        var pending = await _assist.ListAsync(seed.ProjectId, seed.AssistantId, "assistant", AssistConversationStatus.AwaitingAssistant, default);
+        var pending = await _assist.ListAsync(
+            seed.ProjectId,
+            seed.AssistantId,
+            "assistant",
+            AssistConversationStatus.AwaitingAssistant,
+            Ct);
 
         var summary = Assert.Single(pending);
         Assert.Equal("Cory", summary.RequesterName);

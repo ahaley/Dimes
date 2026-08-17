@@ -33,22 +33,22 @@ public sealed class SiteSettingsServiceTests : IDisposable
     [Fact]
     public async Task Reads_FallBackToDefaults_WhenNoRowExists()
     {
-        Assert.Empty(await _db.SiteSettings.ToListAsync());
+        Assert.Empty(await _db.SiteSettings.ToListAsync(cancellationToken: Ct));
 
-        Assert.Equal(SiteSettings.DefaultTitle, (await _settings.GetAsync()).Title);
-        Assert.Equal(SiteSettings.DefaultProjectLimit, (await _settings.GetProjectPolicyAsync()).ProjectLimit);
+        Assert.Equal(SiteSettings.DefaultTitle, (await _settings.GetAsync(Ct)).Title);
+        Assert.Equal(SiteSettings.DefaultProjectLimit, (await _settings.GetProjectPolicyAsync(Ct)).ProjectLimit);
     }
 
     [Fact]
     public async Task ProjectPolicy_RoundTrips_AndKeepsToOneRow()
     {
-        await _settings.UpdateProjectPolicyAsync(new UpdateProjectPolicyRequest(10));
-        Assert.Equal(10, (await _settings.GetProjectPolicyAsync()).ProjectLimit);
+        await _settings.UpdateProjectPolicyAsync(new UpdateProjectPolicyRequest(10), Ct);
+        Assert.Equal(10, (await _settings.GetProjectPolicyAsync(Ct)).ProjectLimit);
 
-        await _settings.UpdateProjectPolicyAsync(new UpdateProjectPolicyRequest(0));
-        Assert.Equal(0, (await _settings.GetProjectPolicyAsync()).ProjectLimit);
+        await _settings.UpdateProjectPolicyAsync(new UpdateProjectPolicyRequest(0), Ct);
+        Assert.Equal(0, (await _settings.GetProjectPolicyAsync(Ct)).ProjectLimit);
 
-        Assert.Single(await _db.SiteSettings.ToListAsync());
+        Assert.Single(await _db.SiteSettings.ToListAsync(cancellationToken: Ct));
     }
 
     /// <summary>The two settings share one row, so writing either must not clobber the other's value —
@@ -56,19 +56,19 @@ public sealed class SiteSettingsServiceTests : IDisposable
     [Fact]
     public async Task BrandingAndProjectPolicy_DoNotClobberEachOther()
     {
-        await _settings.UpdateProjectPolicyAsync(new UpdateProjectPolicyRequest(7));
-        await _settings.UpdateAsync(new UpdateSiteBrandingRequest("Acme Tracker"));
+        await _settings.UpdateProjectPolicyAsync(new UpdateProjectPolicyRequest(7), Ct);
+        await _settings.UpdateAsync(new UpdateSiteBrandingRequest("Acme Tracker"), Ct);
 
-        Assert.Equal("Acme Tracker", (await _settings.GetAsync()).Title);
-        Assert.Equal(7, (await _settings.GetProjectPolicyAsync()).ProjectLimit);
+        Assert.Equal("Acme Tracker", (await _settings.GetAsync(Ct)).Title);
+        Assert.Equal(7, (await _settings.GetProjectPolicyAsync(Ct)).ProjectLimit);
     }
 
     [Fact]
     public async Task BrandingFirst_LeavesTheProjectLimitAtItsDefault()
     {
-        await _settings.UpdateAsync(new UpdateSiteBrandingRequest("Acme Tracker"));
+        await _settings.UpdateAsync(new UpdateSiteBrandingRequest("Acme Tracker"), Ct);
 
-        Assert.Equal(SiteSettings.DefaultProjectLimit, (await _settings.GetProjectPolicyAsync()).ProjectLimit);
+        Assert.Equal(SiteSettings.DefaultProjectLimit, (await _settings.GetProjectPolicyAsync(Ct)).ProjectLimit);
     }
 
     [Theory]
@@ -77,7 +77,7 @@ public sealed class SiteSettingsServiceTests : IDisposable
     public async Task ProjectLimit_OutOfRange_IsRejected(int limit)
     {
         await Assert.ThrowsAsync<BadRequestException>(() =>
-            _settings.UpdateProjectPolicyAsync(new UpdateProjectPolicyRequest(limit)));
+            _settings.UpdateProjectPolicyAsync(new UpdateProjectPolicyRequest(limit), Ct));
     }
 
     /// <summary>Upgrade path: an install that already saved site settings must come out of the
@@ -95,16 +95,16 @@ public sealed class SiteSettingsServiceTests : IDisposable
 
         // Stop at the migration immediately before quotas, so the SiteSettings table has no limit column.
         var migrator = db.GetInfrastructure().GetRequiredService<IMigrator>();
-        await migrator.MigrateAsync("AddNotifications");
+        await migrator.MigrateAsync("AddNotifications", Ct);
 
         // An install that had customized its branding — i.e. the row already exists.
         await db.Database.ExecuteSqlRawAsync(
             "INSERT INTO SiteSettings (Id, Title, CreatedAt, UpdatedAt) VALUES ({0}, {1}, 0, 0)",
             Guid.NewGuid().ToString(), "Acme Tracker");
 
-        await migrator.MigrateAsync();
+        await migrator.MigrateAsync(cancellationToken: Ct);
 
-        var limit = await db.SiteSettings.AsNoTracking().Select(s => s.ProjectLimit).SingleAsync();
+        var limit = await db.SiteSettings.AsNoTracking().Select(s => s.ProjectLimit).SingleAsync(cancellationToken: Ct);
         Assert.Equal(SiteSettings.DefaultProjectLimit, limit);
     }
 

@@ -65,14 +65,18 @@ public sealed class GeminiProviderConfigTests : IDisposable
     [Fact]
     public async Task CreateGeminiProvider_RequiresApiKeyReference()
     {
-        var project = await _projects.CreateAsync(_db, new CreateProjectRequest("P", null));
+        var project = await _projects.CreateAsync(_db, new CreateProjectRequest("P", null), ct: Ct);
 
         // The Google AI endpoint always authenticates, so a missing key reference must fail at save.
-        await Assert.ThrowsAsync<BadRequestException>(() => _projects.CreateLlmProviderAsync(project.Id,
-            new CreateLlmProviderRequest(LlmProviderType.Gemini, "gemini", null, "gemini-x", "  ")));
+        await Assert.ThrowsAsync<BadRequestException>(() => _projects.CreateLlmProviderAsync(
+            project.Id,
+            new CreateLlmProviderRequest(LlmProviderType.Gemini, "gemini", null, "gemini-x", "  "),
+            Ct));
 
-        var created = await _projects.CreateLlmProviderAsync(project.Id,
-            new CreateLlmProviderRequest(LlmProviderType.Gemini, "gemini", null, "gemini-x", "GEMINI_KEY"));
+        var created = await _projects.CreateLlmProviderAsync(
+            project.Id,
+            new CreateLlmProviderRequest(LlmProviderType.Gemini, "gemini", null, "gemini-x", "GEMINI_KEY"),
+            Ct);
         Assert.Equal("GEMINI_KEY", created.ApiKeySecretRef);
         // No provider-specific settings for this type — the JSON column stays empty rather than holding
         // a blob of nulls.
@@ -82,30 +86,27 @@ public sealed class GeminiProviderConfigTests : IDisposable
     [Fact]
     public async Task CreateVertexProvider_RequiresProjectAndLocation()
     {
-        var project = await _projects.CreateAsync(_db, new CreateProjectRequest("P", null));
+        var project = await _projects.CreateAsync(_db, new CreateProjectRequest("P", null), ct: Ct);
 
-        await Assert.ThrowsAsync<BadRequestException>(() => _projects.CreateLlmProviderAsync(project.Id,
-            new CreateLlmProviderRequest(
+        await Assert.ThrowsAsync<BadRequestException>(() => _projects.CreateLlmProviderAsync(project.Id, new CreateLlmProviderRequest(
                 LlmProviderType.GeminiVertex, "vertex", null, "gemini-x", "VERTEX_CREDS",
-                new LlmProviderSettingsDto(GcpProject: null, GcpLocation: "us-central1", false))));
+                new LlmProviderSettingsDto(GcpProject: null, GcpLocation: "us-central1", false)), Ct));
 
-        await Assert.ThrowsAsync<BadRequestException>(() => _projects.CreateLlmProviderAsync(project.Id,
-            new CreateLlmProviderRequest(
+        await Assert.ThrowsAsync<BadRequestException>(() => _projects.CreateLlmProviderAsync(project.Id, new CreateLlmProviderRequest(
                 LlmProviderType.GeminiVertex, "vertex", null, "gemini-x", "VERTEX_CREDS",
-                new LlmProviderSettingsDto("my-gcp-project", GcpLocation: "   ", false))));
+                new LlmProviderSettingsDto("my-gcp-project", GcpLocation: "   ", false)), Ct));
     }
 
     [Fact]
     public async Task CreateVertexProvider_AcceptsApplicationDefaultCredentials_WithNoSecret()
     {
-        var project = await _projects.CreateAsync(_db, new CreateProjectRequest("P", null));
+        var project = await _projects.CreateAsync(_db, new CreateProjectRequest("P", null), ct: Ct);
 
         // ADC is the preferred configuration precisely because no secret is stored, so a null key
         // reference has to be legal here even though it is not for the Google AI type.
-        var created = await _projects.CreateLlmProviderAsync(project.Id,
-            new CreateLlmProviderRequest(
+        var created = await _projects.CreateLlmProviderAsync(project.Id, new CreateLlmProviderRequest(
                 LlmProviderType.GeminiVertex, "vertex", null, "gemini-x", null,
-                new LlmProviderSettingsDto("my-gcp-project", "europe-west4", UseApplicationDefaultCredentials: true)));
+                new LlmProviderSettingsDto("my-gcp-project", "europe-west4", UseApplicationDefaultCredentials: true)), Ct);
 
         Assert.Null(created.ApiKeySecretRef);
         Assert.Equal("my-gcp-project", created.Settings!.GcpProject);
@@ -116,43 +117,38 @@ public sealed class GeminiProviderConfigTests : IDisposable
     [Fact]
     public async Task CreateVertexProvider_RejectsNeitherCredential_AndBothAtOnce()
     {
-        var project = await _projects.CreateAsync(_db, new CreateProjectRequest("P", null));
+        var project = await _projects.CreateAsync(_db, new CreateProjectRequest("P", null), ct: Ct);
 
         // Neither: nothing to authenticate with.
-        await Assert.ThrowsAsync<BadRequestException>(() => _projects.CreateLlmProviderAsync(project.Id,
-            new CreateLlmProviderRequest(
+        await Assert.ThrowsAsync<BadRequestException>(() => _projects.CreateLlmProviderAsync(project.Id, new CreateLlmProviderRequest(
                 LlmProviderType.GeminiVertex, "vertex", null, "gemini-x", null,
-                new LlmProviderSettingsDto("p", "us-central1", UseApplicationDefaultCredentials: false))));
+                new LlmProviderSettingsDto("p", "us-central1", UseApplicationDefaultCredentials: false)), Ct));
 
         // Both: refused rather than silently preferring one, so the operator can't be wrong about which
         // credential is in use.
-        await Assert.ThrowsAsync<BadRequestException>(() => _projects.CreateLlmProviderAsync(project.Id,
-            new CreateLlmProviderRequest(
+        await Assert.ThrowsAsync<BadRequestException>(() => _projects.CreateLlmProviderAsync(project.Id, new CreateLlmProviderRequest(
                 LlmProviderType.GeminiVertex, "vertex", null, "gemini-x", "VERTEX_CREDS",
-                new LlmProviderSettingsDto("p", "us-central1", UseApplicationDefaultCredentials: true))));
+                new LlmProviderSettingsDto("p", "us-central1", UseApplicationDefaultCredentials: true)), Ct));
     }
 
     [Fact]
     public async Task UpdateLlmProvider_RoundTripsSettings_AndClearsThemWhenOmitted()
     {
-        var project = await _projects.CreateAsync(_db, new CreateProjectRequest("P", null));
-        var created = await _projects.CreateLlmProviderAsync(project.Id,
-            new CreateLlmProviderRequest(
+        var project = await _projects.CreateAsync(_db, new CreateProjectRequest("P", null), ct: Ct);
+        var created = await _projects.CreateLlmProviderAsync(project.Id, new CreateLlmProviderRequest(
                 LlmProviderType.GeminiVertex, "vertex", null, "gemini-x", null,
-                new LlmProviderSettingsDto("p1", "us-central1", true)));
+                new LlmProviderSettingsDto("p1", "us-central1", true)), Ct);
 
-        var moved = await _projects.UpdateLlmProviderAsync(created.Id,
-            new UpdateLlmProviderRequest(
+        var moved = await _projects.UpdateLlmProviderAsync(created.Id, new UpdateLlmProviderRequest(
                 LlmProviderType.GeminiVertex, "vertex", null, "gemini-x", null, Enabled: true,
-                new LlmProviderSettingsDto("p2", "asia-northeast1", true)));
+                new LlmProviderSettingsDto("p2", "asia-northeast1", true)), Ct);
         Assert.Equal("p2", moved.Settings!.GcpProject);
         Assert.Equal("asia-northeast1", moved.Settings.GcpLocation);
 
         // Switching the config to a type with no settings drops the blob rather than leaving stale
         // Vertex coordinates behind on the row.
-        var retyped = await _projects.UpdateLlmProviderAsync(created.Id,
-            new UpdateLlmProviderRequest(
-                LlmProviderType.Gemini, "gemini", null, "gemini-x", "GEMINI_KEY", Enabled: true));
+        var retyped = await _projects.UpdateLlmProviderAsync(created.Id, new UpdateLlmProviderRequest(
+                LlmProviderType.Gemini, "gemini", null, "gemini-x", "GEMINI_KEY", Enabled: true), Ct);
         Assert.Null(retyped.Settings);
     }
 
@@ -162,8 +158,7 @@ public sealed class GeminiProviderConfigTests : IDisposable
         var stub = new StubCatalogProvider(LlmProviderType.Gemini, "gemini-z", "gemini-a");
         var catalog = new LlmModelCatalogService([stub], new StubSecrets());
 
-        var models = await catalog.ListModelsAsync(
-            new ListLlmModelsRequest(LlmProviderType.Gemini, null, "GEMINI_KEY"));
+        var models = await catalog.ListModelsAsync(new ListLlmModelsRequest(LlmProviderType.Gemini, null, "GEMINI_KEY"), Ct);
 
         Assert.Equal(["gemini-a", "gemini-z"], models.Select(m => m.Id));
         // The probe resolves the credential from the secret store exactly as a real call does, so the
@@ -177,10 +172,9 @@ public sealed class GeminiProviderConfigTests : IDisposable
         var catalog = new LlmModelCatalogService(
             [new StubPlainProvider(LlmProviderType.GeminiVertex)], new StubSecrets());
 
-        var ex = await Assert.ThrowsAsync<BadRequestException>(() => catalog.ListModelsAsync(
-            new ListLlmModelsRequest(
+        var ex = await Assert.ThrowsAsync<BadRequestException>(() => catalog.ListModelsAsync(new ListLlmModelsRequest(
                 LlmProviderType.GeminiVertex, null, null,
-                new LlmProviderSettingsDto("p", "us-central1", true))));
+                new LlmProviderSettingsDto("p", "us-central1", true)), Ct));
 
         Assert.Contains("do not support model discovery", ex.Message);
     }
@@ -194,7 +188,8 @@ public sealed class GeminiProviderConfigTests : IDisposable
         // Discovery goes through the same validation as a real call, so it can't be used as an
         // unvalidated outbound-request primitive.
         await Assert.ThrowsAsync<BadRequestException>(() => catalog.ListModelsAsync(
-            new ListLlmModelsRequest(LlmProviderType.Gemini, "https://attacker.example.com", "GEMINI_KEY")));
+            new ListLlmModelsRequest(LlmProviderType.Gemini, "https://attacker.example.com", "GEMINI_KEY"),
+            Ct));
     }
 
     [Theory]

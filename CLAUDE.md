@@ -33,9 +33,14 @@ consequences worth knowing, because both fail loudly and confusingly if lost:
 MTP project at all (the .NET 10 SDK refuses the old VSTest path), and the test project must be an
 `OutputType=Exe`. A v3 project needs none of the VSTest packages — no `Microsoft.NET.Test.Sdk`,
 `xunit.runner.visualstudio`, or `coverlet.collector`; leaving them in selects the VSTest path and breaks
-the run. The `xUnit1051` analyzer (thread `TestContext.Current.CancellationToken` through every call that
-takes one) is suppressed in the test project: it fires ~1,300 times and would bury real warnings.
-Adopting it is a worthwhile separate pass.
+the run.
+
+**Pass `Ct` to anything taking a `CancellationToken`.** `xUnit1051` requires it so a cancelled or
+timed-out run stops promptly. `Ct` is a global `using static` alias for
+`TestContext.Current.CancellationToken` (`TestCancellation.cs`) — the analyzer accepts any expression
+there, and the full form at ~640 call sites pushed lines past 250 characters. New tests should use it;
+`dotnet format analyzers --diagnostics xUnit1051` fixes omissions, but note it also reflows the
+statements it touches, so re-check line lengths afterwards.
 
 **A running API locks its own build output.** `dotnet build` fails with MSB3021/3027 ("file is locked
 by: Dimes.Api") while an instance is running from `src/Dimes.Api/bin`. Stop it first, or build with

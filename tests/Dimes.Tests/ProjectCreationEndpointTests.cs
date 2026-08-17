@@ -31,7 +31,7 @@ public sealed class ProjectCreationEndpointTests : IClassFixture<ApiFactory>
     {
         var anonymous = _api.CreateSessionClient();
 
-        var response = await anonymous.PostAsJsonAsync("/api/projects", NewProject("Sneaky", "SNEAK"));
+        var response = await anonymous.PostAsJsonAsync("/api/projects", NewProject("Sneaky", "SNEAK"), cancellationToken: Ct);
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -41,7 +41,7 @@ public sealed class ProjectCreationEndpointTests : IClassFixture<ApiFactory>
     {
         var anonymous = _api.CreateSessionClient();
 
-        var response = await anonymous.GetAsync("/api/projects/quota");
+        var response = await anonymous.GetAsync("/api/projects/quota", Ct);
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -54,10 +54,10 @@ public sealed class ProjectCreationEndpointTests : IClassFixture<ApiFactory>
         var admin = await _api.LoginAsync(ApiFactory.AdminEmail, ApiFactory.AdminPassword);
         var user = await _api.CreateUserAndLoginAsync(admin, "Endpoint User", "endpoint-user@test.local");
 
-        var response = await user.PostAsJsonAsync("/api/projects", NewProject("User Project", "EPU1"));
+        var response = await user.PostAsJsonAsync("/api/projects", NewProject("User Project", "EPU1"), cancellationToken: Ct);
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-        var project = await response.Content.ReadFromJsonAsync<ProjectDto>(ApiFactory.Json);
+        var project = await response.Content.ReadFromJsonAsync<ProjectDto>(ApiFactory.Json, cancellationToken: Ct);
         Assert.Equal(MemberRole.Maintainer, project!.MyRole);
     }
 
@@ -69,17 +69,19 @@ public sealed class ProjectCreationEndpointTests : IClassFixture<ApiFactory>
         var admin = await _api.LoginAsync(ApiFactory.AdminEmail, ApiFactory.AdminPassword);
         var user = await _api.CreateUserAndLoginAsync(admin, "Capped User", "capped-user@test.local");
 
-        var quota = await (await user.GetAsync("/api/projects/quota")).Content.ReadFromJsonAsync<ProjectQuotaDto>(ApiFactory.Json);
+        var quota = await (await user.GetAsync(
+            "/api/projects/quota",
+            Ct)).Content.ReadFromJsonAsync<ProjectQuotaDto>(ApiFactory.Json, cancellationToken: Ct);
         for (var i = 0; i < quota!.Limit; i++)
         {
-            var ok = await user.PostAsJsonAsync("/api/projects", NewProject($"Capped {i}", $"CAP{i}"));
+            var ok = await user.PostAsJsonAsync("/api/projects", NewProject($"Capped {i}", $"CAP{i}"), cancellationToken: Ct);
             Assert.Equal(HttpStatusCode.Created, ok.StatusCode);
         }
 
-        var refused = await user.PostAsJsonAsync("/api/projects", NewProject("One too many", "CAPX"));
+        var refused = await user.PostAsJsonAsync("/api/projects", NewProject("One too many", "CAPX"), cancellationToken: Ct);
 
         Assert.Equal(HttpStatusCode.Forbidden, refused.StatusCode);
-        var problem = await refused.Content.ReadFromJsonAsync<ProblemDetailsBody>(ApiFactory.Json);
+        var problem = await refused.Content.ReadFromJsonAsync<ProblemDetailsBody>(ApiFactory.Json, cancellationToken: Ct);
         Assert.Contains("allowed projects", problem!.Detail);
     }
 
@@ -94,7 +96,7 @@ public sealed class ProjectCreationEndpointTests : IClassFixture<ApiFactory>
         var user = await _api.CreateUserAndLoginAsync(
             admin, $"Prober {path.GetHashCode():X}", $"prober-{Math.Abs(path.GetHashCode()):X}@test.local");
 
-        var response = await user.GetAsync(path);
+        var response = await user.GetAsync(path, Ct);
 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
@@ -105,9 +107,14 @@ public sealed class ProjectCreationEndpointTests : IClassFixture<ApiFactory>
     {
         var admin = await _api.LoginAsync(ApiFactory.AdminEmail, ApiFactory.AdminPassword);
         var user = await _api.CreateUserAndLoginAsync(admin, "Self Raiser", "self-raiser@test.local");
-        var me = await (await user.GetAsync("/api/auth/me")).Content.ReadFromJsonAsync<MeDto>(ApiFactory.Json);
+        var me = await (await user.GetAsync(
+            "/api/auth/me",
+            Ct)).Content.ReadFromJsonAsync<MeDto>(ApiFactory.Json, cancellationToken: Ct);
 
-        var response = await user.PutAsJsonAsync($"/api/admin/users/{me!.ActorId}/project-limit", new { limit = 99 });
+        var response = await user.PutAsJsonAsync(
+            $"/api/admin/users/{me!.ActorId}/project-limit",
+            new { limit = 99 },
+            cancellationToken: Ct);
 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }

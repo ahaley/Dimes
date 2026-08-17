@@ -79,7 +79,7 @@ public sealed class WorkOrderExportServiceTests : IDisposable
 
         await ExportAsync();
 
-        var workOrder = await _db.WorkOrders.Include(w => w.Items).SingleAsync();
+        var workOrder = await _db.WorkOrders.Include(w => w.Items).SingleAsync(cancellationToken: Ct);
         Assert.Equal(2, workOrder.Items.Count);
         Assert.Equal(_actorId, workOrder.ExportedByActorId);
         Assert.All(workOrder.Items, i => Assert.Equal(WorkOrderItemStatus.Pending, i.Status));
@@ -95,7 +95,7 @@ public sealed class WorkOrderExportServiceTests : IDisposable
 
         // Branch matching is an equality check against a string we minted, so the rendered and stored
         // names must come from one place. If these ever drift, branch fallback silently rots.
-        var item = await _db.WorkOrderItems.SingleAsync();
+        var item = await _db.WorkOrderItems.SingleAsync(cancellationToken: Ct);
         Assert.Contains($"- Branch: `{item.BranchName}`", export.Markdown);
     }
 
@@ -124,7 +124,7 @@ public sealed class WorkOrderExportServiceTests : IDisposable
 
         var token = Regex.Match(export.Markdown, @"/api/work-orders/(?<token>[A-Za-z0-9_-]+)/results")
             .Groups["token"].Value;
-        var workOrder = await _db.WorkOrders.SingleAsync();
+        var workOrder = await _db.WorkOrders.SingleAsync(cancellationToken: Ct);
         // Only the hash is stored, so a database read can't be replayed against the ingest endpoint.
         Assert.NotEqual(token, workOrder.TokenHash);
         Assert.Equal(WorkOrderToken.Hash(token), workOrder.TokenHash);
@@ -136,7 +136,7 @@ public sealed class WorkOrderExportServiceTests : IDisposable
         await SetupAsync();
         await InDevAsync("Add CSV export");
 
-        var export = await _changes.ExportInDevelopmentAsync(_projectId, _actorId, null);
+        var export = await _changes.ExportInDevelopmentAsync(_projectId, _actorId, null, Ct);
 
         Assert.Contains("curl -X POST /api/work-orders/", export.Markdown);
         Assert.Contains("Prefix the path below with your Dimes origin", export.Markdown);
@@ -153,8 +153,8 @@ public sealed class WorkOrderExportServiceTests : IDisposable
 
         // Re-export doesn't supersede: the agent still holds the first file and may legitimately report
         // against it, so both tokens stay live.
-        Assert.Equal(2, await _db.WorkOrders.CountAsync());
-        Assert.Equal(2, await _db.WorkOrderItems.CountAsync());
+        Assert.Equal(2, await _db.WorkOrders.CountAsync(cancellationToken: Ct));
+        Assert.Equal(2, await _db.WorkOrderItems.CountAsync(cancellationToken: Ct));
         Assert.NotEqual(TokenOf(first.Markdown), TokenOf(second.Markdown));
 
         static string TokenOf(string md) =>

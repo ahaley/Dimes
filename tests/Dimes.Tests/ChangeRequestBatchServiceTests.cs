@@ -46,17 +46,16 @@ public sealed class ChangeRequestBatchServiceTests : IDisposable
     {
         var (projectId, actorId) = await SeedAsync();
 
-        var created = await _changes.CreateManyAsync(projectId, actorId,
-        [
+        var created = await _changes.CreateManyAsync(projectId, actorId, [
             new CreateChangeRequest("  Add CSV export ", "desc", ChangeKind.Feature, Priority.High),
             new CreateChangeRequest("Fix slow inbox", null, ChangeKind.Problem, Priority.Medium),
-        ]);
+        ], Ct);
 
         Assert.Equal(2, created.Count);
         Assert.All(created, c => Assert.Equal(ChangeStatus.Captured, c.Status));
         Assert.Equal("Add CSV export", created[0].Title); // trimmed
-        Assert.Equal(2, await _db.ChangeRequests.CountAsync());
-        Assert.Equal(2, await _db.AuditEvents.CountAsync(e => e.Action == "Created"));
+        Assert.Equal(2, await _db.ChangeRequests.CountAsync(cancellationToken: Ct));
+        Assert.Equal(2, await _db.AuditEvents.CountAsync(e => e.Action == "Created", cancellationToken: Ct));
         Assert.Equal(2, _notifier.Events.Count);
     }
 
@@ -64,7 +63,7 @@ public sealed class ChangeRequestBatchServiceTests : IDisposable
     public async Task CreateMany_EmptyBatch_IsRejected()
     {
         var (projectId, actorId) = await SeedAsync();
-        await Assert.ThrowsAsync<BadRequestException>(() => _changes.CreateManyAsync(projectId, actorId, []));
+        await Assert.ThrowsAsync<BadRequestException>(() => _changes.CreateManyAsync(projectId, actorId, [], Ct));
     }
 
     [Fact]
@@ -72,13 +71,12 @@ public sealed class ChangeRequestBatchServiceTests : IDisposable
     {
         var (projectId, actorId) = await SeedAsync();
 
-        await Assert.ThrowsAsync<BadRequestException>(() => _changes.CreateManyAsync(projectId, actorId,
-        [
+        await Assert.ThrowsAsync<BadRequestException>(() => _changes.CreateManyAsync(projectId, actorId, [
             new CreateChangeRequest("Valid", null, ChangeKind.Feature, Priority.None),
             new CreateChangeRequest("   ", null, ChangeKind.Feature, Priority.None),
-        ]));
+        ], Ct));
 
-        Assert.Equal(0, await _db.ChangeRequests.CountAsync()); // atomic: nothing persisted
+        Assert.Equal(0, await _db.ChangeRequests.CountAsync(cancellationToken: Ct)); // atomic: nothing persisted
     }
 
     [Fact]
@@ -86,13 +84,14 @@ public sealed class ChangeRequestBatchServiceTests : IDisposable
     {
         var (projectId, actorId) = await SeedAsync();
 
-        await Assert.ThrowsAsync<BadRequestException>(() => _changes.CreateManyAsync(projectId, actorId,
-        [
+        await Assert.ThrowsAsync<BadRequestException>(() => _changes.CreateManyAsync(projectId, actorId, [
             new CreateChangeRequest("Valid", null, ChangeKind.Feature, Priority.None),
             new CreateChangeRequest("Sneaky", null, ChangeKind.ObservationDriven, Priority.None),
-        ]));
+        ], Ct));
 
-        Assert.Equal(0, await _db.ChangeRequests.CountAsync()); // manual ObservationDriven is provenance-only
+        Assert.Equal(
+            0,
+            await _db.ChangeRequests.CountAsync(cancellationToken: Ct)); // manual ObservationDriven is provenance-only
     }
 
     [Fact]
@@ -100,10 +99,13 @@ public sealed class ChangeRequestBatchServiceTests : IDisposable
     {
         var (projectId, actorId) = await SeedAsync();
 
-        await Assert.ThrowsAsync<BadRequestException>(() => _changes.CreateAsync(projectId, actorId,
-            new CreateChangeRequest("Manual signal", null, ChangeKind.ObservationDriven, Priority.None)));
+        await Assert.ThrowsAsync<BadRequestException>(() => _changes.CreateAsync(
+            projectId,
+            actorId,
+            new CreateChangeRequest("Manual signal", null, ChangeKind.ObservationDriven, Priority.None),
+            Ct));
 
-        Assert.Equal(0, await _db.ChangeRequests.CountAsync());
+        Assert.Equal(0, await _db.ChangeRequests.CountAsync(cancellationToken: Ct));
     }
 
     public void Dispose()

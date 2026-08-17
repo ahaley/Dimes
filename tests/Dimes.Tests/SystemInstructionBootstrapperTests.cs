@@ -41,9 +41,9 @@ public sealed class SystemInstructionBootstrapperTests : IDisposable
         await AddProjectAsync("A");
         await AddProjectAsync("B");
 
-        await _seeder.SeedAsync();
+        await _seeder.SeedAsync(Ct);
 
-        var rows = await _db.SystemInstructions.ToListAsync();
+        var rows = await _db.SystemInstructions.ToListAsync(cancellationToken: Ct);
         Assert.Equal(2, rows.Count);
         Assert.All(rows, r =>
         {
@@ -57,11 +57,11 @@ public sealed class SystemInstructionBootstrapperTests : IDisposable
     {
         await AddProjectAsync("A");
 
-        await _seeder.SeedAsync();
-        await _seeder.SeedAsync();
-        await _seeder.SeedAsync();
+        await _seeder.SeedAsync(Ct);
+        await _seeder.SeedAsync(Ct);
+        await _seeder.SeedAsync(Ct);
 
-        Assert.Equal(1, await _db.SystemInstructions.CountAsync());
+        Assert.Equal(1, await _db.SystemInstructions.CountAsync(cancellationToken: Ct));
     }
 
     [Fact]
@@ -74,11 +74,11 @@ public sealed class SystemInstructionBootstrapperTests : IDisposable
             Kind = SystemInstructionKind.ExportWorkOrder,
             Content = "custom guidance",
         });
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(Ct);
 
-        await _seeder.SeedAsync();
+        await _seeder.SeedAsync(Ct);
 
-        var row = Assert.Single(await _db.SystemInstructions.ToListAsync());
+        var row = Assert.Single(await _db.SystemInstructions.ToListAsync(cancellationToken: Ct));
         Assert.Equal("custom guidance", row.Content);
     }
 
@@ -92,13 +92,13 @@ public sealed class SystemInstructionBootstrapperTests : IDisposable
             Kind = SystemInstructionKind.ExportWorkOrder,
             Content = SystemInstructionDefaults.PreviousExportWorkOrders[0],
         });
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(Ct);
 
-        await _seeder.SeedAsync();
+        await _seeder.SeedAsync(Ct);
 
         // A row still carrying a prior built-in default is upgraded to the current text (so a changed
         // default reaches existing projects), while a customized row is left alone (test above).
-        var row = Assert.Single(await _db.SystemInstructions.ToListAsync());
+        var row = Assert.Single(await _db.SystemInstructions.ToListAsync(cancellationToken: Ct));
         Assert.Equal(SystemInstructionDefaults.ExportWorkOrder, row.Content);
     }
 

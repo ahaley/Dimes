@@ -105,7 +105,7 @@ public sealed class WorkOrderIngestServiceTests : IDisposable
             commits: [new WorkOrderCommitReport(
                 "a1b2c3d4e5", $"Add CSV export\n\nDimes change {change.Id}", null,
                 "https://github.com/acme/app/commit/a1b2c3d4e5")],
-            summary: "All done."));
+            summary: "All done."), Ct);
 
         Assert.Equal(1, result.ReportedCount);
         Assert.Empty(result.Ignored);
@@ -113,11 +113,11 @@ public sealed class WorkOrderIngestServiceTests : IDisposable
         // only caller that can act on it.
         Assert.Equal(1, Assert.Single(result.Items).LinksAdded);
 
-        var link = Assert.Single(await _db.ScmLinks.ToListAsync());
+        var link = Assert.Single(await _db.ScmLinks.ToListAsync(cancellationToken: Ct));
         Assert.Equal("https://github.com/acme/app/commit/a1b2c3d4e5", link.Url);
         Assert.Equal(change.Id, link.ChangeRequestId);
 
-        var comment = Assert.Single(await _db.Comments.ToListAsync());
+        var comment = Assert.Single(await _db.Comments.ToListAsync(cancellationToken: Ct));
         Assert.Equal(CommentKind.AgentRecommendation, comment.Kind);
         // Attributed to the exporting human: no agent token exists, so an agent-supplied identity would
         // be unauthenticated self-attribution.
@@ -126,12 +126,12 @@ public sealed class WorkOrderIngestServiceTests : IDisposable
         // The run-wide summary rides on the exporter notification now, not on each change's comment.
         Assert.DoesNotContain("All done.", comment.Body);
 
-        var item = Assert.Single(await _db.WorkOrderItems.ToListAsync());
+        var item = Assert.Single(await _db.WorkOrderItems.ToListAsync(cancellationToken: Ct));
         Assert.Equal(WorkOrderItemStatus.Reported, item.Status);
         Assert.NotNull(item.ReportedAt);
 
         // The status itself must not have moved — ingest is recommend-only.
-        Assert.Equal(ChangeStatus.InDevelopment, (await _db.ChangeRequests.FindAsync(change.Id))!.Status);
+        Assert.Equal(ChangeStatus.InDevelopment, (await _db.ChangeRequests.FindAsync(new object?[] { change.Id }, Ct))!.Status);
         Assert.Contains(_notifier.Events, e => e.ChangeId == change.Id && e.Kind == "reported");
     }
 
@@ -149,11 +149,11 @@ public sealed class WorkOrderIngestServiceTests : IDisposable
                 "https://github.com/acme/app/commit/a1b2c3d4e5f6")],
             prs: [new WorkOrderPullRequestReport("https://github.com/acme/app/pull/42", null, done.Id)],
             blocked: [new WorkOrderBlockedReport(stuck.Id, "Needs a product decision.")],
-            summary: "Integrated 1 of 2."));
+            summary: "Integrated 1 of 2."), Ct);
 
         Assert.Equal(1, result.ReportedCount);
         Assert.Equal(1, result.BlockedCount);
-        Assert.Equal(2, await _db.ScmLinks.CountAsync());
+        Assert.Equal(2, await _db.ScmLinks.CountAsync(cancellationToken: Ct));
         // The commit url and the PR url both landed, so the agent should be told both landed.
         Assert.Equal(2, result.Items.Single(i => i.ChangeId == done.Id).LinksAdded);
     }
@@ -164,7 +164,7 @@ public sealed class WorkOrderIngestServiceTests : IDisposable
         await SetupAsync();
 
         await Assert.ThrowsAsync<NotFoundException>(
-            () => _workOrders.ReportResultsAsync("not-a-real-token", Report()));
+            () => _workOrders.ReportResultsAsync("not-a-real-token", Report(), Ct));
     }
 
     [Fact]
@@ -173,13 +173,13 @@ public sealed class WorkOrderIngestServiceTests : IDisposable
         await SetupAsync();
         await InDevAsync("Add CSV export");
         var token = await ExportAndTakeTokenAsync();
-        var workOrder = await _db.WorkOrders.FirstAsync();
+        var workOrder = await _db.WorkOrders.FirstAsync(cancellationToken: Ct);
         workOrder.ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(-1);
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(Ct);
 
         // Same error as an unknown token: a distinct "expired" would confirm to the holder of a leaked
         // stale token that it was once real.
-        await Assert.ThrowsAsync<NotFoundException>(() => _workOrders.ReportResultsAsync(token, Report()));
+        await Assert.ThrowsAsync<NotFoundException>(() => _workOrders.ReportResultsAsync(token, Report(), Ct));
     }
 
     [Fact]
@@ -194,14 +194,14 @@ public sealed class WorkOrderIngestServiceTests : IDisposable
         var result = await _workOrders.ReportResultsAsync(token, Report(
             commits: [new WorkOrderCommitReport(
                 "beef", $"Fix login redirect\n\nDimes change {later.Id}", null,
-                "https://github.com/acme/app/commit/beef")]));
+                "https://github.com/acme/app/commit/beef")]), Ct);
 
         // The token's scope IS the work order: honoring this would widen a per-export capability into a
         // project-wide write.
         Assert.Single(result.Ignored);
-        Assert.Empty(await _db.ScmLinks.ToListAsync());
-        Assert.Empty(await _db.Comments.ToListAsync());
-        Assert.All(await _db.WorkOrderItems.ToListAsync(),
+        Assert.Empty(await _db.ScmLinks.ToListAsync(cancellationToken: Ct));
+        Assert.Empty(await _db.Comments.ToListAsync(cancellationToken: Ct));
+        Assert.All(await _db.WorkOrderItems.ToListAsync(cancellationToken: Ct),
             i => Assert.Equal(WorkOrderItemStatus.Pending, i.Status));
     }
 
@@ -222,13 +222,13 @@ public sealed class WorkOrderIngestServiceTests : IDisposable
             Number = 1,
         };
         _db.ChangeRequests.Add(foreign);
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(Ct);
 
         var result = await _workOrders.ReportResultsAsync(token, Report(
-            commits: [new WorkOrderCommitReport("beef", $"x\n\nDimes change {foreign.Id}", null, null)]));
+            commits: [new WorkOrderCommitReport("beef", $"x\n\nDimes change {foreign.Id}", null, null)]), Ct);
 
         Assert.Single(result.Ignored);
-        Assert.Empty(await _db.Comments.ToListAsync());
+        Assert.Empty(await _db.Comments.ToListAsync(cancellationToken: Ct));
     }
 
     [Fact]
@@ -239,12 +239,12 @@ public sealed class WorkOrderIngestServiceTests : IDisposable
         var token = await ExportAndTakeTokenAsync();
 
         await _workOrders.ReportResultsAsync(token, Report(
-            commits: [new WorkOrderCommitReport("a1b2c3d", $"Add CSV export\n\nDimes change {change.Id}", null, null)]));
+            commits: [new WorkOrderCommitReport("a1b2c3d", $"Add CSV export\n\nDimes change {change.Id}", null, null)]), Ct);
 
         // A bare sha isn't linkable — Dimes stores no repo base URL — so it belongs in the comment.
-        Assert.Empty(await _db.ScmLinks.ToListAsync());
-        Assert.Contains("a1b2c3d", Assert.Single(await _db.Comments.ToListAsync()).Body);
-        Assert.Equal(WorkOrderItemStatus.Reported, (await _db.WorkOrderItems.FirstAsync()).Status);
+        Assert.Empty(await _db.ScmLinks.ToListAsync(cancellationToken: Ct));
+        Assert.Contains("a1b2c3d", Assert.Single(await _db.Comments.ToListAsync(cancellationToken: Ct)).Body);
+        Assert.Equal(WorkOrderItemStatus.Reported, (await _db.WorkOrderItems.FirstAsync(cancellationToken: Ct)).Status);
     }
 
     [Fact]
@@ -256,11 +256,11 @@ public sealed class WorkOrderIngestServiceTests : IDisposable
 
         await _workOrders.ReportResultsAsync(token, Report(
             commits: [new WorkOrderCommitReport(
-                "a1b2c3d", $"Add CSV export\n\nDimes change {change.Id}", null, "javascript:alert(1)")]));
+                "a1b2c3d", $"Add CSV export\n\nDimes change {change.Id}", null, "javascript:alert(1)")]), Ct);
 
         // Stored URLs render as an <a href> in the SPA; one bad URL shouldn't reject the whole run either.
-        Assert.Empty(await _db.ScmLinks.ToListAsync());
-        Assert.Equal(WorkOrderItemStatus.Reported, (await _db.WorkOrderItems.FirstAsync()).Status);
+        Assert.Empty(await _db.ScmLinks.ToListAsync(cancellationToken: Ct));
+        Assert.Equal(WorkOrderItemStatus.Reported, (await _db.WorkOrderItems.FirstAsync(cancellationToken: Ct)).Status);
     }
 
     [Fact]
@@ -271,13 +271,13 @@ public sealed class WorkOrderIngestServiceTests : IDisposable
         var token = await ExportAndTakeTokenAsync();
 
         var result = await _workOrders.ReportResultsAsync(token, Report(
-            blocked: [new WorkOrderBlockedReport(change.Id, "Needs a product decision on the empty state.")]));
+            blocked: [new WorkOrderBlockedReport(change.Id, "Needs a product decision on the empty state.")]), Ct);
 
         Assert.Equal(1, result.BlockedCount);
         Assert.Equal(0, result.ReportedCount);
-        var item = await _db.WorkOrderItems.FirstAsync();
+        var item = await _db.WorkOrderItems.FirstAsync(cancellationToken: Ct);
         Assert.Equal(WorkOrderItemStatus.Blocked, item.Status);
-        Assert.Contains("product decision", Assert.Single(await _db.Comments.ToListAsync()).Body);
+        Assert.Contains("product decision", Assert.Single(await _db.Comments.ToListAsync(cancellationToken: Ct)).Body);
     }
 
     [Fact]
@@ -291,10 +291,10 @@ public sealed class WorkOrderIngestServiceTests : IDisposable
             commits: [new WorkOrderCommitReport(
                 "a1b2c3d", $"Partial work\n\nDimes change {change.Id}", null,
                 "https://github.com/acme/app/commit/a1b2c3d")],
-            blocked: [new WorkOrderBlockedReport(change.Id, "Couldn't finish — conflicts.")]));
+            blocked: [new WorkOrderBlockedReport(change.Id, "Couldn't finish — conflicts.")]), Ct);
 
         // An agent that committed partial work and then gave up needs a human, not an In Review prompt.
-        Assert.Equal(WorkOrderItemStatus.Blocked, (await _db.WorkOrderItems.FirstAsync()).Status);
+        Assert.Equal(WorkOrderItemStatus.Blocked, (await _db.WorkOrderItems.FirstAsync(cancellationToken: Ct)).Status);
     }
 
     [Fact]
@@ -308,13 +308,13 @@ public sealed class WorkOrderIngestServiceTests : IDisposable
                 "a1b2c3d", $"Add CSV export\n\nDimes change {change.Id}", null,
                 "https://github.com/acme/app/commit/a1b2c3d")]);
 
-        await _workOrders.ReportResultsAsync(token, body);
-        await _workOrders.ReportResultsAsync(token, body);
+        await _workOrders.ReportResultsAsync(token, body, Ct);
+        await _workOrders.ReportResultsAsync(token, body, Ct);
 
         // Agents retry. A replay must be a true no-op, or every retry spams the change.
-        Assert.Single(await _db.ScmLinks.ToListAsync());
-        Assert.Single(await _db.Comments.ToListAsync());
-        Assert.Equal(WorkOrderItemStatus.Reported, (await _db.WorkOrderItems.FirstAsync()).Status);
+        Assert.Single(await _db.ScmLinks.ToListAsync(cancellationToken: Ct));
+        Assert.Single(await _db.Comments.ToListAsync(cancellationToken: Ct));
+        Assert.Equal(WorkOrderItemStatus.Reported, (await _db.WorkOrderItems.FirstAsync(cancellationToken: Ct)).Status);
     }
 
     [Fact]
@@ -327,14 +327,14 @@ public sealed class WorkOrderIngestServiceTests : IDisposable
         await _workOrders.ReportResultsAsync(token, Report(
             commits: [new WorkOrderCommitReport(
                 "a1b2c3d", $"First\n\nDimes change {change.Id}", null,
-                "https://github.com/acme/app/commit/a1b2c3d")]));
+                "https://github.com/acme/app/commit/a1b2c3d")]), Ct);
         await _workOrders.ReportResultsAsync(token, Report(
             commits: [new WorkOrderCommitReport(
                 "9f8e7d6", $"Second\n\nDimes change {change.Id}", null,
-                "https://github.com/acme/app/commit/9f8e7d6")]));
+                "https://github.com/acme/app/commit/9f8e7d6")]), Ct);
 
-        Assert.Equal(2, await _db.ScmLinks.CountAsync());
-        Assert.Equal(2, await _db.Comments.CountAsync());
+        Assert.Equal(2, await _db.ScmLinks.CountAsync(cancellationToken: Ct));
+        Assert.Equal(2, await _db.Comments.CountAsync(cancellationToken: Ct));
     }
 
     [Fact]
@@ -343,14 +343,14 @@ public sealed class WorkOrderIngestServiceTests : IDisposable
         await SetupAsync();
         var change = await InDevAsync("Add CSV export");
         var token = await ExportAndTakeTokenAsync();
-        var branch = (await _db.WorkOrderItems.FirstAsync()).BranchName;
+        var branch = (await _db.WorkOrderItems.FirstAsync(cancellationToken: Ct)).BranchName;
 
         await _workOrders.ReportResultsAsync(token, Report(
-            commits: [new WorkOrderCommitReport("a1b2c3d", "Add CSV export", branch, null)]));
+            commits: [new WorkOrderCommitReport("a1b2c3d", "Add CSV export", branch, null)]), Ct);
 
-        Assert.Equal(WorkOrderItemStatus.Reported, (await _db.WorkOrderItems.FirstAsync()).Status);
+        Assert.Equal(WorkOrderItemStatus.Reported, (await _db.WorkOrderItems.FirstAsync(cancellationToken: Ct)).Status);
         // The weaker provenance is stated, so the human confirming can judge it.
-        Assert.Contains("matched by branch", Assert.Single(await _db.Comments.ToListAsync()).Body);
+        Assert.Contains("matched by branch", Assert.Single(await _db.Comments.ToListAsync(cancellationToken: Ct)).Body);
     }
 
     [Fact]
@@ -361,9 +361,9 @@ public sealed class WorkOrderIngestServiceTests : IDisposable
         var token = await ExportAndTakeTokenAsync();
 
         await _workOrders.ReportResultsAsync(token, Report(
-            commits: [new WorkOrderCommitReport("a1b2c3d", "Add CSV export", Branch(change, "renamed-slug"), null)]));
+            commits: [new WorkOrderCommitReport("a1b2c3d", "Add CSV export", Branch(change, "renamed-slug"), null)]), Ct);
 
-        Assert.Equal(WorkOrderItemStatus.Reported, (await _db.WorkOrderItems.FirstAsync()).Status);
+        Assert.Equal(WorkOrderItemStatus.Reported, (await _db.WorkOrderItems.FirstAsync(cancellationToken: Ct)).Status);
     }
 
     [Fact]
@@ -377,9 +377,9 @@ public sealed class WorkOrderIngestServiceTests : IDisposable
         // The trailer is authoritative: a mismatched branch must not steal the claim.
         await _workOrders.ReportResultsAsync(token, Report(
             commits: [new WorkOrderCommitReport(
-                "a1b2c3d", $"Add CSV export\n\nDimes change {trailered.Id}", Branch(other, "fix-login-redirect"), null)]));
+                "a1b2c3d", $"Add CSV export\n\nDimes change {trailered.Id}", Branch(other, "fix-login-redirect"), null)]), Ct);
 
-        var items = await _db.WorkOrderItems.ToListAsync();
+        var items = await _db.WorkOrderItems.ToListAsync(cancellationToken: Ct);
         Assert.Equal(WorkOrderItemStatus.Reported, items.Single(i => i.ChangeRequestId == trailered.Id).Status);
         Assert.Equal(WorkOrderItemStatus.Pending, items.Single(i => i.ChangeRequestId == other.Id).Status);
     }
@@ -391,11 +391,11 @@ public sealed class WorkOrderIngestServiceTests : IDisposable
         await InDevAsync("Add CSV export");
         var token = await ExportAndTakeTokenAsync();
 
-        _db.Memberships.RemoveRange(await _db.Memberships.Where(m => m.ActorId == _exporterId).ToListAsync());
-        await _db.SaveChangesAsync();
+        _db.Memberships.RemoveRange(await _db.Memberships.Where(m => m.ActorId == _exporterId).ToListAsync(cancellationToken: Ct));
+        await _db.SaveChangesAsync(Ct);
 
         // Removing the exporter revokes their outstanding work orders — the revocation lever.
-        await Assert.ThrowsAsync<ForbiddenException>(() => _workOrders.ReportResultsAsync(token, Report()));
+        await Assert.ThrowsAsync<ForbiddenException>(() => _workOrders.ReportResultsAsync(token, Report(), Ct));
     }
 
     [Fact]
@@ -410,7 +410,7 @@ public sealed class WorkOrderIngestServiceTests : IDisposable
 
         // The endpoint is anonymous, so a valid token still can't be used to flood the database.
         await Assert.ThrowsAsync<BadRequestException>(
-            () => _workOrders.ReportResultsAsync(token, Report(commits: commits)));
+            () => _workOrders.ReportResultsAsync(token, Report(commits: commits), Ct));
     }
 
     [Fact]
@@ -421,11 +421,11 @@ public sealed class WorkOrderIngestServiceTests : IDisposable
         var token = await ExportAndTakeTokenAsync();
 
         await _workOrders.ReportResultsAsync(token, Report(
-            prs: [new WorkOrderPullRequestReport("https://github.com/acme/app/pull/42", null, change.Id)]));
+            prs: [new WorkOrderPullRequestReport("https://github.com/acme/app/pull/42", null, change.Id)]), Ct);
 
-        var link = Assert.Single(await _db.ScmLinks.ToListAsync());
+        var link = Assert.Single(await _db.ScmLinks.ToListAsync(cancellationToken: Ct));
         Assert.Equal("https://github.com/acme/app/pull/42", link.Url);
-        Assert.Equal(WorkOrderItemStatus.Reported, (await _db.WorkOrderItems.FirstAsync()).Status);
+        Assert.Equal(WorkOrderItemStatus.Reported, (await _db.WorkOrderItems.FirstAsync(cancellationToken: Ct)).Status);
     }
 
     [Fact]
@@ -437,9 +437,9 @@ public sealed class WorkOrderIngestServiceTests : IDisposable
         var token = await ExportAndTakeTokenAsync();
 
         await _workOrders.ReportResultsAsync(token, Report(
-            commits: [new WorkOrderCommitReport("a1b2c3d", $"x\n\nDimes change {one.Id}", null, null)]));
+            commits: [new WorkOrderCommitReport("a1b2c3d", $"x\n\nDimes change {one.Id}", null, null)]), Ct);
 
-        var summary = await _workOrders.LatestAsync(_projectId);
+        var summary = await _workOrders.LatestAsync(_projectId, Ct);
 
         Assert.NotNull(summary);
         Assert.Equal(2, summary.ItemCount);

@@ -69,7 +69,7 @@ public sealed class ExportInstructionTests : IDisposable
     {
         var (project, actorId) = await AddProjectAsync("Demo");
 
-        var export = await _changes.ExportInDevelopmentAsync(project.Id, actorId, "https://dimes.test");
+        var export = await _changes.ExportInDevelopmentAsync(project.Id, actorId, "https://dimes.test", Ct);
         var md = Lf(export.Markdown);
 
         Assert.Contains("# Work order — implement In-Development changes (Demo)", md);
@@ -88,9 +88,9 @@ public sealed class ExportInstructionTests : IDisposable
             Kind = SystemInstructionKind.ExportWorkOrder,
             Content = "## Custom\n\nDo it my way.",
         });
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(Ct);
 
-        var export = await _changes.ExportInDevelopmentAsync(project.Id, actorId, "https://dimes.test");
+        var export = await _changes.ExportInDevelopmentAsync(project.Id, actorId, "https://dimes.test", Ct);
         var md = Lf(export.Markdown);
 
         // Custom guidance replaces the default, but the generated scaffolding remains.
@@ -110,11 +110,11 @@ public sealed class ExportInstructionTests : IDisposable
     {
         var (project, actorId) = await AddProjectAsync("Demo");
 
-        var export = await _changes.ExportInDevelopmentAsync(project.Id, actorId, "https://dimes.test");
+        var export = await _changes.ExportInDevelopmentAsync(project.Id, actorId, "https://dimes.test", Ct);
 
         // Nothing to report on: a capability token with no items would be pure liability.
         Assert.DoesNotContain("## Report back", Lf(export.Markdown));
-        Assert.Empty(await _db.WorkOrders.ToListAsync());
+        Assert.Empty(await _db.WorkOrders.ToListAsync(cancellationToken: Ct));
     }
 
     [Fact]
@@ -124,10 +124,10 @@ public sealed class ExportInstructionTests : IDisposable
         await AddInDevelopmentChangeAsync(project, memberId, "Add CSV export");
         var stranger = new Actor { DisplayName = "Stranger", Type = ActorType.Human };
         _db.Actors.Add(stranger);
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(Ct);
 
         await Assert.ThrowsAsync<ForbiddenException>(
-            () => _changes.ExportInDevelopmentAsync(project.Id, stranger.Id, "https://dimes.test"));
+            () => _changes.ExportInDevelopmentAsync(project.Id, stranger.Id, "https://dimes.test", Ct));
     }
 
     public void Dispose()

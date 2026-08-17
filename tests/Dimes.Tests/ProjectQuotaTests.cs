@@ -48,10 +48,10 @@ public sealed class ProjectQuotaTests : IDisposable
         var project = await CreateAs(ned.Id, "Ned's project");
 
         Assert.Equal(MemberRole.Maintainer, project.MyRole);
-        var membership = await _db.Memberships.SingleAsync(m => m.ProjectId == project.Id);
+        var membership = await _db.Memberships.SingleAsync(m => m.ProjectId == project.Id, cancellationToken: Ct);
         Assert.Equal(ned.Id, membership.ActorId);
         Assert.Equal(MemberRole.Maintainer, membership.Role);
-        Assert.Equal(ned.Id, (await _db.Projects.FindAsync(project.Id))!.CreatedByActorId);
+        Assert.Equal(ned.Id, (await _db.Projects.FindAsync(new object?[] { project.Id }, Ct))!.CreatedByActorId);
     }
 
     /// <summary>Provenance has to survive the trip to the client on every path that returns a project —
@@ -66,12 +66,16 @@ public sealed class ProjectQuotaTests : IDisposable
         Assert.Equal(ned.Id, created.CreatedByActorId);
         Assert.Equal("Ned", created.CreatedByDisplayName);
 
-        var listed = (await _projects.ListAsync(ned.Id, isSiteAdmin: false)).Single();
+        var listed = (await _projects.ListAsync(ned.Id, isSiteAdmin: false, ct: Ct)).Single();
         Assert.Equal(ned.Id, listed.CreatedByActorId);
         Assert.Equal("Ned", listed.CreatedByDisplayName);
 
         var updated = await _projects.UpdateAsync(
-            created.Id, new UpdateProjectRequest("Renamed", null, true, false), ned.Id, callerIsSiteAdmin: false);
+            created.Id,
+            new UpdateProjectRequest("Renamed", null, true, false),
+            ned.Id,
+            callerIsSiteAdmin: false,
+            ct: Ct);
         Assert.Equal("Ned", updated.CreatedByDisplayName);
     }
 
@@ -83,10 +87,10 @@ public sealed class ProjectQuotaTests : IDisposable
         var created = await CreateAs(ned.Id, "Orphan");
 
         // Simulate a pre-attribution row.
-        (await _db.Projects.FindAsync(created.Id))!.CreatedByActorId = null;
-        await _db.SaveChangesAsync();
+        (await _db.Projects.FindAsync(new object?[] { created.Id }, Ct))!.CreatedByActorId = null;
+        await _db.SaveChangesAsync(Ct);
 
-        var listed = (await _projects.ListAsync(ned.Id, isSiteAdmin: false)).Single();
+        var listed = (await _projects.ListAsync(ned.Id, isSiteAdmin: false, ct: Ct)).Single();
         Assert.Null(listed.CreatedByActorId);
         Assert.Null(listed.CreatedByDisplayName);
     }
@@ -110,17 +114,17 @@ public sealed class ProjectQuotaTests : IDisposable
     public async Task ArchivedProjects_StillCountAgainstTheLimit()
     {
         var ned = await CreateUser("Ned", "ned@x.com");
-        await _admin.SetProjectLimitAsync(ned.Id, 2);
+        await _admin.SetProjectLimitAsync(ned.Id, 2, Ct);
 
         var first = await CreateAs(ned.Id, "A");
         await CreateAs(ned.Id, "B");
 
         // Ned is a Maintainer of his own project, so he can archive it without an admin.
-        await _projects.ArchiveProjectAsync(first.Id, archived: true, ned.Id, callerIsSiteAdmin: false);
+        await _projects.ArchiveProjectAsync(first.Id, archived: true, ned.Id, callerIsSiteAdmin: false, ct: Ct);
 
         await Assert.ThrowsAsync<ForbiddenException>(() => CreateAs(ned.Id, "C"));
 
-        var quota = await _projects.GetProjectQuotaAsync(ned.Id, isSiteAdmin: false);
+        var quota = await _projects.GetProjectQuotaAsync(ned.Id, isSiteAdmin: false, ct: Ct);
         Assert.Equal(2, quota.Used);
         Assert.False(quota.CanCreate);
     }
@@ -128,10 +132,10 @@ public sealed class ProjectQuotaTests : IDisposable
     [Fact]
     public async Task PersonalOverride_BeatsTheSiteDefault_InBothDirections()
     {
-        await _settings.UpdateProjectPolicyAsync(new UpdateProjectPolicyRequest(1));
+        await _settings.UpdateProjectPolicyAsync(new UpdateProjectPolicyRequest(1), Ct);
 
         var generous = await CreateUser("Gen", "gen@x.com");
-        await _admin.SetProjectLimitAsync(generous.Id, 3);
+        await _admin.SetProjectLimitAsync(generous.Id, 3, Ct);
         for (var i = 0; i < 3; i++)
         {
             await CreateAs(generous.Id, $"G{i}");
@@ -139,9 +143,9 @@ public sealed class ProjectQuotaTests : IDisposable
         await Assert.ThrowsAsync<ForbiddenException>(() => CreateAs(generous.Id, "G4"));
 
         // And downward: an override below the site default still binds.
-        await _settings.UpdateProjectPolicyAsync(new UpdateProjectPolicyRequest(5));
+        await _settings.UpdateProjectPolicyAsync(new UpdateProjectPolicyRequest(5), Ct);
         var limited = await CreateUser("Lim", "lim@x.com");
-        await _admin.SetProjectLimitAsync(limited.Id, 1);
+        await _admin.SetProjectLimitAsync(limited.Id, 1, Ct);
         await CreateAs(limited.Id, "L1");
         await Assert.ThrowsAsync<ForbiddenException>(() => CreateAs(limited.Id, "L2"));
     }
@@ -149,15 +153,15 @@ public sealed class ProjectQuotaTests : IDisposable
     [Fact]
     public async Task ClearingTheOverride_FallsBackToTheSiteDefault()
     {
-        await _settings.UpdateProjectPolicyAsync(new UpdateProjectPolicyRequest(2));
+        await _settings.UpdateProjectPolicyAsync(new UpdateProjectPolicyRequest(2), Ct);
         var ned = await CreateUser("Ned", "ned@x.com");
-        await _admin.SetProjectLimitAsync(ned.Id, 0);
+        await _admin.SetProjectLimitAsync(ned.Id, 0, Ct);
 
         await Assert.ThrowsAsync<ForbiddenException>(() => CreateAs(ned.Id, "Blocked"));
 
-        var cleared = await _admin.SetProjectLimitAsync(ned.Id, null);
+        var cleared = await _admin.SetProjectLimitAsync(ned.Id, null, Ct);
         Assert.Null(cleared.ProjectLimit);
-        Assert.Equal(2, (await _projects.GetProjectQuotaAsync(ned.Id, isSiteAdmin: false)).Limit);
+        Assert.Equal(2, (await _projects.GetProjectQuotaAsync(ned.Id, isSiteAdmin: false, ct: Ct)).Limit);
         await CreateAs(ned.Id, "Now allowed");
     }
 
@@ -166,14 +170,14 @@ public sealed class ProjectQuotaTests : IDisposable
     [Fact]
     public async Task SiteDefaultOfZero_BlocksNonAdmins_ButAnOverrideStillGrants()
     {
-        await _settings.UpdateProjectPolicyAsync(new UpdateProjectPolicyRequest(0));
+        await _settings.UpdateProjectPolicyAsync(new UpdateProjectPolicyRequest(0), Ct);
 
         var ned = await CreateUser("Ned", "ned@x.com");
         await Assert.ThrowsAsync<ForbiddenException>(() => CreateAs(ned.Id, "Nope"));
-        Assert.False((await _projects.GetProjectQuotaAsync(ned.Id, isSiteAdmin: false)).CanCreate);
+        Assert.False((await _projects.GetProjectQuotaAsync(ned.Id, isSiteAdmin: false, ct: Ct)).CanCreate);
 
         var trusted = await CreateUser("Tru", "tru@x.com");
-        await _admin.SetProjectLimitAsync(trusted.Id, 1);
+        await _admin.SetProjectLimitAsync(trusted.Id, 1, Ct);
         await CreateAs(trusted.Id, "Granted");
     }
 
@@ -185,21 +189,21 @@ public sealed class ProjectQuotaTests : IDisposable
     public async Task ZeroLimit_DistinguishesSitePolicyFromAPersonalOverride()
     {
         // Site policy 0, no personal override.
-        await _settings.UpdateProjectPolicyAsync(new UpdateProjectPolicyRequest(0));
+        await _settings.UpdateProjectPolicyAsync(new UpdateProjectPolicyRequest(0), Ct);
         var inherits = await CreateUser("Inh", "inh@x.com");
 
-        var siteQuota = await _projects.GetProjectQuotaAsync(inherits.Id, isSiteAdmin: false);
+        var siteQuota = await _projects.GetProjectQuotaAsync(inherits.Id, isSiteAdmin: false, ct: Ct);
         Assert.Equal(0, siteQuota.Limit);
         Assert.False(siteQuota.LimitIsPersonal);
         var siteError = await Assert.ThrowsAsync<ForbiddenException>(() => CreateAs(inherits.Id, "Nope"));
         Assert.Contains("restricted to site administrators", siteError.Message);
 
         // A generous site policy, but this user is pinned to 0.
-        await _settings.UpdateProjectPolicyAsync(new UpdateProjectPolicyRequest(5));
+        await _settings.UpdateProjectPolicyAsync(new UpdateProjectPolicyRequest(5), Ct);
         var singledOut = await CreateUser("Sng", "sng@x.com");
-        await _admin.SetProjectLimitAsync(singledOut.Id, 0);
+        await _admin.SetProjectLimitAsync(singledOut.Id, 0, Ct);
 
-        var personalQuota = await _projects.GetProjectQuotaAsync(singledOut.Id, isSiteAdmin: false);
+        var personalQuota = await _projects.GetProjectQuotaAsync(singledOut.Id, isSiteAdmin: false, ct: Ct);
         Assert.Equal(0, personalQuota.Limit);
         Assert.True(personalQuota.LimitIsPersonal);
         var personalError = await Assert.ThrowsAsync<ForbiddenException>(() => CreateAs(singledOut.Id, "Nope"));
@@ -213,19 +217,19 @@ public sealed class ProjectQuotaTests : IDisposable
     public async Task Quota_ReportsWhetherTheLimitIsInheritedOrPersonal()
     {
         var ned = await CreateUser("Ned", "ned@x.com");
-        Assert.False((await _projects.GetProjectQuotaAsync(ned.Id, isSiteAdmin: false)).LimitIsPersonal);
+        Assert.False((await _projects.GetProjectQuotaAsync(ned.Id, isSiteAdmin: false, ct: Ct)).LimitIsPersonal);
 
-        await _admin.SetProjectLimitAsync(ned.Id, 7);
-        Assert.True((await _projects.GetProjectQuotaAsync(ned.Id, isSiteAdmin: false)).LimitIsPersonal);
+        await _admin.SetProjectLimitAsync(ned.Id, 7, Ct);
+        Assert.True((await _projects.GetProjectQuotaAsync(ned.Id, isSiteAdmin: false, ct: Ct)).LimitIsPersonal);
 
-        await _admin.SetProjectLimitAsync(ned.Id, null);
-        Assert.False((await _projects.GetProjectQuotaAsync(ned.Id, isSiteAdmin: false)).LimitIsPersonal);
+        await _admin.SetProjectLimitAsync(ned.Id, null, Ct);
+        Assert.False((await _projects.GetProjectQuotaAsync(ned.Id, isSiteAdmin: false, ct: Ct)).LimitIsPersonal);
     }
 
     [Fact]
     public async Task SiteAdmin_IsExempt_AndGainsNoMembership()
     {
-        await _settings.UpdateProjectPolicyAsync(new UpdateProjectPolicyRequest(0));
+        await _settings.UpdateProjectPolicyAsync(new UpdateProjectPolicyRequest(0), Ct);
         var boss = await CreateUser("Boss", "boss@x.com", admin: true);
 
         for (var i = 0; i < 4; i++)
@@ -234,9 +238,9 @@ public sealed class ProjectQuotaTests : IDisposable
             Assert.Null(created.MyRole);
         }
 
-        Assert.Empty(await _db.Memberships.Where(m => m.ActorId == boss.Id).ToListAsync());
+        Assert.Empty(await _db.Memberships.Where(m => m.ActorId == boss.Id).ToListAsync(cancellationToken: Ct));
 
-        var quota = await _projects.GetProjectQuotaAsync(boss.Id, isSiteAdmin: true);
+        var quota = await _projects.GetProjectQuotaAsync(boss.Id, isSiteAdmin: true, ct: Ct);
         Assert.True(quota.Unlimited);
         Assert.True(quota.CanCreate);
         Assert.Equal(4, quota.Used);
@@ -251,9 +255,9 @@ public sealed class ProjectQuotaTests : IDisposable
         await CreateAs(ned.Id, "A");
         await CreateAs(ned.Id, "B");
 
-        await _admin.SetProjectLimitAsync(ned.Id, 1);
+        await _admin.SetProjectLimitAsync(ned.Id, 1, Ct);
 
-        Assert.Equal(2, await _db.Projects.CountAsync(p => p.CreatedByActorId == ned.Id));
+        Assert.Equal(2, await _db.Projects.CountAsync(p => p.CreatedByActorId == ned.Id, cancellationToken: Ct));
         await Assert.ThrowsAsync<ForbiddenException>(() => CreateAs(ned.Id, "C"));
     }
 
@@ -262,7 +266,7 @@ public sealed class ProjectQuotaTests : IDisposable
     {
         var ned = await CreateUser("Ned", "ned@x.com");
 
-        var before = await _projects.GetProjectQuotaAsync(ned.Id, isSiteAdmin: false);
+        var before = await _projects.GetProjectQuotaAsync(ned.Id, isSiteAdmin: false, ct: Ct);
         Assert.Equal(0, before.Used);
         Assert.Equal(SiteSettings.DefaultProjectLimit, before.Limit);
         Assert.True(before.CanCreate);
@@ -270,7 +274,7 @@ public sealed class ProjectQuotaTests : IDisposable
 
         await CreateAs(ned.Id, "A");
 
-        var after = await _projects.GetProjectQuotaAsync(ned.Id, isSiteAdmin: false);
+        var after = await _projects.GetProjectQuotaAsync(ned.Id, isSiteAdmin: false, ct: Ct);
         Assert.Equal(1, after.Used);
         Assert.True(after.CanCreate);
     }
@@ -284,11 +288,11 @@ public sealed class ProjectQuotaTests : IDisposable
         var project = await CreateAs(ned.Id, "A");
 
         // Drop the membership so only the creator reference remains to block deletion.
-        await _projects.RemoveMemberAsync(project.Id, ned.Id);
+        await _projects.RemoveMemberAsync(project.Id, ned.Id, Ct);
 
-        Assert.False((await _projects.GetActorAsync(ned.Id)).Deletable);
-        Assert.False((await _admin.ListUsersAsync()).Single(u => u.Id == ned.Id).Deletable);
-        await Assert.ThrowsAsync<BadRequestException>(() => _projects.DeleteActorAsync(ned.Id));
+        Assert.False((await _projects.GetActorAsync(ned.Id, Ct)).Deletable);
+        Assert.False((await _admin.ListUsersAsync(Ct)).Single(u => u.Id == ned.Id).Deletable);
+        await Assert.ThrowsAsync<BadRequestException>(() => _projects.DeleteActorAsync(ned.Id, Ct));
     }
 
     [Fact]
@@ -297,11 +301,11 @@ public sealed class ProjectQuotaTests : IDisposable
         var ned = await CreateUser("Ned", "ned@x.com");
         await CreateAs(ned.Id, "A");
 
-        var listed = (await _admin.ListUsersAsync()).Single(u => u.Id == ned.Id);
+        var listed = (await _admin.ListUsersAsync(Ct)).Single(u => u.Id == ned.Id);
         Assert.Null(listed.ProjectLimit); // inheriting the site default
         Assert.Equal(1, listed.ProjectsCreated);
 
-        var updated = await _admin.SetProjectLimitAsync(ned.Id, 7);
+        var updated = await _admin.SetProjectLimitAsync(ned.Id, 7, Ct);
         Assert.Equal(7, updated.ProjectLimit);
         Assert.Equal(1, updated.ProjectsCreated);
     }
@@ -314,9 +318,9 @@ public sealed class ProjectQuotaTests : IDisposable
         var ned = await CreateUser("Ned", "ned@x.com");
 
         await Assert.ThrowsAsync<BadRequestException>(() =>
-            _settings.UpdateProjectPolicyAsync(new UpdateProjectPolicyRequest(limit)));
+            _settings.UpdateProjectPolicyAsync(new UpdateProjectPolicyRequest(limit), Ct));
         await Assert.ThrowsAsync<BadRequestException>(() =>
-            _admin.SetProjectLimitAsync(ned.Id, limit));
+            _admin.SetProjectLimitAsync(ned.Id, limit, Ct));
     }
 
     public void Dispose()

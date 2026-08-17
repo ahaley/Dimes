@@ -48,7 +48,7 @@ public sealed class ChangeIdentifierTests : IDisposable
     [Fact]
     public async Task CreateProject_StoresKeyUppercased()
     {
-        var project = await _projects.CreateAsync(_db, new CreateProjectRequest("Acme Web", null, "acme"));
+        var project = await _projects.CreateAsync(_db, new CreateProjectRequest("Acme Web", null, "acme"), ct: Ct);
         Assert.Equal("ACME", project.Key);
     }
 
@@ -60,22 +60,25 @@ public sealed class ChangeIdentifierTests : IDisposable
     public async Task CreateProject_RejectsBadKeyFormat(string key)
     {
         await Assert.ThrowsAsync<BadRequestException>(() =>
-            _projects.CreateAsync(_db, new CreateProjectRequest("P", null, key)));
+            _projects.CreateAsync(_db, new CreateProjectRequest("P", null, key), ct: Ct));
     }
 
     [Fact]
     public async Task CreateProject_RejectsDuplicateKey()
     {
-        await _projects.CreateAsync(_db, new CreateProjectRequest("First", null, "DIMES"));
+        await _projects.CreateAsync(_db, new CreateProjectRequest("First", null, "DIMES"), ct: Ct);
         await Assert.ThrowsAsync<BadRequestException>(() =>
-            _projects.CreateAsync(_db, new CreateProjectRequest("Second", null, "dimes")));
+            _projects.CreateAsync(_db, new CreateProjectRequest("Second", null, "dimes"), ct: Ct));
     }
 
     [Fact]
     public async Task CreateProject_DerivesKeyWhenOmitted()
     {
-        var a = await _projects.CreateAsync(_db, new CreateProjectRequest("Mobile App", null, null));
-        var b = await _projects.CreateAsync(_db, new CreateProjectRequest("Mobile App", null, null)); // same name → unique key
+        var a = await _projects.CreateAsync(_db, new CreateProjectRequest("Mobile App", null, null), ct: Ct);
+        var b = await _projects.CreateAsync(
+            _db,
+            new CreateProjectRequest("Mobile App", null, null),
+            ct: Ct); // same name → unique key
         Assert.True(ProjectKeys.IsValid(a.Key!));
         Assert.True(ProjectKeys.IsValid(b.Key!));
         Assert.NotEqual(a.Key, b.Key);
@@ -88,8 +91,16 @@ public sealed class ChangeIdentifierTests : IDisposable
     {
         var (projectId, actorId) = await SeedProjectAsync("Dimes", "DIMES");
 
-        var c1 = await _changes.CreateAsync(projectId, actorId, new CreateChangeRequest("One", null, ChangeKind.Feature, Priority.None));
-        var c2 = await _changes.CreateAsync(projectId, actorId, new CreateChangeRequest("Two", null, ChangeKind.Feature, Priority.None));
+        var c1 = await _changes.CreateAsync(
+            projectId,
+            actorId,
+            new CreateChangeRequest("One", null, ChangeKind.Feature, Priority.None),
+            Ct);
+        var c2 = await _changes.CreateAsync(
+            projectId,
+            actorId,
+            new CreateChangeRequest("Two", null, ChangeKind.Feature, Priority.None),
+            Ct);
 
         Assert.Equal(1, c1.Number);
         Assert.Equal(2, c2.Number);
@@ -103,8 +114,16 @@ public sealed class ChangeIdentifierTests : IDisposable
         var (p1, a1) = await SeedProjectAsync("Alpha", "ALPHA");
         var (p2, a2) = await SeedProjectAsync("Beta", "BETA");
 
-        var first1 = await _changes.CreateAsync(p1, a1, new CreateChangeRequest("x", null, ChangeKind.Feature, Priority.None));
-        var first2 = await _changes.CreateAsync(p2, a2, new CreateChangeRequest("y", null, ChangeKind.Feature, Priority.None));
+        var first1 = await _changes.CreateAsync(
+            p1,
+            a1,
+            new CreateChangeRequest("x", null, ChangeKind.Feature, Priority.None),
+            Ct);
+        var first2 = await _changes.CreateAsync(
+            p2,
+            a2,
+            new CreateChangeRequest("y", null, ChangeKind.Feature, Priority.None),
+            Ct);
 
         Assert.Equal(1, first1.Number); // each project starts at 1
         Assert.Equal(1, first2.Number);
@@ -116,13 +135,16 @@ public sealed class ChangeIdentifierTests : IDisposable
     public async Task CreateMany_AssignsContiguousBlock()
     {
         var (projectId, actorId) = await SeedProjectAsync("Dimes", "DIMES");
-        await _changes.CreateAsync(projectId, actorId, new CreateChangeRequest("seed", null, ChangeKind.Feature, Priority.None));
+        await _changes.CreateAsync(
+            projectId,
+            actorId,
+            new CreateChangeRequest("seed", null, ChangeKind.Feature, Priority.None),
+            Ct);
 
-        var created = await _changes.CreateManyAsync(projectId, actorId,
-        [
+        var created = await _changes.CreateManyAsync(projectId, actorId, [
             new CreateChangeRequest("a", null, ChangeKind.Feature, Priority.None),
             new CreateChangeRequest("b", null, ChangeKind.Feature, Priority.None),
-        ]);
+        ], Ct);
 
         Assert.Equal([2, 3], created.Select(c => c.Number).ToArray());
         Assert.Equal(["DIMES-2", "DIMES-3"], created.Select(c => c.DisplayKey!).ToArray());
@@ -149,11 +171,11 @@ public sealed class ChangeIdentifierTests : IDisposable
             CreatedBy = actor, CreatedAt = DateTimeOffset.UtcNow.AddMinutes(-1),
         };
         _db.ChangeRequests.AddRange(older, newer);
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(Ct);
         Assert.Null(project.Key);
         Assert.Null(older.Number);
 
-        await new IdentifierBootstrapper(_db).BackfillAsync();
+        await new IdentifierBootstrapper(_db).BackfillAsync(Ct);
 
         Assert.NotNull(project.Key);
         Assert.True(ProjectKeys.IsValid(project.Key!));
@@ -162,7 +184,7 @@ public sealed class ChangeIdentifierTests : IDisposable
 
         // Idempotent: a second run changes nothing.
         var key = project.Key;
-        await new IdentifierBootstrapper(_db).BackfillAsync();
+        await new IdentifierBootstrapper(_db).BackfillAsync(Ct);
         Assert.Equal(key, project.Key);
         Assert.Equal(1, older.Number);
         Assert.Equal(2, newer.Number);
@@ -187,15 +209,15 @@ public sealed class ChangeIdentifierTests : IDisposable
             CreatedBy = actor, Number = 2, CompletedAt = null,
         };
         _db.ChangeRequests.AddRange(done, open);
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(Ct);
 
-        await new IdentifierBootstrapper(_db).BackfillAsync();
+        await new IdentifierBootstrapper(_db).BackfillAsync(Ct);
 
         Assert.Equal(updatedAt, done.CompletedAt); // Done backfilled from UpdatedAt
         Assert.Null(open.CompletedAt);              // non-Done untouched
 
         // Idempotent: a second run leaves the stamped value alone.
-        await new IdentifierBootstrapper(_db).BackfillAsync();
+        await new IdentifierBootstrapper(_db).BackfillAsync(Ct);
         Assert.Equal(updatedAt, done.CompletedAt);
     }
 

@@ -56,31 +56,55 @@ public sealed class ProviderServiceTests : IDisposable
     [Fact]
     public async Task CreateLlmProvider_RequiresKeyForAnthropic_ButNotForKeylessLocal()
     {
-        var project = await _projects.CreateAsync(_db, new CreateProjectRequest("P", null));
+        var project = await _projects.CreateAsync(_db, new CreateProjectRequest("P", null), ct: Ct);
 
         // Anthropic always authenticates, so a missing key reference must fail at save.
-        await Assert.ThrowsAsync<BadRequestException>(() => _projects.CreateLlmProviderAsync(project.Id,
-            new CreateLlmProviderRequest(LlmProviderType.Anthropic, "claude", null, "claude-sonnet-4-6", "  ")));
+        await Assert.ThrowsAsync<BadRequestException>(() => _projects.CreateLlmProviderAsync(
+            project.Id,
+            new CreateLlmProviderRequest(LlmProviderType.Anthropic, "claude", null, "claude-sonnet-4-6", "  "),
+            Ct));
 
         // A local OpenAI-compatible endpoint (Ollama/vLLM) legitimately has no key — the data-stays-local
         // path the spec preserves — so a null reference is accepted.
-        var local = await _projects.CreateLlmProviderAsync(project.Id,
-            new CreateLlmProviderRequest(LlmProviderType.OpenAICompatible, "ollama", "http://localhost:11434/v1", "llama3", null));
+        var local = await _projects.CreateLlmProviderAsync(
+            project.Id,
+            new CreateLlmProviderRequest(
+                LlmProviderType.OpenAICompatible,
+                "ollama",
+                "http://localhost:11434/v1",
+                "llama3",
+                null),
+            Ct);
         Assert.Null(local.ApiKeySecretRef);
     }
 
     [Fact]
     public async Task AgentCommentary_CreatesRecommendationComment_WithoutChangingState()
     {
-        var project = await _projects.CreateAsync(_db, new CreateProjectRequest("P", null));
-        var human = await _projects.AddMemberAsync(project.Id,
-            new AddMemberRequest("Cory", ActorType.Human, null, MemberRole.Contributor));
-        var llm = await _projects.CreateLlmProviderAsync(project.Id,
-            new CreateLlmProviderRequest(LlmProviderType.Anthropic, "claude", null, "claude-sonnet-4-6", "ANTHROPIC_KEY"));
-        var agent = await _projects.AddMemberAsync(project.Id,
-            new AddMemberRequest("Aria", ActorType.Agent, null, MemberRole.Contributor, llm.Id));
+        var project = await _projects.CreateAsync(_db, new CreateProjectRequest("P", null), ct: Ct);
+        var human = await _projects.AddMemberAsync(
+            project.Id,
+            new AddMemberRequest("Cory", ActorType.Human, null, MemberRole.Contributor),
+            Ct);
+        var llm = await _projects.CreateLlmProviderAsync(
+            project.Id,
+            new CreateLlmProviderRequest(
+                LlmProviderType.Anthropic,
+                "claude",
+                null,
+                "claude-sonnet-4-6",
+                "ANTHROPIC_KEY"),
+            Ct);
+        var agent = await _projects.AddMemberAsync(
+            project.Id,
+            new AddMemberRequest("Aria", ActorType.Agent, null, MemberRole.Contributor, llm.Id),
+            Ct);
 
-        var change = await _changes.CreateAsync(project.Id, human.ActorId, new CreateChangeRequest("Improve logging", "Add structured logs", ChangeKind.Feature));
+        var change = await _changes.CreateAsync(
+            project.Id,
+            human.ActorId,
+            new CreateChangeRequest("Improve logging", "Add structured logs", ChangeKind.Feature),
+            Ct);
 
         var commentary = new CommentaryService(
             _db,
@@ -88,12 +112,17 @@ public sealed class ProviderServiceTests : IDisposable
             new StubSecrets(),
             new MembershipResolver(_db));
 
-        var comment = await commentary.CommentOnChangeAsync(change.Id, agent.ActorId, human.ActorId, callerIsSiteAdmin: false);
+        var comment = await commentary.CommentOnChangeAsync(
+            change.Id,
+            agent.ActorId,
+            human.ActorId,
+            callerIsSiteAdmin: false,
+            ct: Ct);
 
         Assert.Equal(CommentKind.AgentRecommendation, comment.Kind);
         Assert.Equal("Looks reasonable; suggest Medium priority.", comment.Body);
 
-        var reloaded = await _changes.GetDetailAsync(change.Id);
+        var reloaded = await _changes.GetDetailAsync(change.Id, Ct);
         Assert.Equal(ChangeStatus.Captured, reloaded.Change.Status); // unchanged
         Assert.Single(reloaded.Comments);
     }
@@ -104,59 +133,94 @@ public sealed class ProviderServiceTests : IDisposable
         // The agent picker only ever offers in-scope providers and a scope move that would strand an agent is
         // refused, so this should be unreachable — asserted anyway so the invariant is enforced where the
         // provider is used rather than resting on the move guard staying correct.
-        var project = await _projects.CreateAsync(_db, new CreateProjectRequest("P", null));
-        var elsewhere = await _projects.CreateAsync(_db, new CreateProjectRequest("Other", null));
-        var human = await _projects.AddMemberAsync(project.Id,
-            new AddMemberRequest("Cory", ActorType.Human, null, MemberRole.Contributor));
-        var llm = await _projects.CreateLlmProviderAsync(project.Id,
-            new CreateLlmProviderRequest(LlmProviderType.Anthropic, "claude", null, "claude-sonnet-4-6", "ANTHROPIC_KEY"));
-        var agent = await _projects.AddMemberAsync(project.Id,
-            new AddMemberRequest("Aria", ActorType.Agent, null, MemberRole.Contributor, llm.Id));
-        var change = await _changes.CreateAsync(project.Id, human.ActorId,
-            new CreateChangeRequest("Improve logging", null, ChangeKind.Feature));
+        var project = await _projects.CreateAsync(_db, new CreateProjectRequest("P", null), ct: Ct);
+        var elsewhere = await _projects.CreateAsync(_db, new CreateProjectRequest("Other", null), ct: Ct);
+        var human = await _projects.AddMemberAsync(
+            project.Id,
+            new AddMemberRequest("Cory", ActorType.Human, null, MemberRole.Contributor),
+            Ct);
+        var llm = await _projects.CreateLlmProviderAsync(
+            project.Id,
+            new CreateLlmProviderRequest(
+                LlmProviderType.Anthropic,
+                "claude",
+                null,
+                "claude-sonnet-4-6",
+                "ANTHROPIC_KEY"),
+            Ct);
+        var agent = await _projects.AddMemberAsync(
+            project.Id,
+            new AddMemberRequest("Aria", ActorType.Agent, null, MemberRole.Contributor, llm.Id),
+            Ct);
+        var change = await _changes.CreateAsync(
+            project.Id,
+            human.ActorId,
+            new CreateChangeRequest("Improve logging", null, ChangeKind.Feature),
+            Ct);
 
         // Reach past the guarded path to leave the assignment dangling, as a direct DB edit would.
-        var config = await _db.LlmProviderConfigs.FindAsync(llm.Id);
+        var config = await _db.LlmProviderConfigs.FindAsync(new object?[] { llm.Id }, Ct);
         config!.ProjectId = elsewhere.Id;
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(Ct);
 
         var commentary = new CommentaryService(
             _db, [new StubLlm(LlmProviderType.Anthropic, "x")], new StubSecrets(), new MembershipResolver(_db));
 
         var ex = await Assert.ThrowsAsync<BadRequestException>(() =>
-            commentary.CommentOnChangeAsync(change.Id, agent.ActorId, human.ActorId, callerIsSiteAdmin: false));
+            commentary.CommentOnChangeAsync(change.Id, agent.ActorId, human.ActorId, callerIsSiteAdmin: false, ct: Ct));
         Assert.Contains("scoped to a different project", ex.Message);
 
         // Nothing was written — the refusal happens before the provider is called.
-        Assert.Empty((await _changes.GetDetailAsync(change.Id)).Comments);
+        Assert.Empty((await _changes.GetDetailAsync(change.Id, Ct)).Comments);
     }
 
     [Fact]
     public async Task AgentCommentary_NonAgentActor_IsRejected()
     {
-        var project = await _projects.CreateAsync(_db, new CreateProjectRequest("P", null));
-        var human = await _projects.AddMemberAsync(project.Id,
-            new AddMemberRequest("Cory", ActorType.Human, null, MemberRole.Contributor));
-        var change = await _changes.CreateAsync(project.Id, human.ActorId, new CreateChangeRequest("x", null, ChangeKind.Problem));
+        var project = await _projects.CreateAsync(_db, new CreateProjectRequest("P", null), ct: Ct);
+        var human = await _projects.AddMemberAsync(
+            project.Id,
+            new AddMemberRequest("Cory", ActorType.Human, null, MemberRole.Contributor),
+            Ct);
+        var change = await _changes.CreateAsync(
+            project.Id,
+            human.ActorId,
+            new CreateChangeRequest("x", null, ChangeKind.Problem),
+            Ct);
 
         var commentary = new CommentaryService(
             _db, [new StubLlm(LlmProviderType.Anthropic, "x")], new StubSecrets(), new MembershipResolver(_db));
 
         await Assert.ThrowsAsync<BadRequestException>(() =>
-            commentary.CommentOnChangeAsync(change.Id, human.ActorId, human.ActorId, callerIsSiteAdmin: false));
+            commentary.CommentOnChangeAsync(change.Id, human.ActorId, human.ActorId, callerIsSiteAdmin: false, ct: Ct));
     }
 
     [Fact]
     public async Task AgentCommentary_NonMemberCaller_IsForbidden()
     {
-        var project = await _projects.CreateAsync(_db, new CreateProjectRequest("P", null));
-        var human = await _projects.AddMemberAsync(project.Id,
-            new AddMemberRequest("Cory", ActorType.Human, null, MemberRole.Contributor));
-        var llm = await _projects.CreateLlmProviderAsync(project.Id,
-            new CreateLlmProviderRequest(LlmProviderType.Anthropic, "claude", null, "claude-sonnet-4-6", "ANTHROPIC_KEY"));
-        var agent = await _projects.AddMemberAsync(project.Id,
-            new AddMemberRequest("Aria", ActorType.Agent, null, MemberRole.Contributor, llm.Id));
-        var change = await _changes.CreateAsync(project.Id, human.ActorId, new CreateChangeRequest("x", null, ChangeKind.Problem));
+        var project = await _projects.CreateAsync(_db, new CreateProjectRequest("P", null), ct: Ct);
+        var human = await _projects.AddMemberAsync(
+            project.Id,
+            new AddMemberRequest("Cory", ActorType.Human, null, MemberRole.Contributor),
+            Ct);
+        var llm = await _projects.CreateLlmProviderAsync(
+            project.Id,
+            new CreateLlmProviderRequest(
+                LlmProviderType.Anthropic,
+                "claude",
+                null,
+                "claude-sonnet-4-6",
+                "ANTHROPIC_KEY"),
+            Ct);
+        var agent = await _projects.AddMemberAsync(
+            project.Id,
+            new AddMemberRequest("Aria", ActorType.Agent, null, MemberRole.Contributor, llm.Id),
+            Ct);
+        var change = await _changes.CreateAsync(
+            project.Id,
+            human.ActorId,
+            new CreateChangeRequest("x", null, ChangeKind.Problem),
+            Ct);
 
         var commentary = new CommentaryService(
             _db, [new StubLlm(LlmProviderType.Anthropic, "x")], new StubSecrets(), new MembershipResolver(_db));
@@ -164,24 +228,33 @@ public sealed class ProviderServiceTests : IDisposable
         // An authenticated non-member of the change's project can't trigger agent commentary — this
         // would otherwise leak the change's content to a non-member and spend provider credits.
         await Assert.ThrowsAsync<ForbiddenException>(() =>
-            commentary.CommentOnChangeAsync(change.Id, agent.ActorId, Guid.NewGuid(), callerIsSiteAdmin: false));
+            commentary.CommentOnChangeAsync(change.Id, agent.ActorId, Guid.NewGuid(), callerIsSiteAdmin: false, ct: Ct));
     }
 
     [Fact]
     public async Task ScmLink_PullsContext_IntoSnapshot()
     {
-        var project = await _projects.CreateAsync(_db, new CreateProjectRequest("P", null));
-        var human = await _projects.AddMemberAsync(project.Id,
-            new AddMemberRequest("Cory", ActorType.Human, null, MemberRole.Contributor));
-        var change = await _changes.CreateAsync(project.Id, human.ActorId, new CreateChangeRequest("x", null, ChangeKind.Feature));
+        var project = await _projects.CreateAsync(_db, new CreateProjectRequest("P", null), ct: Ct);
+        var human = await _projects.AddMemberAsync(
+            project.Id,
+            new AddMemberRequest("Cory", ActorType.Human, null, MemberRole.Contributor),
+            Ct);
+        var change = await _changes.CreateAsync(
+            project.Id,
+            human.ActorId,
+            new CreateChangeRequest("x", null, ChangeKind.Feature),
+            Ct);
 
         var scm = new ScmService(
             _db,
             [new StubScm(new ScmContext("PR title", "PR body", "open", "PR title\n\nPR body"))],
             new StubSecrets(), new MembershipResolver(_db));
 
-        var link = await scm.AddLinkAsync(change.Id, human.ActorId,
-            new AddScmLinkRequest("https://github.com/acme/widget/pull/7", ContextSnapshot: null));
+        var link = await scm.AddLinkAsync(
+            change.Id,
+            human.ActorId,
+            new AddScmLinkRequest("https://github.com/acme/widget/pull/7", ContextSnapshot: null),
+            Ct);
 
         Assert.Equal("PR title\n\nPR body", link.ContextSnapshot);
         Assert.Equal(ScmProviderType.GitHub, link.Provider);
@@ -190,16 +263,25 @@ public sealed class ProviderServiceTests : IDisposable
     [Fact]
     public async Task ScmLink_ExplicitSnapshot_WinsOverProvider()
     {
-        var project = await _projects.CreateAsync(_db, new CreateProjectRequest("P", null));
-        var human = await _projects.AddMemberAsync(project.Id,
-            new AddMemberRequest("Cory", ActorType.Human, null, MemberRole.Contributor));
-        var change = await _changes.CreateAsync(project.Id, human.ActorId, new CreateChangeRequest("x", null, ChangeKind.Feature));
+        var project = await _projects.CreateAsync(_db, new CreateProjectRequest("P", null), ct: Ct);
+        var human = await _projects.AddMemberAsync(
+            project.Id,
+            new AddMemberRequest("Cory", ActorType.Human, null, MemberRole.Contributor),
+            Ct);
+        var change = await _changes.CreateAsync(
+            project.Id,
+            human.ActorId,
+            new CreateChangeRequest("x", null, ChangeKind.Feature),
+            Ct);
 
         var scm = new ScmService(
             _db, [new StubScm(new ScmContext("ignored", null, null, "ignored"))], new StubSecrets(), new MembershipResolver(_db));
 
-        var link = await scm.AddLinkAsync(change.Id, human.ActorId,
-            new AddScmLinkRequest("https://github.com/acme/widget/pull/7", ContextSnapshot: "manual note"));
+        var link = await scm.AddLinkAsync(
+            change.Id,
+            human.ActorId,
+            new AddScmLinkRequest("https://github.com/acme/widget/pull/7", ContextSnapshot: "manual note"),
+            Ct);
 
         Assert.Equal("manual note", link.ContextSnapshot);
     }
@@ -207,36 +289,57 @@ public sealed class ProviderServiceTests : IDisposable
     [Fact]
     public async Task ScmLink_RejectsNonHttpScheme_BlockingHrefInjection()
     {
-        var project = await _projects.CreateAsync(_db, new CreateProjectRequest("P", null));
-        var human = await _projects.AddMemberAsync(project.Id,
-            new AddMemberRequest("Cory", ActorType.Human, null, MemberRole.Contributor));
-        var change = await _changes.CreateAsync(project.Id, human.ActorId, new CreateChangeRequest("x", null, ChangeKind.Feature));
+        var project = await _projects.CreateAsync(_db, new CreateProjectRequest("P", null), ct: Ct);
+        var human = await _projects.AddMemberAsync(
+            project.Id,
+            new AddMemberRequest("Cory", ActorType.Human, null, MemberRole.Contributor),
+            Ct);
+        var change = await _changes.CreateAsync(
+            project.Id,
+            human.ActorId,
+            new CreateChangeRequest("x", null, ChangeKind.Feature),
+            Ct);
 
         var scm = new ScmService(_db, [new StubScm(new ScmContext("t", null, null, "t"))], new StubSecrets(), new MembershipResolver(_db));
 
         // A "javascript:" link would execute in a viewer's session when rendered as an <a href>.
-        await Assert.ThrowsAsync<BadRequestException>(() => scm.AddLinkAsync(change.Id, human.ActorId,
-            new AddScmLinkRequest("javascript:alert(document.cookie)", ContextSnapshot: "x")));
+        await Assert.ThrowsAsync<BadRequestException>(() => scm.AddLinkAsync(
+            change.Id,
+            human.ActorId,
+            new AddScmLinkRequest("javascript:alert(document.cookie)", ContextSnapshot: "x"),
+            Ct));
 
         // A normal https link is still accepted.
-        var link = await scm.AddLinkAsync(change.Id, human.ActorId,
-            new AddScmLinkRequest("https://github.com/acme/widget/pull/7", ContextSnapshot: "x"));
+        var link = await scm.AddLinkAsync(
+            change.Id,
+            human.ActorId,
+            new AddScmLinkRequest("https://github.com/acme/widget/pull/7", ContextSnapshot: "x"),
+            Ct);
         Assert.Equal("https://github.com/acme/widget/pull/7", link.Url);
     }
 
     [Fact]
     public async Task ScmLink_NonMember_IsForbidden()
     {
-        var project = await _projects.CreateAsync(_db, new CreateProjectRequest("P", null));
-        var human = await _projects.AddMemberAsync(project.Id,
-            new AddMemberRequest("Cory", ActorType.Human, null, MemberRole.Contributor));
-        var change = await _changes.CreateAsync(project.Id, human.ActorId, new CreateChangeRequest("x", null, ChangeKind.Feature));
+        var project = await _projects.CreateAsync(_db, new CreateProjectRequest("P", null), ct: Ct);
+        var human = await _projects.AddMemberAsync(
+            project.Id,
+            new AddMemberRequest("Cory", ActorType.Human, null, MemberRole.Contributor),
+            Ct);
+        var change = await _changes.CreateAsync(
+            project.Id,
+            human.ActorId,
+            new CreateChangeRequest("x", null, ChangeKind.Feature),
+            Ct);
 
         var scm = new ScmService(_db, [new StubScm(new ScmContext("t", null, null, "t"))], new StubSecrets(), new MembershipResolver(_db));
 
         // An authenticated non-member of the change's project can't attach a link.
-        await Assert.ThrowsAsync<ForbiddenException>(() => scm.AddLinkAsync(change.Id, Guid.NewGuid(),
-            new AddScmLinkRequest("https://github.com/acme/widget/pull/7", ContextSnapshot: "x")));
+        await Assert.ThrowsAsync<ForbiddenException>(() => scm.AddLinkAsync(
+            change.Id,
+            Guid.NewGuid(),
+            new AddScmLinkRequest("https://github.com/acme/widget/pull/7", ContextSnapshot: "x"),
+            Ct));
     }
 
     public void Dispose()

@@ -40,14 +40,14 @@ public sealed class ProjectOrderingTests : IDisposable
     public async Task Reorder_OrdersByPersonalOrder_UnrankedFallBackToName()
     {
         var actorId = await SeedSiteAdminAsync("Admin");
-        var alpha = await _projects.CreateAsync(_db, new CreateProjectRequest("Alpha", null, "ALPHA"));
-        var beta = await _projects.CreateAsync(_db, new CreateProjectRequest("Beta", null, "BETA"));
-        var gamma = await _projects.CreateAsync(_db, new CreateProjectRequest("Gamma", null, "GAMMA"));
+        var alpha = await _projects.CreateAsync(_db, new CreateProjectRequest("Alpha", null, "ALPHA"), ct: Ct);
+        var beta = await _projects.CreateAsync(_db, new CreateProjectRequest("Beta", null, "BETA"), ct: Ct);
+        var gamma = await _projects.CreateAsync(_db, new CreateProjectRequest("Gamma", null, "GAMMA"), ct: Ct);
 
         // Personal order ranks gamma then alpha; beta is left unranked.
-        await _projects.ReorderProjectsAsync(actorId, new ReorderProjectsRequest([gamma.Id, alpha.Id]));
+        await _projects.ReorderProjectsAsync(actorId, new ReorderProjectsRequest([gamma.Id, alpha.Id]), Ct);
 
-        var listed = await _projects.ListAsync(actorId, isSiteAdmin: true);
+        var listed = await _projects.ListAsync(actorId, isSiteAdmin: true, ct: Ct);
         Assert.Equal([gamma.Id, alpha.Id, beta.Id], listed.Select(p => p.Id).ToArray()); // ranked first, beta (unranked) last by name
     }
 
@@ -56,15 +56,15 @@ public sealed class ProjectOrderingTests : IDisposable
     {
         var actor1 = await SeedSiteAdminAsync("One");
         var actor2 = await SeedSiteAdminAsync("Two");
-        var a = await _projects.CreateAsync(_db, new CreateProjectRequest("Apple", null, "APP"));
-        var b = await _projects.CreateAsync(_db, new CreateProjectRequest("Box", null, "BOX"));
-        var c = await _projects.CreateAsync(_db, new CreateProjectRequest("Cat", null, "CAT"));
+        var a = await _projects.CreateAsync(_db, new CreateProjectRequest("Apple", null, "APP"), ct: Ct);
+        var b = await _projects.CreateAsync(_db, new CreateProjectRequest("Box", null, "BOX"), ct: Ct);
+        var c = await _projects.CreateAsync(_db, new CreateProjectRequest("Cat", null, "CAT"), ct: Ct);
 
-        await _projects.ReorderProjectsAsync(actor1, new ReorderProjectsRequest([c.Id, b.Id, a.Id]));
+        await _projects.ReorderProjectsAsync(actor1, new ReorderProjectsRequest([c.Id, b.Id, a.Id]), Ct);
 
-        Assert.Equal([c.Id, b.Id, a.Id], (await _projects.ListAsync(actor1, true)).Select(p => p.Id).ToArray());
+        Assert.Equal([c.Id, b.Id, a.Id], (await _projects.ListAsync(actor1, true, ct: Ct)).Select(p => p.Id).ToArray());
         // actor2 has no personal order → default alphabetical, unaffected by actor1's reorder.
-        Assert.Equal([a.Id, b.Id, c.Id], (await _projects.ListAsync(actor2, true)).Select(p => p.Id).ToArray());
+        Assert.Equal([a.Id, b.Id, c.Id], (await _projects.ListAsync(actor2, true, ct: Ct)).Select(p => p.Id).ToArray());
     }
 
     public void Dispose()

@@ -75,19 +75,22 @@ public sealed class NotificationServiceTests : IDisposable
         Assert.Contains(NotificationEventType.AwaitingApproval, created.Events);
         Assert.True(created.Enabled);
 
-        var updated = await _projects.UpdateNotificationChannelAsync(seed.ProjectId, created.Id,
-            new UpdateNotificationChannelRequest(NotificationChannelType.GoogleChat, "renamed", "spaces/BBBB",
-                "GCHAT_CREDS", [NotificationEventType.AssignedToYou, NotificationEventType.DailyDigest], Enabled: false));
+        var updated = await _projects.UpdateNotificationChannelAsync(
+            seed.ProjectId, created.Id,
+            new UpdateNotificationChannelRequest(
+                NotificationChannelType.GoogleChat, "renamed", "spaces/BBBB", "GCHAT_CREDS",
+                [NotificationEventType.AssignedToYou, NotificationEventType.DailyDigest], Enabled: false),
+            Ct);
         Assert.Equal("renamed", updated.Name);
         Assert.False(updated.Enabled);
         Assert.DoesNotContain(NotificationEventType.AwaitingApproval, updated.Events);
         Assert.Contains(NotificationEventType.DailyDigest, updated.Events);
 
-        var listed = await _projects.ListNotificationChannelsAsync(seed.ProjectId);
+        var listed = await _projects.ListNotificationChannelsAsync(seed.ProjectId, Ct);
         Assert.Single(listed);
 
-        await _projects.DeleteNotificationChannelAsync(seed.ProjectId, created.Id);
-        Assert.Empty(await _projects.ListNotificationChannelsAsync(seed.ProjectId));
+        await _projects.DeleteNotificationChannelAsync(seed.ProjectId, created.Id, Ct);
+        Assert.Empty(await _projects.ListNotificationChannelsAsync(seed.ProjectId, Ct));
     }
 
     [Fact]
@@ -96,7 +99,7 @@ public sealed class NotificationServiceTests : IDisposable
         var seed = await SeedAsync();
         await Assert.ThrowsAsync<BadRequestException>(() =>
             _projects.CreateNotificationChannelAsync(seed.ProjectId, new CreateNotificationChannelRequest(
-                NotificationChannelType.GoogleChat, "team", "  ", "GCHAT_CREDS", [NotificationEventType.AwaitingApproval])));
+                NotificationChannelType.GoogleChat, "team", "  ", "GCHAT_CREDS", [NotificationEventType.AwaitingApproval]), Ct));
     }
 
     [Fact]
@@ -107,7 +110,7 @@ public sealed class NotificationServiceTests : IDisposable
         // not silently produce an undeliverable channel that only fails minutes later at send time.
         await Assert.ThrowsAsync<BadRequestException>(() =>
             _projects.CreateNotificationChannelAsync(seed.ProjectId, new CreateNotificationChannelRequest(
-                NotificationChannelType.GoogleChat, "team", "spaces/AAAA", "  ", [NotificationEventType.AwaitingApproval])));
+                NotificationChannelType.GoogleChat, "team", "spaces/AAAA", "  ", [NotificationEventType.AwaitingApproval]), Ct));
     }
 
     [Fact]
@@ -115,11 +118,17 @@ public sealed class NotificationServiceTests : IDisposable
     {
         var seed = await SeedAsync();
         await AddChannelAsync(seed.ProjectId, NotificationEventType.AwaitingApproval);
-        var change = await _changes.CreateAsync(seed.ProjectId, seed.ContributorId,
-            new CreateChangeRequest("Gate me", null, ChangeKind.Feature));
+        var change = await _changes.CreateAsync(
+            seed.ProjectId,
+            seed.ContributorId,
+            new CreateChangeRequest("Gate me", null, ChangeKind.Feature),
+            Ct);
 
-        await _changes.TransitionAsync(change.Id, seed.ContributorId,
-            new TransitionChangeRequest(ChangeStatus.Triaged, null, null));
+        await _changes.TransitionAsync(
+            change.Id,
+            seed.ContributorId,
+            new TransitionChangeRequest(ChangeStatus.Triaged, null, null),
+            Ct);
 
         var delivery = Assert.Single(await DeliveriesAsync(NotificationEventType.AwaitingApproval));
         Assert.Equal(change.Id, delivery.ChangeRequestId);
@@ -132,16 +141,19 @@ public sealed class NotificationServiceTests : IDisposable
     {
         var seed = await SeedAsync();
         await AddChannelAsync(seed.ProjectId, NotificationEventType.AssignedToYou);
-        var change = await _changes.CreateAsync(seed.ProjectId, seed.ContributorId,
-            new CreateChangeRequest("Work", null, ChangeKind.Feature));
+        var change = await _changes.CreateAsync(
+            seed.ProjectId,
+            seed.ContributorId,
+            new CreateChangeRequest("Work", null, ChangeKind.Feature),
+            Ct);
 
         // Contributor directs it to the Maintainer → one delivery, addressed to the Maintainer.
-        await _changes.AssignAsync(change.Id, seed.ContributorId, new AssignChangeRequest(seed.MaintainerId));
+        await _changes.AssignAsync(change.Id, seed.ContributorId, new AssignChangeRequest(seed.MaintainerId), Ct);
         var delivery = Assert.Single(await DeliveriesAsync(NotificationEventType.AssignedToYou));
         Assert.Equal(seed.MaintainerId, delivery.RecipientActorId);
 
         // Contributor claims it themselves → no new delivery (you don't notify yourself).
-        await _changes.AssignAsync(change.Id, seed.ContributorId, new AssignChangeRequest(seed.ContributorId));
+        await _changes.AssignAsync(change.Id, seed.ContributorId, new AssignChangeRequest(seed.ContributorId), Ct);
         Assert.Single(await DeliveriesAsync(NotificationEventType.AssignedToYou));
     }
 
@@ -152,19 +164,22 @@ public sealed class NotificationServiceTests : IDisposable
         await AddChannelAsync(seed.ProjectId, NotificationEventType.WorkOrderResults);
 
         // Drive a change to In Development, then export a work order as the Maintainer.
-        var change = await _changes.CreateAsync(seed.ProjectId, seed.ContributorId,
-            new CreateChangeRequest("Ship it", null, ChangeKind.Feature));
+        var change = await _changes.CreateAsync(
+            seed.ProjectId,
+            seed.ContributorId,
+            new CreateChangeRequest("Ship it", null, ChangeKind.Feature),
+            Ct);
         foreach (var target in new[] { ChangeStatus.Triaged, ChangeStatus.Approved, ChangeStatus.InDevelopment })
         {
-            await _changes.TransitionAsync(change.Id, seed.MaintainerId, new TransitionChangeRequest(target, null, null));
+            await _changes.TransitionAsync(change.Id, seed.MaintainerId, new TransitionChangeRequest(target, null, null), Ct);
         }
-        var export = await _changes.ExportInDevelopmentAsync(seed.ProjectId, seed.MaintainerId, "https://dimes.test");
+        var export = await _changes.ExportInDevelopmentAsync(seed.ProjectId, seed.MaintainerId, "https://dimes.test", Ct);
         var token = Regex.Match(export.Markdown, @"/api/work-orders/(?<token>[A-Za-z0-9_-]+)/results").Groups["token"].Value;
 
         await _workOrders.ReportResultsAsync(token, new WorkOrderResultsRequest(
             "Done.",
             [new WorkOrderCommitReport("a1b2c3d", $"Ship it\n\nDimes change {change.Id}", null, "https://github.com/x/y/commit/a1b2c3d")],
-            null, null));
+            null, null), Ct);
 
         var delivery = Assert.Single(await DeliveriesAsync(NotificationEventType.WorkOrderResults));
         Assert.Equal(seed.MaintainerId, delivery.RecipientActorId); // the exporter
@@ -178,11 +193,17 @@ public sealed class NotificationServiceTests : IDisposable
         var seed = await SeedAsync();
         // Channel routes only work-order results; a Triaged transition must not reach it.
         await AddChannelAsync(seed.ProjectId, NotificationEventType.WorkOrderResults);
-        var change = await _changes.CreateAsync(seed.ProjectId, seed.ContributorId,
-            new CreateChangeRequest("x", null, ChangeKind.Feature));
+        var change = await _changes.CreateAsync(
+            seed.ProjectId,
+            seed.ContributorId,
+            new CreateChangeRequest("x", null, ChangeKind.Feature),
+            Ct);
 
-        await _changes.TransitionAsync(change.Id, seed.ContributorId,
-            new TransitionChangeRequest(ChangeStatus.Triaged, null, null));
+        await _changes.TransitionAsync(
+            change.Id,
+            seed.ContributorId,
+            new TransitionChangeRequest(ChangeStatus.Triaged, null, null),
+            Ct);
 
         Assert.Empty(await DeliveriesAsync(NotificationEventType.AwaitingApproval));
     }
@@ -192,14 +213,23 @@ public sealed class NotificationServiceTests : IDisposable
     {
         var seed = await SeedAsync();
         var channel = await AddChannelAsync(seed.ProjectId, NotificationEventType.AwaitingApproval);
-        await _projects.UpdateNotificationChannelAsync(seed.ProjectId, channel.Id,
-            new UpdateNotificationChannelRequest(NotificationChannelType.GoogleChat, "team-space", "spaces/AAAA",
-                "GCHAT_CREDS", [NotificationEventType.AwaitingApproval], Enabled: false));
-        var change = await _changes.CreateAsync(seed.ProjectId, seed.ContributorId,
-            new CreateChangeRequest("x", null, ChangeKind.Feature));
+        await _projects.UpdateNotificationChannelAsync(
+            seed.ProjectId, channel.Id,
+            new UpdateNotificationChannelRequest(
+                NotificationChannelType.GoogleChat, "team-space", "spaces/AAAA", "GCHAT_CREDS",
+                [NotificationEventType.AwaitingApproval], Enabled: false),
+            Ct);
+        var change = await _changes.CreateAsync(
+            seed.ProjectId,
+            seed.ContributorId,
+            new CreateChangeRequest("x", null, ChangeKind.Feature),
+            Ct);
 
-        await _changes.TransitionAsync(change.Id, seed.ContributorId,
-            new TransitionChangeRequest(ChangeStatus.Triaged, null, null));
+        await _changes.TransitionAsync(
+            change.Id,
+            seed.ContributorId,
+            new TransitionChangeRequest(ChangeStatus.Triaged, null, null),
+            Ct);
 
         Assert.Empty(await DeliveriesAsync());
     }
@@ -210,14 +240,14 @@ public sealed class NotificationServiceTests : IDisposable
         var seed = await SeedAsync();
 
         // Default is opted in.
-        Assert.False((await _projects.GetNotificationPreferenceAsync(seed.MaintainerId, seed.ProjectId)).DigestOptOut);
+        Assert.False((await _projects.GetNotificationPreferenceAsync(seed.MaintainerId, seed.ProjectId, Ct)).DigestOptOut);
 
-        await _projects.UpdateNotificationPreferenceAsync(seed.MaintainerId, seed.ProjectId, digestOptOut: true);
-        Assert.True((await _projects.GetNotificationPreferenceAsync(seed.MaintainerId, seed.ProjectId)).DigestOptOut);
+        await _projects.UpdateNotificationPreferenceAsync(seed.MaintainerId, seed.ProjectId, digestOptOut: true, ct: Ct);
+        Assert.True((await _projects.GetNotificationPreferenceAsync(seed.MaintainerId, seed.ProjectId, Ct)).DigestOptOut);
 
         // Upsert flips it back without creating a second row.
-        await _projects.UpdateNotificationPreferenceAsync(seed.MaintainerId, seed.ProjectId, digestOptOut: false);
-        Assert.False((await _projects.GetNotificationPreferenceAsync(seed.MaintainerId, seed.ProjectId)).DigestOptOut);
+        await _projects.UpdateNotificationPreferenceAsync(seed.MaintainerId, seed.ProjectId, digestOptOut: false, ct: Ct);
+        Assert.False((await _projects.GetNotificationPreferenceAsync(seed.MaintainerId, seed.ProjectId, Ct)).DigestOptOut);
         Assert.Single(_db.NotificationPreferences.Where(p => p.ActorId == seed.MaintainerId));
     }
 

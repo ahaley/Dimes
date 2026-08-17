@@ -51,39 +51,39 @@ public sealed class LlmProviderScopeTests : IDisposable
     [Fact]
     public async Task MoveScope_ProjectToWebsiteWide_AndBack()
     {
-        var project = await _projects.CreateAsync(_db, new CreateProjectRequest("P", null));
+        var project = await _projects.CreateAsync(_db, new CreateProjectRequest("P", null), ct: Ct);
         var created = await CreateProviderAsync(project.Id);
         Assert.Equal(project.Id, created.ProjectId);
 
-        var promoted = await _projects.MoveLlmProviderScopeAsync(created.Id, null);
+        var promoted = await _projects.MoveLlmProviderScopeAsync(created.Id, null, Ct);
         Assert.Null(promoted.ProjectId);
 
-        var demoted = await _projects.MoveLlmProviderScopeAsync(created.Id, project.Id);
+        var demoted = await _projects.MoveLlmProviderScopeAsync(created.Id, project.Id, Ct);
         Assert.Equal(project.Id, demoted.ProjectId);
     }
 
     [Fact]
     public async Task MoveScope_BetweenProjects()
     {
-        var a = await _projects.CreateAsync(_db, new CreateProjectRequest("A", null));
-        var b = await _projects.CreateAsync(_db, new CreateProjectRequest("B", null));
+        var a = await _projects.CreateAsync(_db, new CreateProjectRequest("A", null), ct: Ct);
+        var b = await _projects.CreateAsync(_db, new CreateProjectRequest("B", null), ct: Ct);
         var created = await CreateProviderAsync(a.Id);
 
-        var moved = await _projects.MoveLlmProviderScopeAsync(created.Id, b.Id);
+        var moved = await _projects.MoveLlmProviderScopeAsync(created.Id, b.Id, Ct);
 
         Assert.Equal(b.Id, moved.ProjectId);
         // The project list is what feeds the agent picker, so confirm the move actually changed visibility.
-        Assert.DoesNotContain(created.Id, (await _projects.ListLlmProvidersAsync(a.Id)).Select(p => p.Id));
-        Assert.Contains(created.Id, (await _projects.ListLlmProvidersAsync(b.Id)).Select(p => p.Id));
+        Assert.DoesNotContain(created.Id, (await _projects.ListLlmProvidersAsync(a.Id, Ct)).Select(p => p.Id));
+        Assert.Contains(created.Id, (await _projects.ListLlmProvidersAsync(b.Id, Ct)).Select(p => p.Id));
     }
 
     [Fact]
     public async Task MoveScope_UnchangedScope_IsANoOp()
     {
-        var project = await _projects.CreateAsync(_db, new CreateProjectRequest("P", null));
+        var project = await _projects.CreateAsync(_db, new CreateProjectRequest("P", null), ct: Ct);
         var created = await CreateProviderAsync(project.Id);
 
-        var same = await _projects.MoveLlmProviderScopeAsync(created.Id, project.Id);
+        var same = await _projects.MoveLlmProviderScopeAsync(created.Id, project.Id, Ct);
 
         Assert.Equal(project.Id, same.ProjectId);
     }
@@ -94,25 +94,25 @@ public sealed class LlmProviderScopeTests : IDisposable
         var created = await CreateProviderAsync(null);
 
         await Assert.ThrowsAsync<NotFoundException>(
-            () => _projects.MoveLlmProviderScopeAsync(created.Id, Guid.NewGuid()));
+            () => _projects.MoveLlmProviderScopeAsync(created.Id, Guid.NewGuid(), Ct));
     }
 
     [Fact]
     public async Task MoveScope_UnknownProvider_IsNotFound()
     {
         await Assert.ThrowsAsync<NotFoundException>(
-            () => _projects.MoveLlmProviderScopeAsync(Guid.NewGuid(), null));
+            () => _projects.MoveLlmProviderScopeAsync(Guid.NewGuid(), null, Ct));
     }
 
     [Fact]
     public async Task MoveScope_ToWebsiteWide_IsAllowedEvenWhileAgentsUseIt()
     {
         // Widening never strands anyone: a website-wide provider is available to every project.
-        var project = await _projects.CreateAsync(_db, new CreateProjectRequest("P", null));
+        var project = await _projects.CreateAsync(_db, new CreateProjectRequest("P", null), ct: Ct);
         var created = await CreateProviderAsync(project.Id);
         await CreateAgentAsync(created.Id, project.Id);
 
-        var promoted = await _projects.MoveLlmProviderScopeAsync(created.Id, null);
+        var promoted = await _projects.MoveLlmProviderScopeAsync(created.Id, null, Ct);
 
         Assert.Null(promoted.ProjectId);
     }
@@ -120,35 +120,35 @@ public sealed class LlmProviderScopeTests : IDisposable
     [Fact]
     public async Task MoveScope_NarrowingAwayFromAnAgentsProject_IsRefused()
     {
-        var a = await _projects.CreateAsync(_db, new CreateProjectRequest("A", null));
-        var b = await _projects.CreateAsync(_db, new CreateProjectRequest("B", null));
+        var a = await _projects.CreateAsync(_db, new CreateProjectRequest("A", null), ct: Ct);
+        var b = await _projects.CreateAsync(_db, new CreateProjectRequest("B", null), ct: Ct);
         var created = await CreateProviderAsync(null); // website-wide, so the agent in A can use it
         var agent = await CreateAgentAsync(created.Id, a.Id);
 
         // Scoping it to B alone would leave the agent in A holding a provider A can't see.
         var ex = await Assert.ThrowsAsync<BadRequestException>(
-            () => _projects.MoveLlmProviderScopeAsync(created.Id, b.Id));
+            () => _projects.MoveLlmProviderScopeAsync(created.Id, b.Id, Ct));
         Assert.Contains("Reassign", ex.Message);
 
         // Still website-wide — the refusal must not have half-applied.
-        Assert.Null((await _projects.ListGlobalLlmProvidersAsync()).Single(p => p.Id == created.Id).ProjectId);
+        Assert.Null((await _projects.ListGlobalLlmProvidersAsync(Ct)).Single(p => p.Id == created.Id).ProjectId);
 
         // Once that agent is also a member of B, nobody is stranded and the move goes through.
         _db.Memberships.Add(new Membership { ActorId = agent.Id, ProjectId = b.Id, Role = MemberRole.Contributor });
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(Ct);
 
-        var moved = await _projects.MoveLlmProviderScopeAsync(created.Id, b.Id);
+        var moved = await _projects.MoveLlmProviderScopeAsync(created.Id, b.Id, Ct);
         Assert.Equal(b.Id, moved.ProjectId);
     }
 
     [Fact]
     public async Task MoveScope_NarrowingWithinTheAgentsOwnProject_IsAllowed()
     {
-        var project = await _projects.CreateAsync(_db, new CreateProjectRequest("P", null));
+        var project = await _projects.CreateAsync(_db, new CreateProjectRequest("P", null), ct: Ct);
         var created = await CreateProviderAsync(null);
         await CreateAgentAsync(created.Id, project.Id);
 
-        var moved = await _projects.MoveLlmProviderScopeAsync(created.Id, project.Id);
+        var moved = await _projects.MoveLlmProviderScopeAsync(created.Id, project.Id, Ct);
 
         Assert.Equal(project.Id, moved.ProjectId);
     }

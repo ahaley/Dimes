@@ -45,7 +45,9 @@ public sealed class LlmProviderScopeEndpointTests : IClassFixture<ApiFactory>
         var (user, _, provider) = await SetUpMaintainerAsync("scope-maintainer@test.local", "SCP1");
 
         var response = await user.PostAsJsonAsync(
-            $"/api/llm-providers/{provider.Id}/scope", new { projectId = (Guid?)null });
+            $"/api/llm-providers/{provider.Id}/scope",
+            new { projectId = (Guid?)null },
+            cancellationToken: Ct);
 
         // They administer the source, but making something website-wide is site-admin authority.
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
@@ -58,11 +60,15 @@ public sealed class LlmProviderScopeEndpointTests : IClassFixture<ApiFactory>
         // A project the caller has nothing to do with.
         var admin = await _api.LoginAsync(ApiFactory.AdminEmail, ApiFactory.AdminPassword);
         var otherCreated = await admin.PostAsJsonAsync(
-            "/api/projects", new { name = "Someone Else", description = (string?)null, key = "SCP3" });
-        var other = (await otherCreated.Content.ReadFromJsonAsync<ProjectDto>(ApiFactory.Json))!;
+            "/api/projects",
+            new { name = "Someone Else", description = (string?)null, key = "SCP3" },
+            cancellationToken: Ct);
+        var other = (await otherCreated.Content.ReadFromJsonAsync<ProjectDto>(ApiFactory.Json, cancellationToken: Ct))!;
 
         var response = await user.PostAsJsonAsync(
-            $"/api/llm-providers/{provider.Id}/scope", new { projectId = other.Id });
+            $"/api/llm-providers/{provider.Id}/scope",
+            new { projectId = other.Id },
+            cancellationToken: Ct);
 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
@@ -74,10 +80,12 @@ public sealed class LlmProviderScopeEndpointTests : IClassFixture<ApiFactory>
         var admin = await _api.LoginAsync(ApiFactory.AdminEmail, ApiFactory.AdminPassword);
 
         var response = await admin.PostAsJsonAsync(
-            $"/api/llm-providers/{provider.Id}/scope", new { projectId = (Guid?)null });
+            $"/api/llm-providers/{provider.Id}/scope",
+            new { projectId = (Guid?)null },
+            cancellationToken: Ct);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var moved = (await response.Content.ReadFromJsonAsync<LlmProviderConfigDto>(ApiFactory.Json))!;
+        var moved = (await response.Content.ReadFromJsonAsync<LlmProviderConfigDto>(ApiFactory.Json, cancellationToken: Ct))!;
         Assert.Null(moved.ProjectId);
     }
 
@@ -88,7 +96,7 @@ public sealed class LlmProviderScopeEndpointTests : IClassFixture<ApiFactory>
         // load-bearing. Its site-admin gate is what keeps the route's own guard from being the only one.
         var (user, _, _) = await SetUpMaintainerAsync("scope-lister@test.local", "SCP5");
 
-        var response = await user.GetAsync("/api/llm-providers");
+        var response = await user.GetAsync("/api/llm-providers", Ct);
 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
