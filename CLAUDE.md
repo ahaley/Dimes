@@ -184,7 +184,15 @@ detail (bad key, unknown model, rejected parameter).
 Two things to keep straight when touching providers:
 - **Model ids are never hardcoded.** `LlmProviderConfig.Model` is free text, and `ILlmModelCatalog` is
   an *optional* capability (test with `provider is ILlmModelCatalog`) that powers the "Discover models"
-  probe. Adding support for a newly released model should require no code change at all.
+  probe. Adding support for a newly released model should require no code change at all. All four
+  adapters implement it today; the interface stays optional because a minimal local runner may expose no
+  listing route. Two Vertex-specific things to keep straight: its catalog is `publishers.models.list`,
+  which exists **only on `v1beta1`** (verified against the discovery document — `v1` has no such method),
+  so that adapter deliberately speaks `v1` for generation and `v1beta1` for listing; and unlike the
+  credential-scoped listings it is a *published catalog*, so a listed id can still be unavailable to a
+  given project or region — the UI says so rather than implying availability. Vertex results are filtered
+  to the `gemini-` family because the adapter only speaks the Gemini `generateContent` body and the
+  catalog has no capability field to filter on; that is a family prefix, not a list of known ids.
 - **`ProviderUrlValidator` is per provider type.** OpenAI-compatible stays permissive because
   localhost/private-LAN runners are the point of it; the vendor types are pinned to the vendor's domain
   so a stored key can't be redirected to an attacker's host. Build connections through

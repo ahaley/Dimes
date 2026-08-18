@@ -53,16 +53,24 @@ public interface ILlmProvider
         LlmCompletionRequest request, LlmConnection connection, CancellationToken ct = default);
 }
 
-/// <summary>One model the configured credential can actually reach.</summary>
+/// <summary>One model an endpoint reports. <see cref="DisplayName"/> is whatever that vendor offers as a
+/// human label, or null where it offers none — Vertex's catalog has no display name, so its adapter puts
+/// the launch stage there instead.</summary>
 public sealed record LlmModelInfo(string Id, string? DisplayName = null);
 
 /// <summary>Optional capability: enumerate the models available to a connection, so the config UI can
 /// offer real ids instead of a hardcoded list that goes stale on every vendor release.
 ///
-/// Deliberately a *separate* interface rather than a member of <see cref="ILlmProvider"/>: not every
-/// endpoint can enumerate (a Vertex publisher-model listing is not the same shape, and a minimal local
-/// runner may implement no listing route at all), and callers must be able to tell "this endpoint has no
-/// catalog" from "the catalog call failed". Callers test with <c>provider is ILlmModelCatalog</c>.</summary>
+/// Deliberately a *separate* interface rather than a member of <see cref="ILlmProvider"/>, for two
+/// reasons. Listing is not universal — a minimal local runner may implement no listing route at all — and
+/// callers must be able to tell "this endpoint has no catalog" from "the catalog call failed". And the
+/// vendors disagree wildly on shape: a Google AI models list, an Anthropic paged list, and a Vertex
+/// *publisher catalog* on a different API version share nothing but the idea, so the normalising seam has
+/// to live somewhere. Callers test with <c>provider is ILlmModelCatalog</c>.
+///
+/// What a listing means also varies, and callers should not over-promise: most are scoped to the
+/// credential and so report what it can reach, but Vertex's is a published catalog and a listed id may
+/// still be unavailable to a given project or region.</summary>
 public interface ILlmModelCatalog
 {
     Task<IReadOnlyList<LlmModelInfo>> ListModelsAsync(
