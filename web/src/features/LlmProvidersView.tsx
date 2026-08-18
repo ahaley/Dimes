@@ -228,6 +228,15 @@ const draftFrom = (provider: LlmProviderConfig): ProviderDraft => ({
  * Vertex is optional only because Application Default Credentials is the alternative. */
 const needsKeyRef = (type: LlmProviderType) => type === 'Anthropic' || type === 'Gemini'
 
+/** Whether the reference is required, in words. Derived from needsKeyRef rather than spelled out per type,
+ * so the sentence can't drift from the rule that actually gates saving. Vertex says only that ADC is the
+ * alternative — what its value may contain is already stated by the ADC paragraph directly above. */
+const secretRefRequirement = (draft: ProviderDraft) => {
+  if (needsKeyRef(draft.type)) return 'Required for this provider type.'
+  if (draft.type === 'GeminiVertex') return 'Required unless Application Default Credentials is on.'
+  return 'Optional for a keyless local endpoint.'
+}
+
 /** The reference name to show in the config examples below the field. Before one is typed it falls back to
  * the same placeholder the input displays, so the example reads as a concrete, copyable pair. */
 const secretName = (draft: ProviderDraft) =>
@@ -408,22 +417,24 @@ function ProviderFields({
           disabled={draft.type === 'GeminiVertex' && draft.useAdc}
         />
       </Field>
-      <p className="text-xs text-slate-400">
-        A lookup name, not the credential itself. Bind it to a value in configuration
-        (<code className="font-mono">Secrets:Llm:{secretName(draft)}</code>) or the environment variable{' '}
-        <code className="font-mono">DIMES_LLM_{secretName(draft)}</code> — or, for a credential you hold as
-        a file, to its path via <code className="font-mono">SecretFiles:Llm:{secretName(draft)}</code> or a{' '}
-        <code className="font-mono">DIMES_LLM_{secretName(draft)}_FILE</code> environment variable, and
-        Dimes reads the file. The <code className="font-mono">Llm</code> section is required: a name here
-        resolves only among LLM secrets, so it can never reach one bound for something else.{' '}
-        {needsKeyRef(draft.type)
-          ? 'Required for this provider type.'
-          : draft.type === 'GeminiVertex'
-            ? 'Required unless Application Default Credentials is enabled. A service-account key is a file, '
-              + 'so the simplest binding is the key file’s absolute path as the value — Vertex reads '
-              + 'the file either way, so the file forms above work too but are not needed here.'
-            : 'Optional for a keyless local endpoint.'}
-      </p>
+      <div className="space-y-1 text-xs text-slate-400">
+        <p>A name, not the credential itself. Bind it to one of:</p>
+        <ul className="list-disc space-y-0.5 pl-4">
+          <li>
+            <code className="font-mono">Secrets:Llm:{secretName(draft)}</code> or{' '}
+            <code className="font-mono">DIMES_LLM_{secretName(draft)}</code> — the credential
+          </li>
+          <li>
+            <code className="font-mono">SecretFiles:Llm:{secretName(draft)}</code> or{' '}
+            <code className="font-mono">DIMES_LLM_{secretName(draft)}_FILE</code> — its file path, which
+            Dimes reads
+          </li>
+        </ul>
+        <p>
+          The <code className="font-mono">Llm</code> section is required: it keeps this name from reaching
+          secrets bound elsewhere. {secretRefRequirement(draft)}
+        </p>
+      </div>
     </>
   )
 }
