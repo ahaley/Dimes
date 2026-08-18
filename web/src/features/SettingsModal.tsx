@@ -3,6 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '../api/client'
 import { keys, useActors, useExportInstruction, useLlmProviders, useMembers, useNotificationChannels, useNotificationPreference, useProjects, useSaveNotificationChannel, useSources, useUpdateExportInstruction, useUpdateNotificationPreference } from '../api/hooks'
 import type { LlmProviderConfig, Member, MemberRole, NotificationChannel, NotificationEventType } from '../api/types'
+import { SecretRefField } from '../components/SecretRefField'
 import { Badge, Button, cx, ErrorText, Field, Modal, Select, TextInput, Textarea } from '../components/ui'
 import { initials } from '../lifecycle'
 
@@ -649,20 +650,14 @@ function NotificationChannelForm({
       <Field label="Google Chat space">
         <TextInput value={target} onChange={(e) => setTarget(e.target.value)} placeholder="spaces/AAAAAAAAAAA" />
       </Field>
-      <Field label="Credentials secret reference">
-        <TextInput value={secretRef} onChange={(e) => setSecretRef(e.target.value)} placeholder="e.g. GCHAT_CREDS" />
-      </Field>
-      <p className="text-xs text-slate-400">
-        A lookup key, not the credentials themselves — you must separately set its value (the service-account
-        JSON) in configuration (<code className="font-mono">Secrets:Notification:{secretRef.trim() || '<name>'}</code>)
-        or the environment variable{' '}
-        <code className="font-mono">DIMES_NOTIFICATION_{secretRef.trim() || '<name>'}</code>. For a
-        credentials file, bind its path with{' '}
-        <code className="font-mono">SecretFiles:Notification:{secretRef.trim() || '<name>'}</code> instead.
-        The <code className="font-mono">Notification</code> section is required: a name here resolves only
-        among notification secrets, so it can never reach one bound for something else. Required, because
-        Google Chat can&apos;t authenticate without it.
-      </p>
+      <SecretRefField
+        label="Credentials secret reference"
+        namespace="Notification"
+        value={secretRef}
+        onChange={setSecretRef}
+        placeholder="GCHAT_CREDS"
+        requirement={<>Its value is the service-account JSON. Required, because Google Chat can&apos;t authenticate without it.</>}
+      />
       <div>
         <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">Events</div>
         <div className="space-y-1.5">

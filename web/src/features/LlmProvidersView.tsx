@@ -3,6 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '../api/client'
 import { useGlobalLlmProviders, useLlmProviders, useProjects } from '../api/hooks'
 import type { LlmModel, LlmProviderConfig, LlmProviderSettings, LlmProviderType, Project } from '../api/types'
+import { SecretRefField } from '../components/SecretRefField'
 import { Badge, Button, Card, ErrorText, Field, Select, TextInput } from '../components/ui'
 
 /** The scope a provider belongs to. '' is website-wide; anything else is a project id. */
@@ -237,11 +238,6 @@ const secretRefRequirement = (draft: ProviderDraft) => {
   return 'Optional for a keyless local endpoint.'
 }
 
-/** The reference name to show in the config examples below the field. Before one is typed it falls back to
- * the same placeholder the input displays, so the example reads as a concrete, copyable pair. */
-const secretName = (draft: ProviderDraft) =>
-  draft.apiKeySecretRef.trim() || TYPE_PLACEHOLDERS[draft.type].secretRef
-
 /** Only Vertex carries settings today; other types send null so the column stays empty. */
 const settingsOf = (draft: ProviderDraft): LlmProviderSettings | null =>
   draft.type === 'GeminiVertex'
@@ -409,32 +405,15 @@ function ProviderFields({
         </>
       )}
 
-      <Field label={draft.type === 'GeminiVertex' ? 'Credentials secret ref' : 'API key secret ref'}>
-        <TextInput
-          value={draft.apiKeySecretRef}
-          onChange={(e) => set('apiKeySecretRef', e.target.value)}
-          placeholder={placeholders.secretRef}
-          disabled={draft.type === 'GeminiVertex' && draft.useAdc}
-        />
-      </Field>
-      <div className="space-y-1 text-xs text-slate-400">
-        <p>A name, not the credential itself. Bind it to one of:</p>
-        <ul className="list-disc space-y-0.5 pl-4">
-          <li>
-            <code className="font-mono">Secrets:Llm:{secretName(draft)}</code> or{' '}
-            <code className="font-mono">DIMES_LLM_{secretName(draft)}</code> — the credential
-          </li>
-          <li>
-            <code className="font-mono">SecretFiles:Llm:{secretName(draft)}</code> or{' '}
-            <code className="font-mono">DIMES_LLM_{secretName(draft)}_FILE</code> — its file path, which
-            Dimes reads
-          </li>
-        </ul>
-        <p>
-          The <code className="font-mono">Llm</code> section is required: it keeps this name from reaching
-          secrets bound elsewhere. {secretRefRequirement(draft)}
-        </p>
-      </div>
+      <SecretRefField
+        label={draft.type === 'GeminiVertex' ? 'Credentials secret ref' : 'API key secret ref'}
+        namespace="Llm"
+        value={draft.apiKeySecretRef}
+        onChange={(next) => set('apiKeySecretRef', next)}
+        placeholder={placeholders.secretRef}
+        disabled={draft.type === 'GeminiVertex' && draft.useAdc}
+        requirement={secretRefRequirement(draft)}
+      />
     </>
   )
 }

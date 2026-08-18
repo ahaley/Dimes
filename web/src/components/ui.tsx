@@ -56,12 +56,49 @@ export function Field({ label, children }: { label: string; children: ReactNode 
   )
 }
 
-// text-base on phones keeps inputs at 16px so iOS Safari doesn't zoom the page on focus; the smaller
-// desktop size returns at sm+. Vertical padding matches Button so inline input+button rows align.
-const inputCx = 'w-full rounded-md border border-slate-300 bg-white px-2.5 py-2 text-base outline-none focus:border-indigo-500 sm:py-1.5 sm:text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100'
+// Field chrome, split in two so an input group can lift the border onto a wrapper while the control
+// inside keeps its own sizing. text-base on phones keeps inputs at 16px so iOS Safari doesn't zoom the
+// page on focus; the smaller desktop size returns at sm+. Vertical padding matches Button so inline
+// input+button rows align.
+const inputShellCx = 'rounded-md border border-slate-300 bg-white dark:border-slate-600 dark:bg-slate-800'
+const inputSizeCx = 'px-2.5 py-2 text-base outline-none sm:py-1.5 sm:text-sm'
+const inputCx = cx('w-full', inputShellCx, inputSizeCx, 'focus:border-indigo-500 dark:text-slate-100')
 
-export function TextInput(props: InputHTMLAttributes<HTMLInputElement>) {
-  return <input {...props} className={cx(inputCx, props.className)} />
+/** A text input, optionally fronted by a static affix fused to its left edge.
+ *
+ * The affix is for a value that is only the *middle* of what the system finally uses — a secret
+ * reference, which the resolver looks up as `<prefix><what you type>`. Showing the fixed part inside the
+ * control is what stops it being typed a second time; the hint below the field did not, because the
+ * mistake gets made while looking at the box. Border and focus move to the wrapper so the pair reads as
+ * one control, and `disabled` dims the whole group — an affix left bright beside a greyed input reads as
+ * still-active. It is `aria-hidden` because `Field` wraps its children in the label, so an audible affix
+ * would land in the input's accessible name; callers point `aria-describedby` at the hint instead. */
+export function TextInput({ affix, className, ...props }: InputHTMLAttributes<HTMLInputElement> & { affix?: ReactNode }) {
+  if (affix == null) {
+    return <input {...props} className={cx(inputCx, className)} />
+  }
+  return (
+    <div
+      className={cx(
+        'flex w-full items-stretch overflow-hidden focus-within:border-indigo-500',
+        inputShellCx,
+        props.disabled && 'opacity-60',
+        className,
+      )}
+    >
+      <span
+        aria-hidden="true"
+        className={cx(
+          inputSizeCx,
+          'shrink-0 select-none border-r border-slate-300 bg-slate-50 font-mono text-slate-500',
+          'dark:border-slate-600 dark:bg-slate-900/60 dark:text-slate-400',
+        )}
+      >
+        {affix}
+      </span>
+      <input {...props} className={cx('w-full min-w-0 border-0 bg-transparent dark:text-slate-100', inputSizeCx)} />
+    </div>
+  )
 }
 
 // ComponentProps (not TextareaHTMLAttributes) so callers can pass a ref — React 19 forwards it as a prop.
