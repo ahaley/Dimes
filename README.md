@@ -38,8 +38,8 @@ through what's actually wrong and querying it as you go, and the agent helps tur
 proposed change requests. In **freestyle mode**, you hand it loose markdown (notes, a brain-dump, a
 meeting's worth of asks) and the agent decomposes it into a suggested list. Both paths end the same way:
 the agent proposes, you edit, and you approve what lands on the board. Nothing is created without your
-sign-off. Like everything else in Dimes, it runs on your own LLM, whether Anthropic or any
-OpenAI-compatible endpoint, so the problem you're working through never leaves infrastructure you control.
+sign-off. Like everything else in Dimes, it runs on your own LLM — Anthropic, Gemini, or any
+OpenAI-compatible endpoint — so the problem you're working through never leaves infrastructure you control.
 
 - **Capture:** an explicit feedback widget; the [`dimes-capture-sdk`](#embedding-the-capture-sdk) for latent
   client signals (uncaught errors, rage clicks, navigation breadcrumbs); a Seq integration for server-side
@@ -60,9 +60,11 @@ OpenAI-compatible endpoint, so the problem you're working through never leaves i
   Guards are enforced per role; the most important is the **Maintainer gate** on **`Triaged → Approved`**
   and on acceptance (`→ Done`). Authentication is built in: **Local** (email + password) or
   **OIDC / Keycloak**.
-- **AI providers:** bring your own LLM, whether Anthropic (primary) or any OpenAI-compatible endpoint,
-  including local runners like Ollama / vLLM. Commentary is recommend-only, and API keys are referenced
-  from a secret store, never stored in plaintext.
+- **AI providers:** bring your own LLM — Anthropic (primary), Gemini (Google AI or Vertex AI), or any
+  OpenAI-compatible endpoint, including local runners like Ollama / vLLM. Model ids are never hardcoded,
+  and an endpoint that lists its models can be probed from the form. Commentary is recommend-only, and
+  credentials are referenced from a secret store, never stored in plaintext. See
+  [Adding an LLM provider](#adding-an-llm-provider).
 
 ## Quick start
 
@@ -113,6 +115,72 @@ Password: dimes-dev
   is available — see [`CLAUDE.md`](CLAUDE.md) for the two-provider (SQLite + Postgres) workflow.
 
 </details>
+
+## Adding an LLM provider
+
+Dimes ships no model ids and stores no keys. A provider config is an endpoint type, a free-text model
+id, and a **reference** to a credential that is resolved at runtime — so supporting a newly released
+model needs no code change and no redeploy. Wiring one up is three steps: bind the credential, create
+the provider, attach it to an agent.
+
+Four endpoint types are supported:
+
+| Type | How it authenticates | Base URL |
+| --- | --- | --- |
+| **Anthropic (Claude)** | `x-api-key` header | Defaults to `api.anthropic.com`; an override must stay on `anthropic.com`. |
+| **Gemini (Google AI)** | `x-goog-api-key` header | Defaults to `generativelanguage.googleapis.com`; an override must stay on `googleapis.com`. |
+| **Gemini (Vertex AI)** | OAuth2 bearer minted from a service-account key, or Application Default Credentials | Defaults to the regional Vertex host for the location you set. |
+| **OpenAI-compatible** | `Authorization: Bearer` | Required for anything but OpenAI itself. Permissive on purpose — `localhost` and private-LAN runners (Ollama, vLLM) are the point of it. |
+
+The vendor types are pinned to the vendor's domain so a stored credential cannot be redirected to
+someone else's host. A vendor only earns its own adapter when its auth model differs from a plain bearer
+token; Google's OpenAI compatibility endpoint, for instance, already works under **OpenAI-compatible**
+with no adapter at all.
+
+### 1. Bind the credential
+
+The provider form never takes a key — it takes a **lookup name**, and only that name reaches the
+database. Bind the name to a real value in the host's configuration or environment first. Every route
+lives under an `Llm` namespace:
+
+| Route | Where you bind it | The value is |
+| --- | --- | --- |
+| Configuration, literal | `Secrets:Llm:<name>` | the credential itself |
+| Configuration, file | `SecretFiles:Llm:<name>` | an **absolute path**; Dimes reads the file |
+| Environment, literal | `DIMES_LLM_<name>` | the credential itself |
+| Environment, file | `DIMES_LLM_<name>_FILE` | an **absolute path**; Dimes reads the file |
+
+Literal beats file within each tier, and configuration beats environment. So for a provider whose
+reference name is `ANTHROPIC_KEY`:
+
+```bash
+export DIMES_LLM_ANTHROPIC_KEY='sk-ant-...'
+```
+
+The file routes exist for credentials operators hold *as files* — a Google service-account JSON is
+multi-line and embeds a PEM private key — and they match how self-hosted deployments already mount
+secrets (Docker secrets under `/run/secrets/`, Kubernetes projected volumes). The `_FILE` suffix is the
+same convention the official Docker images use. Dimes reads the file itself, so what the adapter sees is
+always the credential, never a path. A configured-but-unreadable path fails loudly rather than looking
+like "no secret configured".
+
+### 2. Create the provider
+
+Providers live under **Settings → Providers** (site admin). Pick the **scope** first — *website-wide*
+(available to every project) or a single project — because that choice is explicit rather than inherited
+from whichever project you last visited. Then fill in the type, a display name, the credential reference
+from step 1, and the model.
+
+A provider can be moved between scopes later, but narrowing a scope is refused while it would strand an
+agent that references it.
+
+### 3. Attach it to an agent
+
+A provider on its own does nothing. Open the project's **Settings → Members**, add an **Agent** with a
+display name and role, and select the provider under *LLM provider (for commentary)*. The agent is now a
+first-class actor: it can be assigned work, comment on changes, and drive Capture Assist. It cannot move
+anything through the lifecycle — its commentary is posted as a recommendation, and the Assistant role
+holds no transition rights.
 
 ## Embedding the capture SDK
 
@@ -194,8 +262,10 @@ Ready-made references:
   bootstrap site admin) or **OIDC / Keycloak** (server-side authorization-code flow with an HttpOnly
   session cookie, so no tokens reach the browser).
 - **Secrets** (LLM API keys, the OIDC client secret) are *referenced* and resolved at runtime from
-  environment variables or a secret store, never committed to the repo or stored in the database in
-  plaintext.
+  environment variables, files, or a secret store, never committed to the repo or stored in the database
+  in plaintext. References resolve in a namespace chosen by their purpose, so a name a project Maintainer
+  types into a provider form cannot reach an operator-only secret — see
+  [Bind the credential](#1-bind-the-credential).
 
 **Reporting a vulnerability:** please report security issues privately through
 [GitHub's private vulnerability reporting](https://github.com/ahaley/Dimes/security/advisories/new) rather
@@ -210,7 +280,7 @@ capabilities are deliberately **not built yet** (tracked in [`specs/parking-lot.
 - code-executing agents (opening branches/PRs) and autonomous AI approval
 - per-change preview/deploy environments and CI/CD propagation
 - richer capture (session replay, screenshots) and automatic ML clustering
-- more LLM providers (e.g. Gemini) and SCM providers (GitLab, Azure DevOps)
+- more SCM providers (GitLab, Azure DevOps)
 - configurable per-project workflows, and multi-tenant / hosted offerings
 
 ## Contributing
