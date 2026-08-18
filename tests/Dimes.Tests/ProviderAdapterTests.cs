@@ -367,6 +367,62 @@ public class ProviderAdapterTests
         Assert.Contains("/v1beta/models", handler.Request!.RequestUri!.ToString());
     }
 
+    /// <summary>The catalog is a different surface from generation: it lives on v1beta1 (v1 has no
+    /// publishers.models.list) and its parent is just publishers/google, with no project or location
+    /// segment. The location therefore only picks a host, and its absence must not block discovery — that
+    /// is the state a half-filled form is in when the operator reaches for the button.</summary>
+    [Theory]
+    // No override, no location yet: the multi-region host, so a form with only credentials can discover.
+    [InlineData(null, null, "https://aiplatform.googleapis.com/v1beta1/publishers/google/models")]
+    [InlineData(null, "", "https://aiplatform.googleapis.com/v1beta1/publishers/google/models")]
+    // A location selects its regional host, matching how generation is addressed.
+    [InlineData(null, "europe-west4", "https://europe-west4-aiplatform.googleapis.com/v1beta1/publishers/google/models")]
+    // "global" is the multi-region pool, which is the unprefixed host.
+    [InlineData(null, "global", "https://aiplatform.googleapis.com/v1beta1/publishers/google/models")]
+    // An explicit override wins and keeps its host (a PSC endpoint or a pinned regional host).
+    [InlineData("https://us-central1-aiplatform.googleapis.com/", "europe-west4",
+        "https://us-central1-aiplatform.googleapis.com/v1beta1/publishers/google/models")]
+    public void GeminiVertex_CatalogUrl_IsVersionBetaAndNotProjectScoped(
+        string? baseUrl, string? location, string expected)
+    {
+        Assert.Equal(expected, GeminiVertexLlmProvider.BuildListModelsUrl(baseUrl, location));
+    }
+
+    /// <summary>The catalog returns everything Google publishes, but this adapter only speaks the Gemini
+    /// generateContent body — so non-Gemini families are dropped rather than offered and left to fail at
+    /// first use. A non-GA launch stage becomes the display label, since the payload carries no display
+    /// name of its own and "this is a preview" is the useful thing to say.</summary>
+    [Fact]
+    public void GeminiVertex_ParsePublisherModels_KeepsGeminiOnly_AndLabelsNonGaStages()
+    {
+        var models = GeminiVertexLlmProvider.ParsePublisherModels(
+            """
+            {"publisherModels":[
+              {"name":"publishers/google/models/gemini-2.0-flash","launchStage":"GA"},
+              {"name":"publishers/google/models/gemini-3-pro","launchStage":"PUBLIC_PREVIEW"},
+              {"name":"publishers/google/models/imagen-3.0-generate","launchStage":"GA"},
+              {"name":"publishers/google/models/gemma-2","launchStage":"GA"},
+              {"name":"publishers/google/models/text-embedding-004","launchStage":"GA"}
+            ]}
+            """);
+
+        Assert.Equal(["gemini-2.0-flash", "gemini-3-pro"], models.Select(m => m.Id));
+        // GA is the unremarkable case and gets no label; a preview says so.
+        Assert.Null(models[0].DisplayName);
+        Assert.Equal("public preview", models[1].DisplayName);
+    }
+
+    /// <summary>A newly released Gemini id must surface with no code change — the filter is a family
+    /// prefix, not a list of known ids.</summary>
+    [Fact]
+    public void GeminiVertex_ParsePublisherModels_AcceptsUnknownGeminiIds()
+    {
+        var models = GeminiVertexLlmProvider.ParsePublisherModels(
+            """{"publisherModels":[{"name":"publishers/google/models/gemini-9-something-unreleased"}]}""");
+
+        Assert.Equal("gemini-9-something-unreleased", Assert.Single(models).Id);
+    }
+
     [Fact]
     public async Task GeminiVertex_WithoutProjectOrLocation_FailsBeforeAnyRequest()
     {

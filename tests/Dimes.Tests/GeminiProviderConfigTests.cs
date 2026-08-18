@@ -175,14 +175,16 @@ public sealed class GeminiProviderConfigTests : IDisposable
     [Fact]
     public async Task ListModels_ForAnEndpointWithoutACatalog_SaysSoInsteadOfFailingOpaquely()
     {
+        // Every adapter shipped today implements ILlmModelCatalog, so the stub stands in for a future one
+        // that doesn't — the capability is optional by design (a minimal local runner may expose no
+        // listing route), and this branch is what keeps that a clear 400 rather than a cast failure.
         var catalog = new LlmModelCatalogService(
-            [new StubPlainProvider(LlmProviderType.GeminiVertex)], new StubSecrets());
+            [new StubPlainProvider(LlmProviderType.OpenAICompatible)], new StubSecrets());
 
-        var ex = await Assert.ThrowsAsync<BadRequestException>(() => catalog.ListModelsAsync(new ListLlmModelsRequest(
-                LlmProviderType.GeminiVertex, null, null,
-                new LlmProviderSettingsDto("p", "us-central1", true)), Ct));
+        var ex = await Assert.ThrowsAsync<BadRequestException>(() => catalog.ListModelsAsync(
+            new ListLlmModelsRequest(LlmProviderType.OpenAICompatible, null, null, null), Ct));
 
-        Assert.Contains("do not support model discovery", ex.Message);
+        Assert.Contains("cannot list models", ex.Message);
     }
 
     [Fact]

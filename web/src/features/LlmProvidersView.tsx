@@ -157,8 +157,7 @@ const TYPE_PLACEHOLDERS: Record<
     name: 'vertex',
     baseUrl: 'https://us-central1-aiplatform.googleapis.com',
     secretRef: 'VERTEX_CREDENTIALS',
-    // Vertex has no discovery route, so the hint has to stand on its own.
-    model: 'Enter a Gemini model id',
+    model: 'Discover models, or enter an id',
   },
   OpenAICompatible: {
     name: 'ollama',
@@ -301,6 +300,14 @@ function ModelDiscovery({
             <option key={m.id} value={m.id}>{m.displayName ? `${m.id} — ${m.displayName}` : m.id}</option>
           ))}
         </Select>
+      )}
+      {/* Vertex lists Google's published catalog rather than what this project may call, so a listed id
+          can still be refused. Said up front, because the alternative is a confusing failure later. */}
+      {draft.type === 'GeminiVertex' && models !== null && models.length > 0 && (
+        <p className="text-xs text-slate-400">
+          These are the Gemini models Google publishes. Availability still depends on your project and
+          region, so confirm the one you pick is enabled for {draft.gcpLocation.trim() || 'your region'}.
+        </p>
       )}
       <ErrorText error={discover.error} />
     </div>

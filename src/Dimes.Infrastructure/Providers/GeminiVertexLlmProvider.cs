@@ -3,6 +3,8 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using Dimes.Domain;
 using Dimes.Domain.Providers;
 using Google.Apis.Auth.OAuth2;
@@ -21,10 +23,33 @@ namespace Dimes.Infrastructure.Providers;
 /// there is then no stored secret at all, which is a stronger position than any secret reference. The
 /// credentials-JSON path exists for hosts without ADC and reuses the caching approach already proven in
 /// <see cref="GoogleChatNotificationProvider"/>.</summary>
-public sealed class GeminiVertexLlmProvider(HttpClient http) : ILlmProvider
+public sealed class GeminiVertexLlmProvider(HttpClient http) : ILlmProvider, ILlmModelCatalog
 {
     private const string CloudPlatformScope = "https://www.googleapis.com/auth/cloud-platform";
     private const string ApiVersion = "v1";
+
+    /// <summary>The publisher-model catalog lives only on <c>v1beta1</c>: <c>publishers.models.list</c> is
+    /// absent from the <c>v1</c> discovery document. So this adapter deliberately speaks two API versions —
+    /// <c>v1</c> for generation, <c>v1beta1</c> for listing — rather than moving generation onto a beta
+    /// surface for the sake of symmetry.</summary>
+    private const string CatalogApiVersion = "v1beta1";
+
+    /// <summary>The catalog is not project- or region-scoped (its parent is just <c>publishers/google</c>),
+    /// so a provider that has no location yet can still be probed against the multi-region host.</summary>
+    private const string GlobalHost = "https://aiplatform.googleapis.com";
+
+    /// <summary>Runaway guard on the paged listing, not a real limit.</summary>
+    private const int MaxModelPages = 5;
+
+    /// <summary>The catalog returns every model Google publishes — Imagen, Veo, Gemma, embeddings — but
+    /// this adapter only speaks the Gemini <c>generateContent</c> body, so anything else would be offered
+    /// only to fail at first use. Unlike the Google AI catalog there is no per-model capability field to
+    /// filter on (<c>supportedActions</c> describes console links, not API surface), so the model family is
+    /// the honest discriminator. This is a family prefix, not a hardcoded id: a newly released
+    /// <c>gemini-*</c> appears with no code change, which is the rule the codebase sets for model ids. If
+    /// Google ever renames the family this returns nothing and the operator types the id, which the field
+    /// still accepts.</summary>
+    private const string GeminiModelPrefix = "gemini-";
 
     /// <summary>Cache key for the Application Default Credentials entry; ADC has no secret to fingerprint.</summary>
     private const string AdcCacheKey = "\0adc";
@@ -68,6 +93,114 @@ public sealed class GeminiVertexLlmProvider(HttpClient http) : ILlmProvider
             await response.Content.ReadFromJsonAsync<GeminiGenerateContent.GeminiResponse>(ct);
         return new LlmCompletionResult(GeminiGenerateContent.ExtractText(body));
     }
+
+    /// <summary>Enumerate the Gemini models Vertex publishes
+    /// (<c>GET /v1beta1/publishers/google/models</c>), so the config UI offers live ids instead of asking
+    /// the operator to know one.
+    ///
+    /// Authenticates with the same minted <c>cloud-platform</c> bearer as generation, so this costs no new
+    /// credential handling — ADC or the service-account key already covers it.
+    ///
+    /// **This is a catalog, not an entitlement check.** It answers "what does Google publish?", not "what
+    /// can this project call in this region?" — a listed model can still be refused for a project without
+    /// access to it, or in a region that doesn't serve it. That is weaker than the Google AI catalog, which
+    /// is scoped to the key it is called with. It is still worth offering: a real id that might not be
+    /// enabled beats a guessed id that certainly isn't.</summary>
+    public async Task<IReadOnlyList<LlmModelInfo>> ListModelsAsync(
+        LlmConnection connection, CancellationToken ct = default)
+    {
+        LlmProviderSettings settings = connection.Settings ?? new LlmProviderSettings();
+        // Deliberately does not Require() the project: unlike generation, the catalog URL has no project
+        // segment, so demanding one would block discovery from a half-filled form — which is exactly when
+        // the operator needs it.
+        string url = BuildListModelsUrl(connection.BaseUrl, settings.GcpLocation);
+        string accessToken = await GetAccessTokenAsync(connection, settings, ct);
+
+        List<LlmModelInfo> models = [];
+        string? pageToken = null;
+
+        for (int page = 0; page < MaxModelPages; page++)
+        {
+            // BASIC is already the server default; naming it keeps the payload small if that ever changes.
+            string pageUrl = $"{url}?pageSize=200&view=PUBLISHER_MODEL_VIEW_BASIC";
+            if (pageToken is not null)
+            {
+                pageUrl += $"&pageToken={Uri.EscapeDataString(pageToken)}";
+            }
+
+            using HttpRequestMessage message = new(HttpMethod.Get, pageUrl);
+            message.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+
+            using HttpResponseMessage response = await http.SendAsync(message, ct);
+            await LlmHttp.EnsureSuccessAsync(response, "Vertex AI", ct);
+
+            PublisherModelList? body =
+                await response.Content.ReadFromJsonAsync<PublisherModelList>(ct);
+            models.AddRange(ToModels(body));
+
+            pageToken = body?.NextPageToken;
+            if (string.IsNullOrEmpty(pageToken))
+            {
+                break;
+            }
+        }
+
+        return models;
+    }
+
+    /// <summary>The catalog URL for a connection. Public because minting a token needs a real RSA key and
+    /// Google's token endpoint, so <see cref="ListModelsAsync"/> cannot be driven end-to-end offline — the
+    /// URL rule is exposed as a pure function instead of going untested.</summary>
+    public static string BuildListModelsUrl(string? baseUrl, string? location)
+    {
+        string host = (baseUrl ?? CatalogHost(location)).TrimEnd('/');
+        return $"{host}/{CatalogApiVersion}/publishers/google/models";
+    }
+
+    /// <summary>Select the Gemini models from a <c>ListPublisherModels</c> payload. Public for the same
+    /// reason as <see cref="BuildListModelsUrl"/> — it is the filter/naming rule, tested directly.</summary>
+    public static IReadOnlyList<LlmModelInfo> ParsePublisherModels(string json) =>
+        ToModels(JsonSerializer.Deserialize<PublisherModelList>(json));
+
+    private static List<LlmModelInfo> ToModels(PublisherModelList? body)
+    {
+        List<LlmModelInfo> models = [];
+        foreach (PublisherModelEntry entry in body?.PublisherModels ?? [])
+        {
+            // "name" is the resource name ("publishers/google/models/gemini-x"); the id callers configure
+            // is the leaf, matching what the generateContent URL takes.
+            string id = entry.Name[(entry.Name.LastIndexOf('/') + 1)..];
+            if (!id.StartsWith(GeminiModelPrefix, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            models.Add(new LlmModelInfo(id, StageLabel(entry.LaunchStage)));
+        }
+
+        return models;
+    }
+
+    /// <summary>Surface a non-GA launch stage as the display name. The catalog has no display name of its
+    /// own, and "this one is a preview" is the single most useful thing to say about a Vertex model id when
+    /// choosing one for unattended commentary.</summary>
+    private static string? StageLabel(string? launchStage) =>
+        string.IsNullOrWhiteSpace(launchStage)
+        || launchStage.Equals("GA", StringComparison.OrdinalIgnoreCase)
+        || launchStage.Equals("LAUNCH_STAGE_UNSPECIFIED", StringComparison.OrdinalIgnoreCase)
+            ? null
+            : launchStage.Replace('_', ' ').ToLowerInvariant();
+
+    private static string CatalogHost(string? location) =>
+        string.IsNullOrWhiteSpace(location) ? GlobalHost : DefaultHost(location);
+
+    private sealed record PublisherModelList(
+        [property: JsonPropertyName("publisherModels")] IReadOnlyList<PublisherModelEntry>? PublisherModels,
+        [property: JsonPropertyName("nextPageToken")] string? NextPageToken);
+
+    private sealed record PublisherModelEntry(
+        [property: JsonPropertyName("name")] string Name,
+        [property: JsonPropertyName("launchStage")] string? LaunchStage);
 
     /// <summary>Vertex is addressed by regional host; the multi-region pool uses the unprefixed host with
     /// <c>locations/global</c> in the path.</summary>

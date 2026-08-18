@@ -26,13 +26,11 @@ public class LlmModelCatalogService(IEnumerable<ILlmProvider> providers, ISecret
 
         if (provider is not ILlmModelCatalog catalog)
         {
-            // Vertex AI is the case today: publisher models are not enumerable the same way, and Dimes
-            // will not guess. The message points at the workaround that actually works, because Vertex
-            // serves the same Gemini model ids as the Google AI API.
+            // No adapter is in this state today — every registered type implements the catalog. It stays
+            // because the capability is optional by design (a minimal local runner may expose no listing
+            // route), and because the alternative is a NullReferenceException in that case.
             throw new BadRequestException(
-                $"{req.Type} endpoints do not support model discovery — enter the model id directly. " +
-                "Vertex AI serves the same Gemini model ids as a Gemini (Google AI) provider, so you can " +
-                "discover the id there and paste it here.");
+                $"Dimes cannot list models for {req.Type} endpoints — enter the model id directly.");
         }
 
         // An unsaved stand-in, so discovery goes through the same validate-then-resolve path as a real
