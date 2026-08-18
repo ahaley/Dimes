@@ -1,4 +1,5 @@
 using Dimes.Domain;
+using Dimes.Domain.Providers;
 
 namespace Dimes.Api.Contracts;
 
@@ -84,9 +85,13 @@ public record ActorDetailDto(
     IReadOnlyList<UserMembershipDto> Memberships);
 
 // ----- LLM provider configs -----
-// Settings carries the knobs only some provider types need (Vertex project/location/ADC) and is null
-// otherwise; it maps to the LlmProviderSettings JSON column.
-public record LlmProviderSettingsDto(string? GcpProject, string? GcpLocation, bool UseApplicationDefaultCredentials);
+// Settings carries the knobs only some provider types need (Vertex project/location/ADC, and the
+// per-endpoint reasoning/token overrides) and is null otherwise; it maps to the LlmProviderSettings JSON
+// column. Reasoning and MaxTokens are null unless overridden — null means "honour what the call site
+// asked for", which is not the same as any particular mode.
+public record LlmProviderSettingsDto(
+    string? GcpProject, string? GcpLocation, bool UseApplicationDefaultCredentials,
+    LlmReasoning? Reasoning = null, int? MaxTokens = null);
 public record CreateLlmProviderRequest(
     LlmProviderType Type, string Name, string? BaseUrl, string Model, string? ApiKeySecretRef,
     LlmProviderSettingsDto? Settings = null);

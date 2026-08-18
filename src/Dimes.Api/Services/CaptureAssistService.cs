@@ -34,8 +34,13 @@ public class CaptureAssistService(
             .Take(req.Messages.Count - 1)
             .Select(m => new LlmMessage(m.Role.ToLowerInvariant(), m.Content))
             .ToList();
+        // Reasoning off, stated rather than left to the parameter default: this is a back-and-forth chat on
+        // a small budget that reasoning would share, and "the default happens to be what we want" is the
+        // thing LlmReasoning exists to stop us relying on. A model that can't honour it is handled by the
+        // provider config's override, not here.
         var completion = new LlmCompletionRequest(
-            BuildSystemPrompt(req.Draft), req.Messages[^1].Content, MaxTokens: 1024, History: history);
+            BuildSystemPrompt(req.Draft), req.Messages[^1].Content, MaxTokens: 1024, History: history,
+            Reasoning: LlmReasoning.Disabled);
 
         var result = await provider.CompleteAsync(completion, connection, ct);
         return new CaptureAssistReplyDto(result.Text);

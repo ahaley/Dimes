@@ -174,6 +174,15 @@ from step 1, and the model.
 A provider can be moved between scopes later, but narrowing a scope is refused while it would strand an
 agent that references it.
 
+**Call settings** at the bottom of the form should stay untouched for almost every provider — Dimes asks
+each call for what that call needs. There is one case that needs them. A few models reason
+unconditionally and reject being told not to (Anthropic's Fable and Mythos family answers an explicit
+`thinking` with a 400), so a config on one of those can't complete a call until *Reasoning* is set to
+**Model default — send no reasoning setting**. Raise **Max output tokens** at the same time: reasoning
+comes out of the same allowance as the answer, so Dimes's default (1024–2048, enough for a recommendation)
+would be spent before any text is written. The reasoning control appears for Anthropic only, because it is
+the only endpoint type Dimes sends a reasoning setting to; the token budget applies to all of them.
+
 ### 3. Attach it to an agent
 
 A provider on its own does nothing. Open the project's **Settings → Members**, add an **Agent** with a

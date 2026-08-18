@@ -181,8 +181,29 @@ last-visited project made the owning project invisible.
 default) exists because the vendor default isn't stable across models: omitting Anthropic's `thinking` field
 means "no thinking" on Sonnet 4.6 but "adaptive" on Sonnet 5 — and a request's token budget covers reasoning
 *and* the answer, so changing only a config's model id could start spending the budget on reasoning and
-return nothing. Both call sites set it explicitly. `OpenAICompatible` ignores it (no field the many vendors
-behind that shim agree on); the Gemini adapters ignore it too.
+return nothing. All three call sites set it explicitly. `OpenAICompatible` ignores it (no field the many
+vendors behind that shim agree on); the Gemini adapters ignore it too.
+
+**…except that some models have no "off", which is what the per-endpoint overrides are for.**
+`LlmProviderSettings.Reasoning` / `.MaxTokens` (both nullable; null = honour the request) override what a
+call site asked for, and `LlmReasoning.VendorDefault` sends *no* reasoning field at all. Anthropic's
+Fable/Mythos family reasons unconditionally and rejects an explicit `thinking` — of any type — with a 400,
+so `Disabled` makes such a config uncallable. Three rules keep this from rotting:
+- **Never select `VendorDefault` from a call site.** A call site knows what Dimes wants; only the operator
+  who typed the model id knows what the model allows. That is why the override lives on the config.
+- **Never key the decision off the model id.** No `startsWith("claude-fable")` in an adapter — a denylist
+  there goes stale on the next release and silently reintroduces the 400, against this file's own rule that
+  a new model needs no code change. The vendor's error message is what tells the operator to set the
+  override; `LlmHttp.EnsureSuccessAsync` is what makes that message visible.
+- **The two knobs move together.** Reasoning is drawn from the same budget as the answer, so a model that
+  reasons regardless will exhaust Dimes's 1024/2048 defaults before writing text — making the request legal
+  without raising the budget just moves the failure from the parameter to a truncation error.
+
+Every adapter's `CompleteAsync` starts with `request = request.WithSettings(connection.Settings)` — the
+overrides belong to the endpoint, and the adapter is what speaks to one. A reasoning override is refused at
+save time on the types whose adapters ignore reasoning, so it can never sit in the column looking configured
+while doing nothing; the token budget is accepted on every type. Both live in `SettingsJson`, so neither
+needed a migration on either set.
 
 **An empty completion is an error, not an empty comment.** `LlmHttp.RequireText` fails with the vendor's
 stop reason instead of storing a blank `AgentRecommendation` — the adapters used to coalesce a missing

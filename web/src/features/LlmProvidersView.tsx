@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '../api/client'
 import { useGlobalLlmProviders, useLlmProviders, useProjects } from '../api/hooks'
-import type { LlmModel, LlmProviderConfig, LlmProviderSettings, LlmProviderType, Project } from '../api/types'
+import type { LlmModel, LlmProviderConfig, LlmProviderSettings, LlmProviderType, LlmReasoning, Project } from '../api/types'
 import { SecretRefField } from '../components/SecretRefField'
 import { Badge, Button, Card, ErrorText, Field, Select, TextInput } from '../components/ui'
 
@@ -124,6 +124,10 @@ type ProviderDraft = {
   gcpProject: string
   gcpLocation: string
   useAdc: boolean
+  /** '' = don't override; Dimes asks each call for what it wants. Anthropic only. */
+  reasoning: LlmReasoning | ''
+  /** '' = don't override. Kept as text so a half-typed number isn't coerced to 0 mid-keystroke. */
+  maxTokens: string
 }
 
 const TYPE_LABELS: Record<LlmProviderType, string> = {
@@ -190,12 +194,18 @@ const DEFAULT_MODELS: Record<LlmProviderType, string> = {
  * mutually exclusive, and both can be set on arrival — tick ADC under Vertex, switch to Anthropic, type a
  * key reference, switch back. Left alone that reproduces the dead end `setUseAdc` exists to prevent: an
  * unsaveable draft whose reference field is disabled and so can't be emptied. ADC yields rather than the
- * reference, because the reference is the value the operator typed most recently and can see. */
+ * reference, because the reference is the value the operator typed most recently and can see.
+ *
+ * Switching *away* from Anthropic clears any reasoning override for the same reason: the server refuses
+ * one on a type whose adapter ignores reasoning, and the field that holds it is hidden outside Anthropic —
+ * so leaving it set would make the draft unsaveable with nothing on screen to explain why. The token
+ * budget override survives the switch; it means the same thing on every type. */
 const withType = (draft: ProviderDraft, type: LlmProviderType): ProviderDraft => ({
   ...draft,
   type,
   model: draft.model.trim() === DEFAULT_MODELS[draft.type] ? DEFAULT_MODELS[type] : draft.model,
   useAdc: type === 'GeminiVertex' && draft.apiKeySecretRef.trim() ? false : draft.useAdc,
+  reasoning: type === 'Anthropic' ? draft.reasoning : '',
 })
 
 /** What the base-URL field means per type — it is an override for the vendor types (restricted to that
@@ -212,6 +222,7 @@ const BASE_URL_HINTS: Record<LlmProviderType, string> = {
 const emptyDraft = (): ProviderDraft => ({
   type: 'Anthropic', name: '', model: DEFAULT_MODELS.Anthropic, baseUrl: '',
   apiKeySecretRef: '', gcpProject: '', gcpLocation: '', useAdc: false,
+  reasoning: '', maxTokens: '',
 })
 
 const draftFrom = (provider: LlmProviderConfig): ProviderDraft => ({
@@ -223,6 +234,8 @@ const draftFrom = (provider: LlmProviderConfig): ProviderDraft => ({
   gcpProject: provider.settings?.gcpProject ?? '',
   gcpLocation: provider.settings?.gcpLocation ?? '',
   useAdc: provider.settings?.useApplicationDefaultCredentials ?? false,
+  reasoning: provider.settings?.reasoning ?? '',
+  maxTokens: provider.settings?.maxTokens?.toString() ?? '',
 })
 
 /** Endpoints that always authenticate. OpenAI-compatible stays optional so a keyless local runner works;
@@ -238,15 +251,33 @@ const secretRefRequirement = (draft: ProviderDraft) => {
   return 'Optional for a keyless local endpoint.'
 }
 
-/** Only Vertex carries settings today; other types send null so the column stays empty. */
-const settingsOf = (draft: ProviderDraft): LlmProviderSettings | null =>
-  draft.type === 'GeminiVertex'
-    ? {
-        gcpProject: draft.gcpProject.trim() || null,
-        gcpLocation: draft.gcpLocation.trim() || null,
-        useApplicationDefaultCredentials: draft.useAdc,
-      }
-    : null
+/** A positive integer, or null for "not overridden" — anything unparseable is null so a half-typed value
+ *  is simply absent rather than sent as 0 or NaN. `isSaveable` is what refuses it. */
+const overrideNumber = (value: string): number | null => {
+  const trimmed = value.trim()
+  if (!trimmed) return null
+  const parsed = Number(trimmed)
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null
+}
+
+/** The settings block, or null when nothing in it is set — Vertex always carries one (project/region are
+ *  required there), and any type carries one once a call override is set. Null keeps the JSON column empty
+ *  for the common case rather than storing a blob of nulls. */
+const settingsOf = (draft: ProviderDraft): LlmProviderSettings | null => {
+  const isVertex = draft.type === 'GeminiVertex'
+  // Only Anthropic acts on a reasoning override, and the server refuses one elsewhere; `withType` already
+  // clears it on a switch, so this is belt-and-braces for a draft built any other way.
+  const reasoning = draft.type === 'Anthropic' && draft.reasoning ? draft.reasoning : null
+  const maxTokens = overrideNumber(draft.maxTokens)
+  if (!isVertex && reasoning === null && maxTokens === null) return null
+  return {
+    gcpProject: isVertex ? draft.gcpProject.trim() || null : null,
+    gcpLocation: isVertex ? draft.gcpLocation.trim() || null : null,
+    useApplicationDefaultCredentials: isVertex && draft.useAdc,
+    reasoning,
+    maxTokens,
+  }
+}
 
 const writeBody = (draft: ProviderDraft) => ({
   type: draft.type,
@@ -259,6 +290,9 @@ const writeBody = (draft: ProviderDraft) => ({
 
 function isSaveable(draft: ProviderDraft): boolean {
   if (!draft.name.trim() || !draft.model.trim()) return false
+  // Typed but not a positive integer: refuse rather than silently dropping it, or the operator would save
+  // and never learn their budget override wasn't stored.
+  if (draft.maxTokens.trim() && overrideNumber(draft.maxTokens) === null) return false
   const hasKeyRef = !!draft.apiKeySecretRef.trim()
   if (needsKeyRef(draft.type) && !hasKeyRef) return false
   if (draft.type === 'GeminiVertex') {
@@ -414,7 +448,74 @@ function ProviderFields({
         disabled={draft.type === 'GeminiVertex' && draft.useAdc}
         requirement={secretRefRequirement(draft)}
       />
+
+      <CallOverrides draft={draft} set={set} />
     </>
+  )
+}
+
+/** How each reasoning override reads. '' is first and is what every provider should stay on: Dimes asks
+ *  each call for what that call needs, which is currently "off" everywhere. */
+const REASONING_LABELS: Record<LlmReasoning | '', string> = {
+  '': 'Follow the request (recommended)',
+  Disabled: 'Always off',
+  Adaptive: 'Adaptive — the model decides',
+  VendorDefault: 'Model default — send no reasoning setting',
+}
+
+/** Per-endpoint overrides of what a call asks for.
+ *
+ * These exist for one concrete failure: a model whose reasoning cannot be turned off. Dimes asks every
+ * call for reasoning-off, which is right for short recommend-only output — but Anthropic's Fable/Mythos
+ * family reasons unconditionally and rejects an explicit reasoning setting outright, so such a config
+ * can't complete a call until it stops sending one. Making that legal isn't enough on its own: reasoning
+ * comes out of the same budget as the answer, so the same config also needs a bigger one. The two knobs
+ * sit together because they are one decision.
+ *
+ * The reasoning control is Anthropic-only because it is the only adapter that sends a reasoning parameter
+ * at all — the server refuses the setting elsewhere rather than store something inert. The budget applies
+ * to every type. */
+function CallOverrides({
+  draft, set,
+}: {
+  draft: ProviderDraft
+  set: <K extends keyof ProviderDraft>(key: K, value: ProviderDraft[K]) => void
+}) {
+  const badMaxTokens = !!draft.maxTokens.trim() && overrideNumber(draft.maxTokens) === null
+
+  return (
+    <div className="space-y-1 border-t border-slate-100 pt-3 dark:border-slate-800">
+      <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Call settings</div>
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+        {draft.type === 'Anthropic' && (
+          <Field label="Reasoning">
+            <Select
+              value={draft.reasoning}
+              onChange={(e) => set('reasoning', e.target.value as LlmReasoning | '')}
+            >
+              {(Object.keys(REASONING_LABELS) as (LlmReasoning | '')[]).map((r) => (
+                <option key={r} value={r}>{REASONING_LABELS[r]}</option>
+              ))}
+            </Select>
+          </Field>
+        )}
+        <Field label="Max output tokens">
+          <TextInput
+            inputMode="numeric"
+            value={draft.maxTokens}
+            onChange={(e) => set('maxTokens', e.target.value)}
+            placeholder="Dimes decides (1024–2048)"
+          />
+        </Field>
+      </div>
+      {badMaxTokens && <ErrorText error="Enter a whole number greater than zero, or leave it empty." />}
+      <p className="text-xs text-slate-400">
+        Leave both alone unless a model needs it. Set reasoning to{' '}
+        <span className="font-semibold">{REASONING_LABELS.VendorDefault}</span> for a model that always
+        reasons and rejects being told not to — and raise the budget with it, because reasoning is drawn
+        from the same allowance as the answer, so the default would be spent before any text is written.
+      </p>
+    </div>
   )
 }
 

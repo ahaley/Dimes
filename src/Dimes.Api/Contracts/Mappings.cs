@@ -54,9 +54,11 @@ public static class Mappings
             c.SettingsJson is null ? null : LlmProviderSettings.Parse(c.SettingsJson).ToDto());
 
     public static LlmProviderSettingsDto ToDto(this LlmProviderSettings s) =>
-        new(s.GcpProject, s.GcpLocation, s.UseApplicationDefaultCredentials);
+        new(s.GcpProject, s.GcpLocation, s.UseApplicationDefaultCredentials, s.Reasoning, s.MaxTokens);
 
-    /// <summary>A null settings block means "none supplied" and stores as a null column.</summary>
+    /// <summary>A null settings block means "none supplied" and stores as a null column. Reasoning and
+    /// MaxTokens round-trip as nullables rather than being defaulted here: null is the meaningful value
+    /// ("honour the call site"), so coercing it to a mode would turn "not overridden" into an override.</summary>
     public static string? ToSettingsJson(this LlmProviderSettingsDto? dto) =>
         dto is null
             ? null
@@ -65,6 +67,8 @@ public static class Mappings
                 GcpProject = string.IsNullOrWhiteSpace(dto.GcpProject) ? null : dto.GcpProject.Trim(),
                 GcpLocation = string.IsNullOrWhiteSpace(dto.GcpLocation) ? null : dto.GcpLocation.Trim(),
                 UseApplicationDefaultCredentials = dto.UseApplicationDefaultCredentials,
+                Reasoning = dto.Reasoning,
+                MaxTokens = dto.MaxTokens,
             }.ToJson();
 
     public static ObservationSourceDto ToDto(this ObservationSource s) =>

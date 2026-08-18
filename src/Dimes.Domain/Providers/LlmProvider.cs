@@ -31,6 +31,19 @@ public enum LlmReasoning
     /// <see cref="LlmCompletionRequest.MaxTokens"/> as the answer, so enabling this on the small default
     /// budget can truncate the call before it produces any text.</summary>
     Adaptive,
+
+    /// <summary>Send no reasoning parameter at all and take whatever the model does natively.
+    ///
+    /// This is the deliberate exception to "always state it", and it exists because some models have no
+    /// legal off switch: Anthropic's Fable/Mythos family reasons unconditionally and rejects an explicit
+    /// <c>thinking</c> of any kind with a 400, so <see cref="Disabled"/> makes the endpoint uncallable
+    /// rather than quiet. Never select this from a call site — a call site knows what it wants, not what
+    /// the model allows. It is reachable only as a per-config override
+    /// (<see cref="LlmProviderSettings.Reasoning"/>), set by the operator who chose the model id, because
+    /// that is the only place the two facts meet. Pair it with a raised
+    /// <see cref="LlmProviderSettings.MaxTokens"/>: reasoning still consumes the same budget as the
+    /// answer, so a model that always reasons will exhaust a 1024-token call before writing text.</summary>
+    VendorDefault,
 }
 
 /// <summary>A recommend-only completion request: a system instruction plus the user content.
@@ -38,7 +51,25 @@ public enum LlmReasoning
 /// of the final <see cref="User"/> turn so the model has context. Null/empty means a one-shot call.</summary>
 public sealed record LlmCompletionRequest(
     string System, string User, int MaxTokens = 1024, IReadOnlyList<LlmMessage>? History = null,
-    LlmReasoning Reasoning = LlmReasoning.Disabled);
+    LlmReasoning Reasoning = LlmReasoning.Disabled)
+{
+    /// <summary>Apply a provider config's per-endpoint overrides, yielding the request that is actually
+    /// sent. Null settings, or settings that override neither knob, return this request unchanged.
+    ///
+    /// Every adapter calls this first, because the overrides are properties of the *endpoint* and the
+    /// adapter is what speaks to one — a call site picks what Dimes wants and cannot know which of those
+    /// wants the configured model will accept. Both knobs move together on purpose: the reason to stop
+    /// asserting <see cref="LlmReasoning.Disabled"/> is a model that reasons regardless, and such a model
+    /// needs the larger budget in the same breath.</summary>
+    public LlmCompletionRequest WithSettings(LlmProviderSettings? settings) =>
+        settings is null || (settings.Reasoning is null && settings.MaxTokens is null)
+            ? this
+            : this with
+            {
+                Reasoning = settings.Reasoning ?? Reasoning,
+                MaxTokens = settings.MaxTokens ?? MaxTokens,
+            };
+}
 
 public sealed record LlmCompletionResult(string Text);
 

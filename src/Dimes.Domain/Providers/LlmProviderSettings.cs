@@ -29,7 +29,31 @@ public sealed record LlmProviderSettings
     [JsonPropertyName("useApplicationDefaultCredentials")]
     public bool UseApplicationDefaultCredentials { get; init; }
 
-    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
+    /// <summary>Override the reasoning mode the call site asked for. Null (the normal case) honours the
+    /// request, which is what keeps reasoning stated rather than inherited.
+    ///
+    /// It exists because a call site chooses what Dimes wants and the operator chooses the model id, and
+    /// only some models accept "off": Anthropic's Fable/Mythos family reasons unconditionally and rejects
+    /// an explicit <c>thinking</c> with a 400, so such a config is uncallable until it can say
+    /// <see cref="LlmReasoning.VendorDefault"/>. Refused at save time on the provider types whose adapters
+    /// ignore reasoning entirely, so it can never sit here looking configured while doing nothing.</summary>
+    [JsonPropertyName("reasoning")]
+    public LlmReasoning? Reasoning { get; init; }
+
+    /// <summary>Override the output token budget the call site asked for. Null uses the request's own.
+    ///
+    /// The companion to <see cref="Reasoning"/>, and vendor-neutral because the problem is: reasoning is
+    /// drawn from the same budget as the answer, so a model that reasons regardless of what we ask will
+    /// exhaust Dimes's small defaults (1024 for commentary, 2048 for proposals) before writing any text —
+    /// which surfaces as a truncation error, not an answer. Raising the parameter was the standing advice
+    /// in that error message with no way to act on it.</summary>
+    [JsonPropertyName("maxTokens")]
+    public int? MaxTokens { get; init; }
+
+    /// <summary>Enums are written as strings here for the same reason they are in the database: the blob
+    /// stays readable, and adding a member can't silently reinterpret rows already stored.</summary>
+    private static readonly JsonSerializerOptions Json =
+        new(JsonSerializerDefaults.Web) { Converters = { new JsonStringEnumConverter() } };
 
     /// <summary>Parse a stored settings blob. A null/blank/corrupt blob yields default settings rather
     /// than throwing: a config row must stay readable and editable in the UI even if its settings JSON

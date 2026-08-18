@@ -143,6 +143,95 @@ public class ProviderAdapterTests
     }
 
     [Fact]
+    public async Task Anthropic_VendorDefaultReasoning_OmitsTheThinkingFieldEntirely()
+    {
+        // The one case where stating the mode is wrong: a model that reasons unconditionally rejects an
+        // explicit thinking of any kind with a 400, so an absent field is the only legal request. Asserted
+        // on the whole body — sending null would serialize as "thinking":null, which the API also refuses.
+        var handler = new CapturingHandler(HttpStatusCode.OK,
+            """{"content":[{"type":"text","text":"ok"}],"stop_reason":"end_turn"}""");
+        var provider = new AnthropicLlmProvider(new HttpClient(handler));
+
+        await provider.CompleteAsync(
+            new LlmCompletionRequest("sys", "hi", Reasoning: LlmReasoning.VendorDefault),
+            new LlmConnection(BaseUrl: null, Model: "claude-fable-5", ApiKey: "k"),
+            Ct);
+
+        Assert.DoesNotContain("thinking", handler.RequestBody);
+    }
+
+    [Fact]
+    public async Task Anthropic_ProviderSettings_OverrideWhatTheCallSiteAskedFor()
+    {
+        // The call site always asks for reasoning off on a small budget; only the config knows the model
+        // can't honour that. Both knobs move together because they are one decision.
+        var handler = new CapturingHandler(HttpStatusCode.OK,
+            """{"content":[{"type":"text","text":"ok"}],"stop_reason":"end_turn"}""");
+        var provider = new AnthropicLlmProvider(new HttpClient(handler));
+
+        await provider.CompleteAsync(
+            new LlmCompletionRequest("sys", "hi", MaxTokens: 1024, Reasoning: LlmReasoning.Disabled),
+            new LlmConnection(BaseUrl: null, Model: "claude-fable-5", ApiKey: "k", Settings:
+                new LlmProviderSettings { Reasoning = LlmReasoning.VendorDefault, MaxTokens = 32000 }),
+            Ct);
+
+        Assert.DoesNotContain("thinking", handler.RequestBody);
+        Assert.Contains("\"max_tokens\":32000", handler.RequestBody);
+    }
+
+    [Fact]
+    public async Task Anthropic_NoSettings_LeavesTheRequestAlone()
+    {
+        var handler = new CapturingHandler(HttpStatusCode.OK,
+            """{"content":[{"type":"text","text":"ok"}],"stop_reason":"end_turn"}""");
+        var provider = new AnthropicLlmProvider(new HttpClient(handler));
+
+        await provider.CompleteAsync(
+            new LlmCompletionRequest("sys", "hi", MaxTokens: 1024, Reasoning: LlmReasoning.Disabled),
+            new LlmConnection(BaseUrl: null, Model: "claude-sonnet-5", ApiKey: "k",
+                Settings: new LlmProviderSettings()),
+            Ct);
+
+        Assert.Contains("\"thinking\":{\"type\":\"disabled\"}", handler.RequestBody);
+        Assert.Contains("\"max_tokens\":1024", handler.RequestBody);
+    }
+
+    [Fact]
+    public async Task OpenAiCompatible_ProviderSettings_OverrideTheTokenBudget()
+    {
+        // The budget override is vendor-neutral: any endpoint whose model reasons regardless of what we
+        // ask needs the headroom, not just Anthropic's. (Reasoning itself is refused on this type at save
+        // time, because this adapter sends no reasoning parameter.)
+        var handler = new CapturingHandler(HttpStatusCode.OK,
+            """{"choices":[{"message":{"content":"ok"},"finish_reason":"stop"}]}""");
+        var provider = new OpenAiCompatibleLlmProvider(new HttpClient(handler));
+
+        await provider.CompleteAsync(
+            new LlmCompletionRequest("sys", "hi", MaxTokens: 1024),
+            new LlmConnection(BaseUrl: null, Model: "gpt-x", ApiKey: "k",
+                Settings: new LlmProviderSettings { MaxTokens = 8000 }),
+            Ct);
+
+        Assert.Contains("\"max_tokens\":8000", handler.RequestBody);
+    }
+
+    [Fact]
+    public async Task Gemini_ProviderSettings_OverrideTheTokenBudget()
+    {
+        var handler = new CapturingHandler(HttpStatusCode.OK,
+            """{"candidates":[{"content":{"parts":[{"text":"ok"}]},"finishReason":"STOP"}]}""");
+        var provider = new GeminiLlmProvider(new HttpClient(handler));
+
+        await provider.CompleteAsync(
+            new LlmCompletionRequest("sys", "hi", MaxTokens: 1024),
+            new LlmConnection(BaseUrl: null, Model: "gemini-x", ApiKey: "k",
+                Settings: new LlmProviderSettings { MaxTokens = 8000 }),
+            Ct);
+
+        Assert.Contains("\"maxOutputTokens\":8000", handler.RequestBody);
+    }
+
+    [Fact]
     public async Task Anthropic_ConcatenatesEveryTextBlock_SkippingThinkingBlocks()
     {
         // With reasoning on, thinking blocks lead the content array; citations split the answer across

@@ -833,6 +833,8 @@ public class ProjectService(DimesDbContext db, MembershipResolver members)
                 "configure in Secrets:<name> or an environment variable — it is not the key itself.");
         }
 
+        ValidateCallOverrides(type, settings);
+
         if (type != LlmProviderType.GeminiVertex)
         {
             return;
@@ -860,6 +862,32 @@ public class ProjectService(DimesDbContext db, MembershipResolver members)
             throw new BadRequestException(
                 "A Vertex AI provider needs either Application Default Credentials (preferred — no secret " +
                 "is stored) or a secret reference naming a service-account credentials JSON.");
+        }
+    }
+
+    /// <summary>The per-endpoint overrides of what a call site asked for: reasoning mode and token budget.
+    ///
+    /// A reasoning override is refused on the types whose adapters ignore reasoning altogether
+    /// (OpenAI-compatible fronts too many vendors to have one field they agree on; neither Gemini surface
+    /// exposes one). Same reasoning as the Vertex ADC-plus-secret check: rejecting beats storing a value
+    /// that looks configured and does nothing, because the operator would then have no way to tell whether
+    /// it took effect. Only Anthropic acts on it, and only there does a model exist
+    /// (the Fable/Mythos family) that makes the override necessary.</summary>
+    private static void ValidateCallOverrides(LlmProviderType type, LlmProviderSettingsDto? settings)
+    {
+        if (settings?.Reasoning is not null && type != LlmProviderType.Anthropic)
+        {
+            throw new BadRequestException(
+                $"A reasoning mode can't be set on {type} providers — that adapter sends no reasoning " +
+                "parameter, so the setting would be stored and ignored.");
+        }
+
+        // Only a floor, not a ceiling: what a model will accept moves with each release, and the vendor
+        // rejects an over-large value with a message that names its own limit — which beats a number
+        // guessed here going stale and refusing a config that would have worked.
+        if (settings?.MaxTokens is int maxTokens && maxTokens < 1)
+        {
+            throw new BadRequestException("The max output tokens override must be a positive number.");
         }
     }
 

@@ -69,6 +69,8 @@ public sealed class GeminiVertexLlmProvider(HttpClient http) : ILlmProvider, ILl
         LlmCompletionRequest request, LlmConnection connection, CancellationToken ct = default)
     {
         LlmProviderSettings settings = connection.Settings ?? new LlmProviderSettings();
+        // Picks up the token-budget override; the reasoning one is refused at save time for this type.
+        request = request.WithSettings(settings);
         string project = Require(settings.GcpProject, "GCP project");
         string location = Require(settings.GcpLocation, "GCP location");
 

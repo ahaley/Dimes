@@ -83,8 +83,12 @@ export interface WorkOrderSummary {
   itemCount: number; reportedCount: number; blockedCount: number; pendingChangeIds: string[]
 }
 // Provider-specific knobs only some types need (Vertex project/region/ADC); null otherwise.
+// reasoning/maxTokens override what a call site asks for, per endpoint. null is meaningful — it means
+// "honour the request", which is not the same as any particular mode.
+export type LlmReasoning = 'Disabled' | 'Adaptive' | 'VendorDefault'
 export interface LlmProviderSettings {
   gcpProject?: string | null; gcpLocation?: string | null; useApplicationDefaultCredentials: boolean
+  reasoning?: LlmReasoning | null; maxTokens?: number | null
 }
 export interface LlmProviderConfig {
   id: string; projectId?: string | null; type: LlmProviderType; name: string

@@ -27,6 +27,8 @@ public sealed class GeminiLlmProvider(HttpClient http) : ILlmProvider, ILlmModel
     public async Task<LlmCompletionResult> CompleteAsync(
         LlmCompletionRequest request, LlmConnection connection, CancellationToken ct = default)
     {
+        // Picks up the token-budget override; the reasoning one is refused at save time for this type.
+        request = request.WithSettings(connection.Settings);
         string baseUrl = (connection.BaseUrl ?? DefaultBaseUrl).TrimEnd('/');
         using HttpRequestMessage message = new(
             HttpMethod.Post, $"{baseUrl}/{ApiVersion}/models/{Uri.EscapeDataString(connection.Model)}:generateContent")

@@ -20,6 +20,7 @@ public sealed class AnthropicLlmProvider(HttpClient http) : ILlmProvider, ILlmMo
     public async Task<LlmCompletionResult> CompleteAsync(
         LlmCompletionRequest request, LlmConnection connection, CancellationToken ct = default)
     {
+        request = request.WithSettings(connection.Settings);
         var baseUrl = (connection.BaseUrl ?? DefaultBaseUrl).TrimEnd('/');
         // Replay prior turns (if any) ahead of the final user message so the model has the
         // conversation context; a null/empty history collapses to a one-shot call.
@@ -34,7 +35,7 @@ public sealed class AnthropicLlmProvider(HttpClient http) : ILlmProvider, ILlmMo
                 request.MaxTokens,
                 request.System,
                 messages,
-                new AnthropicThinking(ThinkingType(request.Reasoning)))),
+                Thinking(request.Reasoning))),
         };
         message.Headers.TryAddWithoutValidation("x-api-key", connection.ApiKey);
         message.Headers.TryAddWithoutValidation("anthropic-version", AnthropicVersion);
@@ -50,11 +51,25 @@ public sealed class AnthropicLlmProvider(HttpClient http) : ILlmProvider, ILlmMo
         return new LlmCompletionResult(LlmHttp.RequireText(text, "Anthropic", body?.StopReason));
     }
 
-    /// <summary>Always send an explicit <c>thinking</c> mode — see <see cref="LlmReasoning"/> for why the
-    /// vendor default can't be relied on. A model that rejects the requested mode surfaces its own error
-    /// message via <see cref="LlmHttp.EnsureSuccessAsync"/> rather than a bare status code.</summary>
-    private static string ThinkingType(LlmReasoning reasoning) =>
-        reasoning == LlmReasoning.Adaptive ? "adaptive" : "disabled";
+    /// <summary>Translate the requested reasoning mode into the <c>thinking</c> field, or null to omit it.
+    ///
+    /// <see cref="LlmReasoning.Disabled"/> and <see cref="LlmReasoning.Adaptive"/> are sent explicitly —
+    /// see <see cref="LlmReasoning"/> for why the vendor default can't be relied on.
+    /// <see cref="LlmReasoning.VendorDefault"/> omits the field, which is the *only* legal request for a
+    /// model that reasons unconditionally: Anthropic's Fable/Mythos family rejects
+    /// <c>{"type":"disabled"}</c> (and an explicit budget) with a 400. Deliberately keyed off the requested
+    /// mode rather than off the model id — a list of always-thinking model names here would go stale on
+    /// the next release, and this file's own rule is that a new model needs no code change.
+    ///
+    /// A model that rejects the mode it is sent still surfaces the vendor's own message via
+    /// <see cref="LlmHttp.EnsureSuccessAsync"/> rather than a bare status code, which is what tells the
+    /// operator to set the override.</summary>
+    private static AnthropicThinking? Thinking(LlmReasoning reasoning) => reasoning switch
+    {
+        LlmReasoning.VendorDefault => null,
+        LlmReasoning.Adaptive => new AnthropicThinking("adaptive"),
+        _ => new AnthropicThinking("disabled"),
+    };
 
     /// <summary>Enumerate the models this key can reach (<c>GET /v1/models</c>), so the config UI can
     /// offer live ids rather than a list that goes stale with every release.
@@ -112,7 +127,10 @@ public sealed class AnthropicLlmProvider(HttpClient http) : ILlmProvider, ILlmMo
         [property: JsonPropertyName("max_tokens")] int MaxTokens,
         [property: JsonPropertyName("system")] string System,
         [property: JsonPropertyName("messages")] IReadOnlyList<AnthropicMessage> Messages,
-        [property: JsonPropertyName("thinking")] AnthropicThinking Thinking);
+        // Omitted rather than sent as null when reasoning is left to the model: the API rejects a null
+        // here, and "field absent" is the wire form that means "vendor default".
+        [property: JsonPropertyName("thinking"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        AnthropicThinking? Thinking);
 
     private sealed record AnthropicThinking(
         [property: JsonPropertyName("type")] string Type);

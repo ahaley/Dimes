@@ -159,6 +159,51 @@ public sealed class GeminiProviderConfigTests : IDisposable
     }
 
     [Fact]
+    public async Task CreateProvider_ReasoningOverride_IsAcceptedForAnthropic_AndRefusedElsewhere()
+    {
+        var project = await _projects.CreateAsync(_db, new CreateProjectRequest("P", null), ct: Ct);
+
+        // The override exists for a model that reasons unconditionally and rejects being told not to.
+        var created = await _projects.CreateLlmProviderAsync(project.Id, new CreateLlmProviderRequest(
+                LlmProviderType.Anthropic, "claude", null, "claude-fable-5", "ANTHROPIC_KEY",
+                new LlmProviderSettingsDto(null, null, false,
+                    Reasoning: LlmReasoning.VendorDefault, MaxTokens: 32000)), Ct);
+        Assert.Equal(LlmReasoning.VendorDefault, created.Settings!.Reasoning);
+        Assert.Equal(32000, created.Settings.MaxTokens);
+
+        // Refused rather than stored-and-ignored on the types whose adapters send no reasoning parameter:
+        // the operator would otherwise have no way to tell whether the setting took effect.
+        await Assert.ThrowsAsync<BadRequestException>(() => _projects.CreateLlmProviderAsync(project.Id,
+            new CreateLlmProviderRequest(
+                LlmProviderType.Gemini, "gemini", null, "gemini-x", "GEMINI_KEY",
+                new LlmProviderSettingsDto(null, null, false, Reasoning: LlmReasoning.Adaptive)), Ct));
+
+        await Assert.ThrowsAsync<BadRequestException>(() => _projects.CreateLlmProviderAsync(project.Id,
+            new CreateLlmProviderRequest(
+                LlmProviderType.OpenAICompatible, "ollama", "http://localhost:11434/v1", "llama", null,
+                new LlmProviderSettingsDto(null, null, false, Reasoning: LlmReasoning.Disabled)), Ct));
+    }
+
+    [Fact]
+    public async Task CreateProvider_TokenBudgetOverride_AppliesToAnyType_AndMustBePositive()
+    {
+        var project = await _projects.CreateAsync(_db, new CreateProjectRequest("P", null), ct: Ct);
+
+        // Vendor-neutral: any endpoint whose model reasons regardless needs the headroom, and only the
+        // budget half is meaningful on an adapter that sends no reasoning parameter.
+        var created = await _projects.CreateLlmProviderAsync(project.Id, new CreateLlmProviderRequest(
+                LlmProviderType.OpenAICompatible, "ollama", "http://localhost:11434/v1", "llama", null,
+                new LlmProviderSettingsDto(null, null, false, MaxTokens: 8000)), Ct);
+        Assert.Equal(8000, created.Settings!.MaxTokens);
+        Assert.Null(created.Settings.Reasoning);
+
+        await Assert.ThrowsAsync<BadRequestException>(() => _projects.CreateLlmProviderAsync(project.Id,
+            new CreateLlmProviderRequest(
+                LlmProviderType.OpenAICompatible, "ollama", "http://localhost:11434/v1", "llama", null,
+                new LlmProviderSettingsDto(null, null, false, MaxTokens: 0)), Ct));
+    }
+
+    [Fact]
     public async Task ListModels_ReturnsSortedIds_AndResolvesTheSecretByReference()
     {
         var stub = new StubCatalogProvider(LlmProviderType.Gemini, "gemini-z", "gemini-a");
@@ -219,6 +264,22 @@ public sealed class GeminiProviderConfigTests : IDisposable
     {
         Assert.Null(new LlmProviderSettings().ToJson());
         Assert.NotNull(new LlmProviderSettings { GcpProject = "p" }.ToJson());
+        // A call override on its own is enough to make the blob worth storing.
+        Assert.NotNull(new LlmProviderSettings { MaxTokens = 8000 }.ToJson());
+    }
+
+    [Fact]
+    public void ReasoningOverride_RoundTripsAsAString()
+    {
+        // Stored as the name, not the ordinal, for the same reason the database stores enums as strings:
+        // the blob stays readable and adding a member can't reinterpret rows already written.
+        var json = new LlmProviderSettings { Reasoning = LlmReasoning.VendorDefault }.ToJson();
+
+        Assert.Contains("\"reasoning\":\"VendorDefault\"", json);
+        Assert.Equal(LlmReasoning.VendorDefault, LlmProviderSettings.Parse(json).Reasoning);
+        // Absent means "honour the request", which has to survive the round trip as null rather than
+        // collapsing to the first enum member.
+        Assert.Null(LlmProviderSettings.Parse("""{"gcpProject":"p"}""").Reasoning);
     }
 
     public void Dispose()

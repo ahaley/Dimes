@@ -22,6 +22,8 @@ public sealed class OpenAiCompatibleLlmProvider(HttpClient http) : ILlmProvider,
     public async Task<LlmCompletionResult> CompleteAsync(
         LlmCompletionRequest request, LlmConnection connection, CancellationToken ct = default)
     {
+        // Picks up the token-budget override; the reasoning one is refused at save time for this type.
+        request = request.WithSettings(connection.Settings);
         var baseUrl = (connection.BaseUrl ?? DefaultBaseUrl).TrimEnd('/');
         // system, then any prior turns (replayed for context), then the final user message.
         var messages = new List<ChatMessage> { new("system", request.System) };
