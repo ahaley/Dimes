@@ -35,6 +35,15 @@ MTP project at all (the .NET 10 SDK refuses the old VSTest path), and the test p
 `xunit.runner.visualstudio`, or `coverlet.collector`; leaving them in selects the VSTest path and breaks
 the run.
 
+**Use only the flags above — an unknown one is forwarded to the test app and reads as a broken test run.**
+In MTP mode `dotnet test` hands any flag it doesn't own to the runner, and the runner rejects unknown
+options by printing usage and exiting 5. The SDK reports that as
+`Dimes.Tests.dll (net10.0) Zero tests ran`, exit code 5, in ~100ms — it names the assembly but never the
+flag, so it reads as "discovery is broken" rather than "you typed something wrong". VSTest muscle memory
+is what triggers it: `--nologo` costs an afternoon this way. The same run under `dotnet run` from
+`tests/Dimes.Tests` works, which makes it look like `dotnet test` is at fault; it isn't. `-v:diag` and
+friends are safe because MSBuild claims them before the runner sees them.
+
 **Pass `Ct` to anything taking a `CancellationToken`.** `xUnit1051` requires it so a cancelled or
 timed-out run stops promptly. `Ct` is a global `using static` alias for
 `TestContext.Current.CancellationToken` (`TestCancellation.cs`) — the analyzer accepts any expression
