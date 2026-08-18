@@ -169,6 +169,17 @@ public sealed class GeminiVertexLlmProvider(HttpClient http) : ILlmProvider, ILl
         List<LlmModelInfo> models = [];
         foreach (PublisherModelEntry entry in body?.PublisherModels ?? [])
         {
+            // A payload that isn't Google's shape: skip rather than dereference. `Name` is declared
+            // non-nullable, but System.Text.Json assigns null for an absent property without complaint, so
+            // nullable reference types guarantee nothing across the deserializer. It matters here more than
+            // the odds suggest — LlmModelCatalogService turns HttpRequestException/InvalidOperationException
+            // into a 400 the provider form can display, and a NullReferenceException would slip past that
+            // filter into a bare "Unexpected error" 500 on the one screen built to explain the mistake.
+            if (string.IsNullOrEmpty(entry.Name))
+            {
+                continue;
+            }
+
             // "name" is the resource name ("publishers/google/models/gemini-x"); the id callers configure
             // is the leaf, matching what the generateContent URL takes.
             string id = entry.Name[(entry.Name.LastIndexOf('/') + 1)..];

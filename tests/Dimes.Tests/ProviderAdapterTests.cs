@@ -513,6 +513,32 @@ public class ProviderAdapterTests
     }
 
     [Fact]
+    public void GeminiVertex_ParsePublisherModels_SkipsAnEntryWithNoName()
+    {
+        // `Name` is declared non-nullable, but System.Text.Json assigns null for an absent property, so a
+        // payload that isn't Google's shape used to throw NullReferenceException here. That escapes
+        // LlmModelCatalogService's HttpRequestException/InvalidOperationException filter, turning a
+        // displayable 400 on the provider form into a bare "Unexpected error" 500.
+        var models = GeminiVertexLlmProvider.ParsePublisherModels(
+            """{"publisherModels":[{"launchStage":"GA"},{"name":"publishers/google/models/gemini-x"}]}""");
+
+        Assert.Equal("gemini-x", Assert.Single(models).Id);
+    }
+
+    [Fact]
+    public async Task Gemini_ListModels_SkipsAnEntryWithNoName()
+    {
+        var handler = new CapturingHandler(HttpStatusCode.OK,
+            """{"models":[{"displayName":"orphan"},{"name":"models/gemini-x","displayName":"Gemini X"}]}""");
+        var provider = new GeminiLlmProvider(new HttpClient(handler));
+
+        var models = await provider.ListModelsAsync(
+            new LlmConnection(BaseUrl: null, Model: "", ApiKey: "k"), Ct);
+
+        Assert.Equal("gemini-x", Assert.Single(models).Id);
+    }
+
+    [Fact]
     public async Task GeminiVertex_WithoutProjectOrLocation_FailsBeforeAnyRequest()
     {
         var handler = new CapturingHandler(HttpStatusCode.OK, "{}");

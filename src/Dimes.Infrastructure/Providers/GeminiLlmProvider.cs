@@ -71,6 +71,14 @@ public sealed class GeminiLlmProvider(HttpClient http) : ILlmProvider, ILlmModel
             ModelListResponse? body = await response.Content.ReadFromJsonAsync<ModelListResponse>(ct);
             foreach (ModelEntry entry in body?.Models ?? [])
             {
+                // A payload that isn't Google's shape: skip rather than dereference. See the same guard in
+                // GeminiVertexLlmProvider for why a null here would surface as an opaque 500 on the
+                // provider form instead of the 400 that screen is built to show.
+                if (string.IsNullOrEmpty(entry.Name))
+                {
+                    continue;
+                }
+
                 // Skip embedding/tuning-only entries — offering them would just produce a 400 later.
                 if (entry.SupportedGenerationMethods is { Count: > 0 } methods
                     && !methods.Contains("generateContent"))
