@@ -584,6 +584,20 @@ function ProviderRow({ provider }: { provider: LlmProviderConfig }) {
   const [draft, setDraft] = useState<ProviderDraft>(() => draftFrom(provider))
   const [enabled, setEnabled] = useState(provider.enabled)
 
+  /** Seed the form when it opens, not when the row mounts.
+   *
+   * The row stays mounted across refetches (it is keyed by id), so state seeded at mount survives things
+   * it shouldn't. Cancel only hid the form: reopening showed the abandoned edits looking like the current
+   * config, and because `enabled` is separate state, an untick the operator had cancelled rode along on
+   * the *next* save — silently stopping that project's agent commentary, with the collapsed row still
+   * showing the provider as enabled the whole time. Re-seeding here also picks up values the server
+   * normalized on the previous save (it trims baseUrl and the GCP fields) and another admin's edit. */
+  const startEditing = () => {
+    setDraft(draftFrom(provider))
+    setEnabled(provider.enabled)
+    setEditing(true)
+  }
+
   const invalidate = () => qc.invalidateQueries({ queryKey: ['providers'] })
   const save = useMutation({
     mutationFn: () => api.updateLlmProvider(provider.id, { ...writeBody(draft), enabled }),
@@ -605,7 +619,7 @@ function ProviderRow({ provider }: { provider: LlmProviderConfig }) {
         </Badge>
         {!provider.enabled && <Badge tone="red">disabled</Badge>}
         <span className="ml-auto flex items-center gap-1">
-          <Button variant="subtle" onClick={() => setEditing(true)}>Edit</Button>
+          <Button variant="subtle" onClick={startEditing}>Edit</Button>
           <Button
             variant="subtle"
             disabled={remove.isPending}
