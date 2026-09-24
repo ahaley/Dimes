@@ -181,13 +181,12 @@ if (!useForwardedHeaders)
     app.UseHttpsRedirection();
 }
 
-// Serve the built SPA same-origin (so the BFF cookie + OIDC redirects work). Static assets are
-// served before auth; the SPA fallback is anonymous so the shell loads and drives the login flow.
-app.UseDefaultFiles();
-app.UseStaticFiles();
+// The API does not serve the SPA. Same-origin comes from whatever fronts it — the Vite dev server, or
+// the proxy / static site that serves web/dist in every deploy (deploy/, .do/app.yaml) — which keeps
+// the two independently built and deployed.
 
 // CORS must sit after routing and before auth. Only the ingest endpoint carries an [EnableCors]
-// policy, so this is a no-op for every other (same-origin) endpoint and for the SPA.
+// policy, so this is a no-op for every other (same-origin) endpoint.
 app.UseCors();
 
 app.UseAuthentication();
@@ -202,7 +201,6 @@ if (app.Environment.IsDevelopment())
 app.MapControllers();
 app.MapHub<BoardHub>("/hubs/board");
 app.MapGet("/health", () => Results.Ok(new { status = "ok" })).AllowAnonymous();
-app.MapFallbackToFile("index.html").AllowAnonymous();
 
 app.Run();
 
