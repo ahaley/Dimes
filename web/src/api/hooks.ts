@@ -23,6 +23,7 @@ export const keys = {
   changes: (projectId: string, status?: ChangeStatus) => ['changes', projectId, status ?? 'all'] as const,
   change: (id: string) => ['change', id] as const,
   assignmentCounts: ['assignment-counts'] as const,
+  myChanges: ['my-changes'] as const,
   audit: (id: string) => ['audit', id] as const,
   assistConversation: (id: string) => ['assist', id] as const,
   pendingAssist: (projectId: string) => ['assist-pending', projectId] as const,
@@ -338,6 +339,15 @@ export function useMyAssignmentCounts(enabled = true) {
   })
 }
 
+/** The current user's open change requests across all their projects (assigned to or created by them). */
+export function useMyChanges(enabled = true) {
+  return useQuery({
+    queryKey: keys.myChanges,
+    queryFn: api.myChanges,
+    enabled,
+  })
+}
+
 export function useChangeDetail(id: string | undefined) {
   return useQuery({
     queryKey: keys.change(id ?? ''),
@@ -362,6 +372,7 @@ export function useProjectInvalidator(projectId: string | undefined) {
     qc.invalidateQueries({ queryKey: ['inbox'] })
     // Creation / assignment / transition can change the caller's open-assignment counts (sidebar badge).
     qc.invalidateQueries({ queryKey: keys.assignmentCounts })
+    qc.invalidateQueries({ queryKey: keys.myChanges })
     // Confirming an agent's report settles its work-order item, so the "reported back" counts move too.
     qc.invalidateQueries({ queryKey: ['work-order'] })
     if (projectId) qc.invalidateQueries({ queryKey: keys.projects })

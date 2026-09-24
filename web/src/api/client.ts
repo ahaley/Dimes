@@ -185,6 +185,7 @@ export const api = {
   getChange: (id: string) => request<ChangeRequestDetail>('GET', `/api/changes/${id}`),
   myAssignmentCounts: () =>
     request<ProjectAssignmentCount[]>('GET', '/api/me/assignment-counts'),
+  myChanges: () => request<ChangeRequest[]>('GET', '/api/me/changes'),
   updateChangeDetails: (
     id: string,
     body: { title: string; description?: string | null; kind: ChangeKind; priority: Priority },

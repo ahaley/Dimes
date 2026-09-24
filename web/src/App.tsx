@@ -9,6 +9,7 @@ import { Button, Card } from './components/ui'
 import { Sidebar } from './features/Sidebar'
 import { Workspace } from './features/Workspace'
 import { FocusView } from './features/FocusView'
+import { MyChangesView } from './features/MyChangesView'
 import { LlmProvidersView } from './features/LlmProvidersView'
 import { ActorsView } from './features/ActorsView'
 import { ActorDetailView } from './features/ActorDetailView'
@@ -39,7 +40,7 @@ function writeSeenAssignments(seen: Record<string, number>): void {
   localStorage.setItem(SEEN_KEY, JSON.stringify(seen))
 }
 
-type View = 'board' | 'providers' | 'actors' | 'settings'
+type View = 'board' | 'my-changes' | 'providers' | 'actors' | 'settings'
 
 /** Shown when the session check can't reach the backend (the most common first-run confusion: the
  * web app is up but the API isn't). useMe() keeps polling, so this clears itself once the API
@@ -200,13 +201,15 @@ export default function App() {
   const canCreateProject = quota?.canCreate ?? false
 
   const view: View =
-    location.pathname.startsWith('/providers') ? 'providers'
+    location.pathname.startsWith('/my-changes') ? 'my-changes'
+      : location.pathname.startsWith('/providers') ? 'providers'
       : location.pathname.startsWith('/actors') ? 'actors'
         : location.pathname.startsWith('/settings') ? 'settings'
           : 'board'
 
   const headerTitle =
-    view === 'providers' ? 'LLM providers'
+    view === 'my-changes' ? 'My changes'
+      : view === 'providers' ? 'LLM providers'
       : view === 'actors' ? 'Actors'
         : view === 'settings' ? 'Site settings'
           : (currentProject ? `${currentProject.key ? `${currentProject.key} · ` : ''}${currentProject.name}` : siteTitle)
@@ -234,6 +237,7 @@ export default function App() {
         projectQuota={quota}
         onNewProject={() => setShowCreateProject(true)}
         activeView={view}
+        onShowMyChanges={() => navigate('/my-changes')}
         onShowProviders={() => navigate('/providers')}
         onShowActors={() => navigate('/actors')}
         onShowSettings={() => navigate('/settings')}
@@ -309,6 +313,10 @@ export default function App() {
             <Route
               path="/projects/:projectId/focus/:status"
               element={<FocusView actingActorId={me.actorId} members={members ?? []} />}
+            />
+            <Route
+              path="/my-changes"
+              element={<MyChangesView actingActorId={me.actorId} projects={projects ?? []} />}
             />
             {/* LLM providers + Actors are site-admin-only; guard the routes so a bookmark can't reach them. */}
             {/* Scope is chosen inside the view (defaulting to website-wide), not inherited from the

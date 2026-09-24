@@ -12,7 +12,7 @@ import { projectLimitMessage } from '../projectQuota'
 export function Sidebar({
   projects, otherProjects = [], archivedProjects = [], assignmentCounts, siteTitle, projectId, onSelect, collapsed, onToggleCollapse,
   canCreateProject, projectQuota, onNewProject,
-  activeView, onShowProviders, onShowActors, onShowSettings, showSettings, mobileOpen,
+  activeView, onShowMyChanges, onShowProviders, onShowActors, onShowSettings, showSettings, mobileOpen,
 }: {
   projects: Project[]
   /** Projects the viewer can see but isn't a member of — only ever non-empty for a site admin. */
@@ -29,7 +29,8 @@ export function Sidebar({
    *  rather than leaving an unexplained gap. Undefined while still loading. */
   projectQuota?: ProjectQuota
   onNewProject: () => void
-  activeView: 'board' | 'providers' | 'actors' | 'settings'
+  activeView: 'board' | 'my-changes' | 'providers' | 'actors' | 'settings'
+  onShowMyChanges: () => void
   onShowProviders: () => void
   onShowActors: () => void
   onShowSettings: () => void
@@ -77,6 +78,23 @@ export function Sidebar({
           )}
         >
           {compact ? siteTitle.charAt(0).toUpperCase() : '«'}
+        </button>
+      </div>
+
+      <div className="px-2 pb-2">
+        <button
+          onClick={onShowMyChanges}
+          title="My changes"
+          className={cx(
+            'flex w-full items-center rounded-md text-sm',
+            compact ? 'h-9 w-9 justify-center' : 'gap-2 px-2 py-1.5 text-left',
+            activeView === 'my-changes'
+              ? 'bg-slate-100 font-medium text-slate-900 dark:bg-slate-800 dark:text-slate-100'
+              : 'text-slate-600 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-800',
+          )}
+        >
+          <span aria-hidden>◎</span>
+          {!compact && <span>My changes</span>}
         </button>
       </div>
 

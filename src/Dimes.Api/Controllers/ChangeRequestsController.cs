@@ -51,6 +51,12 @@ public class ChangeRequestsController(
     public async Task<ActionResult<IReadOnlyList<ProjectAssignmentCountDto>>> AssignmentCounts(CancellationToken ct)
         => Ok(await changes.AssignedOpenCountsAsync(currentActor.ActorId, ct));
 
+    /// <summary>The caller's open change requests across all their projects (assigned to or created by
+    /// them). Scoped to the caller by construction.</summary>
+    [HttpGet("api/me/changes")]
+    public async Task<ActionResult<IReadOnlyList<ChangeRequestDto>>> MyChanges(CancellationToken ct)
+        => Ok(await changes.MyOpenChangesAsync(currentActor.ActorId, ct));
+
     [HttpGet("api/changes/{id:guid}")]
     public async Task<ActionResult<ChangeRequestDetailDto>> Get(Guid id, CancellationToken ct)
     {

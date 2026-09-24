@@ -710,6 +710,31 @@ public class ChangeRequestService(
             .ToListAsync(ct);
     }
 
+    /// <summary>The caller's open change requests across every project — those assigned to or created by
+    /// them — for the cross-project "My changes" view. Ordered by severity, then least recently updated,
+    /// so neglected work rises regardless of which project it sits in.</summary>
+    public async Task<IReadOnlyList<ChangeRequestDto>> MyOpenChangesAsync(
+        Guid actorId, CancellationToken ct = default)
+    {
+        var rows = await db.ChangeRequests
+            .Where(c => (c.AssigneeActorId == actorId || c.CreatedByActorId == actorId)
+                && c.Status != ChangeStatus.Done
+                && c.Status != ChangeStatus.Rejected
+                && c.Status != ChangeStatus.Duplicate
+                && !c.Project.IsArchived
+                // A creator can be removed from a project; without this the view would leak it.
+                && db.Memberships.Any(m => m.ProjectId == c.ProjectId && m.ActorId == actorId))
+            .Select(c => new { Change = c, c.Project.Key })
+            .ToListAsync(ct);
+
+        // In memory: Priority is persisted as a string, so a DB ORDER BY would sort it alphabetically.
+        return rows
+            .OrderByDescending(r => r.Change.Priority)
+            .ThenBy(r => r.Change.UpdatedAt)
+            .Select(r => r.Change.ToDto(r.Key))
+            .ToList();
+    }
+
     /// <summary>Persist a manual within-column order from board drag-and-drop. Assigns SortOrder 1..n to
     /// the given changes in order; all ids must belong to the project and the named status. Not a
     /// lifecycle/details change, so no audit event is written.</summary>
