@@ -22,7 +22,10 @@ obj/
 *.db-wal
 *.db-shm
 *.db-journal
-# Runtime data directory (default SQLite location under the API content root)
+# Runtime data directories. The API puts its default SQLite database in data/ under whatever directory
+# it runs from (src/Dimes.Api, or the repo root), and database dumps land here too; never commit them.
+# Anchored on purpose: a bare `data/` would also silently ignore any source folder named data.
+/data/
 src/Dimes.Api/data/
 
 # ---- Node (in case tooling runs outside web/ and sdk/) ----
