@@ -73,7 +73,10 @@ public sealed class GoogleChatNotificationProvider(HttpClient http) : INotificat
     {
         var key = Fingerprint(credentialsJson);
         var credential = CredentialCache.GetOrAdd(key, _ =>
-            GoogleCredential.FromJson(credentialsJson).CreateScoped(ChatScope));
+            // Typed to a service account, for the same reason as GeminiVertexLlmProvider.FromCredentialsJson.
+            CredentialFactory.FromJson<ServiceAccountCredential>(credentialsJson)
+                .ToGoogleCredential()
+                .CreateScoped(ChatScope));
         return await credential.GetAccessTokenForRequestAsync(cancellationToken: ct);
     }
 

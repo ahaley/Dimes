@@ -326,7 +326,11 @@ public sealed class GeminiVertexLlmProvider(HttpClient http) : ILlmProvider, ILl
     {
         try
         {
-            return GoogleCredential.FromJson(credentials).CreateScoped(CloudPlatformScope);
+            // Typed to a service account: the untyped factory also honours external-account JSON, which
+            // makes the library fetch arbitrary URLs or run executables named inside the credential.
+            return CredentialFactory.FromJson<ServiceAccountCredential>(credentials)
+                .ToGoogleCredential()
+                .CreateScoped(CloudPlatformScope);
         }
         catch (Exception ex)
         {

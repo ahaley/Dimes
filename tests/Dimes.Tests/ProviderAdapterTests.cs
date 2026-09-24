@@ -576,6 +576,18 @@ public class ProviderAdapterTests
     }
 
     [Fact]
+    public async Task GeminiVertex_ExternalAccountCredential_IsRejectedAsNotAServiceAccount()
+    {
+        var ex = await VertexCredentialFailure("""
+            {"type":"external_account","audience":"a","subject_token_type":"t",
+             "token_url":"https://sts.googleapis.com/v1/token",
+             "credential_source":{"url":"http://169.254.169.254/latest/meta-data"}}
+            """);
+
+        Assert.Contains("not a valid Google service-account credentials JSON", ex.Message);
+    }
+
+    [Fact]
     public async Task GeminiVertex_CredentialThatIsAPath_ReadsTheKeyFileFromDisk()
     {
         // Operators hold a service-account key as a file, so binding the reference to its path is the
