@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Text;
 using Dimes.Api.Contracts;
 using Dimes.Api.Realtime;
@@ -417,12 +418,13 @@ public class WorkOrderService(
             return "_no message_";
         }
         var line = message.Replace("\r\n", "\n").Split('\n')[0].Trim();
-        return line.Length == 0 ? "_no message_" : Truncate(line, 200)!;
+        return line.Length == 0 ? "_no message_" : Truncate(line, 200);
     }
 
     private static string Short(string? sha) =>
         string.IsNullOrWhiteSpace(sha) ? "(no sha)" : sha.Trim()[..Math.Min(sha.Trim().Length, 10)];
 
+    [return: NotNullIfNotNull(nameof(s))]
     private static string? Truncate(string? s, int max) =>
         s is null || s.Length <= max ? s : s[..max];
 
