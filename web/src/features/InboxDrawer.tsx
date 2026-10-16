@@ -7,6 +7,7 @@ import type { Observation } from '../api/types'
 import { Badge, Button, ErrorText, Field, Modal, Select, TextInput } from '../components/ui'
 import { Drawer } from '../components/Drawer'
 import { useToast } from '../components/Toast'
+import { ObservationDetail } from './ObservationDetail'
 
 export function InboxDrawer({
   projectId, onClose,
@@ -19,9 +20,26 @@ export function InboxDrawer({
     (o) => (o.status === 'New' || o.status === 'Clustered') && (!o.targetActorId || o.targetActorId === me?.actorId),
   )
   const [promote, setPromote] = useState<Observation | null>(null)
+  // Held as an id so the pane tracks refetches and drops back to the list once the item leaves `open`.
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const selected = open.find((o) => o.id === selectedId && o.kind !== 'AssistRequest')
 
   return (
     <Drawer title={`Observation inbox (${open.length})`} onClose={onClose}>
+      {selected ? (
+        <div className="flex h-full flex-col">
+          <div className="mb-3">
+            <Button variant="subtle" onClick={() => setSelectedId(null)}>← Back to inbox</Button>
+          </div>
+          <div className="flex-1">
+            <ObservationDetail observation={selected} />
+          </div>
+          <div className="mt-4 flex flex-wrap gap-2 border-t border-slate-200 pt-3 dark:border-slate-800">
+            <Button variant="primary" onClick={() => setPromote(selected)}>Promote</Button>
+            <DismissButton id={selected.id} projectId={projectId} />
+          </div>
+        </div>
+      ) : (
       <div className="flex h-full flex-col">
         <p className="mb-3 text-xs text-slate-500">
           Captured signals awaiting triage. Promote the meaningful ones into change requests; dismiss the noise.
@@ -33,12 +51,19 @@ export function InboxDrawer({
               <AssistRequestRow key={o.id} observation={o} projectId={projectId} onClose={onClose} />
             ) : (
               <li key={o.id} className="rounded-md border border-slate-200 p-3 dark:border-slate-700">
-                <div className="flex flex-wrap items-center gap-2">
-                  <Badge tone="amber">{o.kind}</Badge>
-                  {o.occurrenceCount > 1 && <Badge tone="red">×{o.occurrenceCount}</Badge>}
-                  {o.status === 'Clustered' && <Badge tone="slate">clustered</Badge>}
-                </div>
-                <p className="mt-2 line-clamp-3 break-words font-mono text-xs text-slate-600 dark:text-slate-300">{o.payload}</p>
+                <button
+                  type="button"
+                  onClick={() => setSelectedId(o.id)}
+                  className="block w-full text-left"
+                  aria-label={`View details of ${o.kind} observation`}
+                >
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge tone="amber">{o.kind}</Badge>
+                    {o.occurrenceCount > 1 && <Badge tone="red">×{o.occurrenceCount}</Badge>}
+                    {o.status === 'Clustered' && <Badge tone="slate">clustered</Badge>}
+                  </div>
+                  <p className="mt-2 line-clamp-3 break-words font-mono text-xs text-slate-600 dark:text-slate-300">{o.payload}</p>
+                </button>
                 <div className="mt-3 flex flex-wrap gap-2">
                   <Button variant="primary" onClick={() => setPromote(o)}>Promote</Button>
                   <DismissButton id={o.id} projectId={projectId} />
@@ -55,6 +80,7 @@ export function InboxDrawer({
 
         <SimulateCapture projectId={projectId} />
       </div>
+      )}
 
       {promote && (
         <PromoteModal
