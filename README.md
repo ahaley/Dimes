@@ -69,8 +69,8 @@ OpenAI-compatible endpoint — so the problem you're working through never leave
 ## Quick start
 
 **Prerequisites:** the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0) and
-[Node.js 20+](https://nodejs.org/). Check what you have with `dotnet --version` (expect `10.0.x`) and
-`node --version` (expect `v20` or newer). A `global.json` pins the SDK to the .NET 10 band, so an older
+[Node.js 22 (20.19 or newer also works)](https://nodejs.org/). Check what you have with `dotnet --version` (expect `10.0.x`) and
+`node --version` (expect `v22`, or `v20.19`+). A `global.json` pins the SDK to the .NET 10 band, so an older
 SDK fails fast with a clear message instead of a confusing build error.
 
 The API uses SQLite by default and applies its migrations automatically on startup, so a fresh checkout
@@ -109,7 +109,7 @@ Password: dimes-dev
   To point it elsewhere, copy `web/.env.example` to `web/.env` and set `DIMES_API`.
 - **First build is slow:** the initial `dotnet run` restores NuGet packages and the first `npm install`
   pulls the web dependencies — both need network access and take a minute. Later runs are fast.
-- **Version complaints:** `global.json` requires a .NET 10 SDK and `web/package.json` expects Node 20+.
+- **Version complaints:** `global.json` requires a .NET 10 SDK and `web/package.json` expects Node 20.19+ or 22.12+.
   Install the versions linked above if a build fails citing a version.
 - **Adding a migration (contributors):** run `dotnet tool restore` once so the pinned `dotnet-ef` tool
   is available — see [`CLAUDE.md`](CLAUDE.md) for the two-provider (SQLite + Postgres) workflow.
