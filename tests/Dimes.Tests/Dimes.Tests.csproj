@@ -24,8 +24,8 @@
          host), xunit.runner.visualstudio (the VSTest adapter), and coverlet.collector (a VSTest data
          collector, replaced by the MTP coverage extension below). Leaving them in place is not harmless —
          they select the VSTest path, which the .NET 10 SDK then refuses to run. -->
-    <PackageReference Include="xunit.v3" Version="4.0.1" />
-    <PackageReference Include="Microsoft.Testing.Extensions.CodeCoverage" Version="18.11.2" />
+    <PackageReference Include="xunit.v3" Version="4.0.2" />
+    <PackageReference Include="Microsoft.Testing.Extensions.CodeCoverage" Version="18.12.0" />
   </ItemGroup>
 
   <ItemGroup>
