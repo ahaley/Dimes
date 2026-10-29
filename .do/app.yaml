@@ -93,6 +93,9 @@ services:
       # Trust App Platform's X-Forwarded-* so the OIDC redirect_uri is built as https.
       - key: Proxy__UseForwardedHeaders
         value: "true"
+      # Strict-Transport-Security max-age in seconds. Start short; raise (e.g. 31536000) once HTTPS is proven.
+      - key: Hsts__MaxAgeSeconds
+        value: "300"
       # Your managed Postgres connection string — SECRET (contains the password). Set after create.
       - key: ConnectionStrings__Dimes
         scope: RUN_TIME

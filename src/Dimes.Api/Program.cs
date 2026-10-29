@@ -62,6 +62,17 @@ if (useForwardedHeaders)
     });
 }
 
+// HSTS is emitted by the API because on App Platform the static site can't set response headers; the
+// SPA calls /api on load, so browsers cache the policy for the whole host. Host-only (no
+// includeSubDomains/preload): sibling *.cbmdev.com hosts aren't ours to force onto HTTPS. The short
+// default lets a bad cert or DNS change expire quickly; raise Hsts:MaxAgeSeconds once it's proven.
+builder.Services.AddHsts(o =>
+{
+    o.MaxAge = TimeSpan.FromSeconds(builder.Configuration.GetValue("Hsts:MaxAgeSeconds", 300));
+    o.IncludeSubDomains = false;
+    o.Preload = false;
+});
+
 // Application services (capture → inbox → promote → lifecycle, commentary, SCM context).
 builder.Services.AddScoped<MembershipResolver>();
 builder.Services.AddScoped<ProjectService>();
@@ -156,6 +167,13 @@ var app = builder.Build();
 if (useForwardedHeaders)
 {
     app.UseForwardedHeaders();
+}
+
+// After forwarded headers so the proxied request reads as https; the middleware ignores plain HTTP
+// and loopback hosts, so local runs are unaffected.
+if (!app.Environment.IsDevelopment())
+{
+    app.UseHsts();
 }
 
 app.UseExceptionHandler();
